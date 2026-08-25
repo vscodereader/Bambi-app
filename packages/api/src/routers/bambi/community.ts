@@ -6,6 +6,7 @@ import {
 	communityBoard,
 	communityBoardHomeLayout,
 	communityComment,
+	communityNoticeBoardPlacement,
 	communityPost,
 	communityPostLike,
 	communityPostLikeHistory,
@@ -20,6 +21,7 @@ import {
 	eq,
 	gte,
 	ilike,
+	inArray,
 	isNull,
 	notInArray,
 	or,
@@ -62,6 +64,7 @@ import {
 } from "../../services/bambi-community-password";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
+import { pingCommunityPost } from "../../services/bambi-indexnow";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
 import {
 	JOB_POST_IMAGE_MAX_BYTES,
@@ -162,6 +165,7 @@ const createPostInput = z.object({
 	isEvent: z.boolean().default(false),
 	isAnonymous: z.boolean().default(false),
 	isPromotion: z.boolean().default(false),
+	noticeBoardKeys: z.array(boardKeySchema).default([]),
 	// 비밀번호는 비밀글(잠금)에만 필요하다 — 잠그지 않으면 생략하고 등록할 수 있다.
 	password: z.string().trim().max(30).optional(),
 	title: z.string().trim().min(2).max(100),
@@ -250,6 +254,7 @@ const updatePostInput = postIdInput.extend({
 	isEvent: z.boolean().optional(),
 	isAnonymous: z.boolean().optional(),
 	isPromotion: z.boolean(),
+	noticeBoardKeys: z.array(boardKeySchema).optional(),
 	password: z.string().trim().max(30).optional(),
 	title: z.string().trim().min(2).max(100),
 });
@@ -274,6 +279,45 @@ const assertCreateCommentsDisabledAllowed = (
 	if (commentsDisabled) {
 		assertCommentsDisabledAllowed(true, role);
 	}
+};
+
+const validateNoticeBoardKeys = async (
+	board: string,
+	role: string,
+	keys: string[]
+): Promise<string[]> => {
+	if (board !== "notice" || role !== "admin") {
+		if (keys.length > 0) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "공지사항 노출 게시판은 운영자만 선택할 수 있습니다.",
+			});
+		}
+		return [];
+	}
+	const unique = [...new Set(keys)];
+	if (unique.length !== keys.length || unique.includes("notice")) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "공지사항 노출 게시판 선택을 확인해 주세요.",
+		});
+	}
+	if (unique.length === 0) {
+		return [];
+	}
+	const rows = await db
+		.select({ key: communityBoard.key })
+		.from(communityBoard)
+		.where(
+			and(
+				eq(communityBoard.isActive, true),
+				inArray(communityBoard.key, unique)
+			)
+		);
+	if (rows.length !== unique.length) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "선택할 수 없는 게시판이 포함되어 있습니다.",
+		});
+	}
+	return unique;
 };
 
 const resolveMemberPostAuthorName = async (
@@ -430,6 +474,10 @@ const postSummarySelection = {
 	),
 	viewCount: communityPost.viewCount,
 	source: sql<CommunityFeedSource>`'native'`.as("source"),
+	isNotice:
+		sql<number>`case when ${communityPost.board} = 'notice' then 0 else 1 end`.as(
+			"is_notice"
+		),
 	isCrawled: sql<number>`0`.as("is_crawled"),
 };
 
@@ -474,6 +522,7 @@ const crawledCommunityFeedSelection = {
 	thumbnailUrl: sql<string | null>`null`,
 	viewCount: sql<number>`coalesce(${crawledCommunityTopic.viewCount}, 0)`,
 	source: sql<CommunityFeedSource>`'crawled'`,
+	isNotice: sql<number>`1`,
 	isCrawled: sql<number>`1`,
 };
 
@@ -537,7 +586,17 @@ const buildBoardFilters = (board: string, windowStart: Date): SQL[] => {
 	}
 	return [
 		eq(communityPost.status, "published"),
-		eq(communityPost.board, board),
+		or(
+			eq(communityPost.board, board),
+			and(
+				eq(communityPost.board, "notice"),
+				sql`exists (
+					select 1 from ${communityNoticeBoardPlacement}
+					where ${communityNoticeBoardPlacement.postId} = ${communityPost.id}
+					and ${communityNoticeBoardPlacement.boardKey} = ${board}
+				)`
+			)
+		) as SQL,
 	];
 };
 
@@ -627,7 +686,11 @@ const buildBoardOrder = (board: string) => {
 			desc(communityPost.id),
 		];
 	}
-	return [desc(communityPost.createdAt), desc(communityPost.id)];
+	return [
+		asc(sql`case when ${communityPost.board} = 'notice' then 0 else 1 end`),
+		desc(communityPost.createdAt),
+		desc(communityPost.id),
+	];
 };
 
 const selectBoardPosts = (
@@ -728,7 +791,7 @@ const selectWorkTalkFeedUnion = ({
 			// 게시판에서 긁어 온 글은 신선한 것만 섞는다). null 게시일은 이 조건이 자연히 걸러낸다.
 			.where(and(...crawledTopicFeedFilters(windowStart), ...crawledFilters))
 	)
-		.orderBy(sql`is_crawled asc, created_at desc, id desc`)
+		.orderBy(sql`is_notice asc, is_crawled asc, created_at desc, id desc`)
 		.limit(limit)
 		.offset(offset);
 
@@ -865,6 +928,13 @@ const resolvePostAuthorName = async (
 	actor: CommunityActor,
 	input: { authorName: string; board: string; isAnonymous: boolean }
 ): Promise<string> => {
+	if (
+		input.board === "notice" &&
+		actor.kind === "member" &&
+		actor.profile.role === "admin"
+	) {
+		return "운영자";
+	}
 	if (isSecretBoard(input.board)) {
 		return SECRET_AUTHOR_NAME;
 	}
@@ -1358,10 +1428,18 @@ export const communityRouter = {
 				board.key === CRAWLED_COMMUNITY_BOARD && communityFeedOn
 					? selectWorkTalkFeedUnion({
 							limit: OVERVIEW_LIMIT,
+							nativeFilters: [eq(communityPost.board, CRAWLED_COMMUNITY_BOARD)],
 							offset: 0,
 							windowStart,
 						})
-					: selectBoardPosts(board.key, { limit: OVERVIEW_LIMIT, windowStart })
+					: selectBoardPosts(board.key, {
+							filters:
+								board.key === BEST_BOARD
+									? []
+									: [eq(communityPost.board, board.key)],
+							limit: OVERVIEW_LIMIT,
+							windowStart,
+						})
 			)
 		);
 
@@ -1447,7 +1525,6 @@ export const communityRouter = {
 			const authorGrade = post.authorUserId
 				? ((await loadAuthorBadges([post])).get(post.authorUserId) ?? null)
 				: null;
-
 			return {
 				// author_user_id는 익명성 때문에 계속 제외하고 등급(이름·색)만 노출한다.
 				authorGrade,
@@ -1560,6 +1637,15 @@ export const communityRouter = {
 			const authorGrade = post.authorUserId
 				? ((await loadAuthorBadges([post])).get(post.authorUserId) ?? null)
 				: null;
+			const noticeBoardKeys =
+				post.board === "notice"
+					? (
+							await db
+								.select({ key: communityNoticeBoardPlacement.boardKey })
+								.from(communityNoticeBoardPlacement)
+								.where(eq(communityNoticeBoardPlacement.postId, post.id))
+						).map((row) => row.key)
+					: [];
 
 			return {
 				// author_user_id는 익명성 때문에 계속 제외하고 등급(이름·색)만 노출한다.
@@ -1587,6 +1673,7 @@ export const communityRouter = {
 				isPromotion: post.isPromotion,
 				likeCount: post.likeCount,
 				locked: false as const,
+				noticeBoardKeys,
 				title: post.title,
 				updatedAt: post.updatedAt,
 				viewCount: viewUpdated?.viewCount ?? post.viewCount + 1,
@@ -1750,6 +1837,11 @@ export const communityRouter = {
 				isLocked,
 				role,
 			});
+			const noticeBoardKeys = await validateNoticeBoardKeys(
+				input.board,
+				role,
+				input.noticeBoardKeys
+			);
 			// 비밀글(잠금)은 잠금 게이트에 쓸 4자 이상 비밀번호가 필요하다.
 			if (isLocked && (input.password?.length ?? 0) < 4) {
 				throw new ORPCError("BAD_REQUEST", { message: LOCKED_PASSWORD_ERROR });
@@ -1773,7 +1865,7 @@ export const communityRouter = {
 			// 회원이고 게시판 적립 금액이 있으면 그만큼, 아니면 0(게스트·0포인트 게시판).
 			const target = authorUserId ? postPoints : 0;
 
-			let created: { board: string; id: string } | undefined;
+			let created: { board: string; id: string; isLocked: boolean } | undefined;
 			try {
 				created = await db.transaction(async (tx) => {
 					const [row] = await tx
@@ -1800,7 +1892,19 @@ export const communityRouter = {
 							pointsAwarded: target,
 							title: input.title,
 						})
-						.returning({ board: communityPost.board, id: communityPost.id });
+						.returning({
+							board: communityPost.board,
+							id: communityPost.id,
+							isLocked: communityPost.isLocked,
+						});
+					if (row && noticeBoardKeys.length > 0) {
+						await tx.insert(communityNoticeBoardPlacement).values(
+							noticeBoardKeys.map((boardKey) => ({
+								boardKey,
+								postId: row.id,
+							}))
+						);
+					}
 					await reconcileContentPoints(tx, {
 						userId: authorUserId,
 						currentAwarded: 0,
@@ -1832,6 +1936,10 @@ export const communityRouter = {
 					targetType: "community_post",
 				});
 			}
+
+			// 새 글은 즉시 published라 공개 URL이 생긴다 — 공개 게시판이면 글 상세·목록 재색인
+			// 요청(비공개 게시판·행 없음이면 pingCommunityPost가 no-op).
+			pingCommunityPost(created);
 
 			return created;
 		}),
@@ -1885,6 +1993,14 @@ export const communityRouter = {
 				isLocked,
 				role: actorRole(actor),
 			});
+			const noticeBoardKeys =
+				input.noticeBoardKeys === undefined
+					? undefined
+					: await validateNoticeBoardKeys(
+							post.board,
+							actorRole(actor),
+							input.noticeBoardKeys
+						);
 
 			// 비회원은 자기 신분(gid)이 찍힌 글만, 그것도 비밀번호로만 수정한다.
 			if (actor.kind === "guest") {
@@ -1916,22 +2032,45 @@ export const communityRouter = {
 				});
 			}
 
-			const [updated] = await db
-				.update(communityPost)
-				.set({
-					authorDisplayName: authorName,
-					body: input.body,
-					contactPhone: input.contactPhone || null,
-					commentsDisabled: nextCommentsDisabled,
-					isLocked,
-					isEvent: nextIsEvent,
-					isAnonymous: nextIsAnonymous,
-					isPromotion: input.isPromotion,
-					title: input.title,
-					updatedAt: new Date(),
-				})
-				.where(eq(communityPost.id, input.postId))
-				.returning({ board: communityPost.board, id: communityPost.id });
+			const updated = await db.transaction(async (tx) => {
+				const [row] = await tx
+					.update(communityPost)
+					.set({
+						authorDisplayName: authorName,
+						body: input.body,
+						contactPhone: input.contactPhone || null,
+						commentsDisabled: nextCommentsDisabled,
+						isLocked,
+						isEvent: nextIsEvent,
+						isAnonymous: nextIsAnonymous,
+						isPromotion: input.isPromotion,
+						title: input.title,
+						updatedAt: new Date(),
+					})
+					.where(eq(communityPost.id, input.postId))
+					.returning({
+						board: communityPost.board,
+						id: communityPost.id,
+						isLocked: communityPost.isLocked,
+					});
+				if (noticeBoardKeys !== undefined) {
+					await tx
+						.delete(communityNoticeBoardPlacement)
+						.where(eq(communityNoticeBoardPlacement.postId, input.postId));
+					if (noticeBoardKeys.length > 0) {
+						await tx.insert(communityNoticeBoardPlacement).values(
+							noticeBoardKeys.map((boardKey) => ({
+								boardKey,
+								postId: input.postId,
+							}))
+						);
+					}
+				}
+				return row;
+			});
+
+			// 본문 수정은 상세 페이지 콘텐츠를 바꾼다 — 공개 게시판 글이면 재색인 요청.
+			pingCommunityPost(updated);
 
 			return updated;
 		}),
@@ -1968,6 +2107,14 @@ export const communityRouter = {
 					targetAmount: 0,
 					reasons: POINT_REASONS.post,
 				});
+			});
+
+			// 글이 목록·상세에서 사라졌으니(soft delete) 재색인을 요청한다 — 공개 게시판만.
+			// 잠금 글이면 공개 경로에 애초에 없던 글이라 pingCommunityPost가 no-op.
+			pingCommunityPost({
+				board: post.board,
+				id: post.id,
+				isLocked: post.isLocked,
 			});
 
 			return { id: post.id };
@@ -2446,6 +2593,8 @@ export const communityRouter = {
 						authorUserId: communityPost.authorUserId,
 						// 알림 딥링크(/seeker/community/{slug}/{postId})에 필요하다.
 						board: communityPost.board,
+						// 잠금 글은 공개 URL이 없어 재색인 핑 대상에서 뺀다.
+						isLocked: communityPost.isLocked,
 						pointsAwarded: communityPost.pointsAwarded,
 						status: communityPost.status,
 					})
@@ -2512,6 +2661,7 @@ export const communityRouter = {
 				return {
 					board: existing.board,
 					id: updated.id,
+					isLocked: existing.isLocked,
 					status: updated.status,
 				};
 			});
@@ -2523,6 +2673,14 @@ export const communityRouter = {
 				reason: input.reason,
 				targetId: input.postId,
 				targetType: "community_post",
+			});
+
+			// 운영자 숨김/복구는 공개 목록·상세 노출을 바꾼다 — 공개 게시판이면 재색인 요청.
+			// 잠금 글은 공개 경로에 노출되지 않으므로 pingCommunityPost가 no-op.
+			pingCommunityPost({
+				board: result.board,
+				id: result.id,
+				isLocked: result.isLocked,
 			});
 
 			return { id: result.id, status: result.status };

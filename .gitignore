@@ -71,3 +71,6 @@ apps/web/.local-storage/
 # git commit -F 용 임시 메시지 파일
 .commitmsg
 *.commitmsg
+
+# seo audit
+bambialba.com-audit

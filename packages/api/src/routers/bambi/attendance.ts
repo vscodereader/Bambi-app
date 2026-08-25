@@ -32,6 +32,7 @@ import {
 	type SessionLike,
 } from "../../services/bambi-authz";
 import {
+	loadGradeBadges,
 	nextGrade,
 	POINT_SHOP_REASONS,
 	resolveGrade,
@@ -264,9 +265,16 @@ export const attendanceRouter = {
 			.where(where);
 
 		const hasMore = rows.length > input.limit;
+		const pageRows = rows.slice(0, input.limit);
+		const gradeBadges = await loadGradeBadges(
+			pageRows.map((row) => row.userId)
+		);
 
 		return {
-			items: rows.slice(0, input.limit),
+			items: pageRows.map((row) => ({
+				...row,
+				grade: gradeBadges.get(row.userId) ?? null,
+			})),
 			nextCursor: hasMore ? input.cursor + input.limit : null,
 			summary: summary ?? { attendedToday: 0, eligibleUsers: 0 },
 			totalCount: summary?.eligibleUsers ?? 0,

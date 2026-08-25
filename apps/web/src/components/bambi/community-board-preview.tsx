@@ -174,6 +174,7 @@ export function BoardPreviewCard({
 						// 수집 글은 전용 상세로 분기한다(순수 글은 기존 게시판 상세 경로 그대로).
 						// 출처 배지는 달지 않는다 — 라우팅 판별에만 쓰는 값이다.
 						const isCrawled = post.source === "crawled";
+						const isCrossListedNotice = post.board === "notice" && !isNotice;
 						const href = isCrawled
 							? communityCrawledPath(post.id)
 							: communityPostPath(slugOfPost, post.id);
@@ -181,7 +182,9 @@ export function BoardPreviewCard({
 							<Link
 								className={cn(
 									"flex items-center justify-between gap-3 rounded-lg px-2 py-1.5",
-									isNotice ? "hover:bg-coral-100/60" : "hover:bg-muted"
+									isNotice && "hover:bg-coral-100/60",
+									isCrossListedNotice && "bg-primary/5 hover:bg-primary/10",
+									!(isNotice || isCrossListedNotice) && "hover:bg-muted"
 								)}
 								href={href as Route}
 								key={post.id}
@@ -203,7 +206,11 @@ export function BoardPreviewCard({
 										<LockIcon className="size-3 shrink-0 text-muted-foreground" />
 									) : null}
 									{isNotice ? null : <CommunityRoleBadges post={post} />}
-									<CommunityNewBadge createdAt={post.createdAt} />
+									<CommunityNewBadge
+										createdAt={post.createdAt}
+										displayedBoardKey={board.key}
+										postBoardKey={post.board}
+									/>
 									<span className="truncate text-sm">{post.title}</span>
 									{post.commentCount > 0 ? (
 										<span className="flex shrink-0 items-center gap-0.5 font-semibold text-coral-500 text-xs">

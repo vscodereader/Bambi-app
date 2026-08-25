@@ -1,10 +1,11 @@
 import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
 import {
+	bambiPointJobDailySelection,
+	bambiPointJobReward,
 	bambiPointTransaction,
 	bambiProfile,
 	bambiSiteSettings,
-	communityBoard,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
@@ -12,6 +13,7 @@ import {
 	count,
 	desc,
 	eq,
+	gt,
 	ilike,
 	inArray,
 	isNull,
@@ -39,18 +41,20 @@ import {
 } from "../../services/bambi-point-settings";
 
 const nonnegativePoints = z.number().int().min(0).max(100_000_000);
+const rotationHours = z.number().int().positive();
 const saveInput = z.object({
 	attendancePoints: nonnegativePoints,
 	jobPaymentMaxPoints: nonnegativePoints.nullable(),
 	jobPaymentMinPoints: nonnegativePoints.nullable(),
 	reviewViewPoints: nonnegativePoints,
 	reviewWritePoints: nonnegativePoints,
+	premiumPointJobRewardPoints: nonnegativePoints.nullable(),
+	premiumPointJobRotationHours: rotationHours,
+	recommendedPointJobRewardPoints: nonnegativePoints.nullable(),
+	recommendedPointJobRotationHours: rotationHours,
+	specialPointJobRewardPoints: nonnegativePoints.nullable(),
+	specialPointJobRotationHours: rotationHours,
 	signupPoints: nonnegativePoints,
-});
-const saveBoardInput = z.object({
-	commentPoints: nonnegativePoints,
-	key: z.string().min(1),
-	postPoints: nonnegativePoints.optional(),
 });
 const historyCursorInput = z.object({
 	createdAt: z.string().datetime(),
@@ -99,6 +103,9 @@ const pointReasonLabel = (reason: string): string => {
 	}
 	if (reason === "review_view") {
 		return "다른 구직자 후기 열람";
+	}
+	if (reason === "point_job_view") {
+		return "포인트 공고 확인";
 	}
 	if (reason.startsWith("운영자 지급:")) {
 		return reason;
@@ -389,29 +396,6 @@ export const pointSettingsRouter = {
 						: null,
 			};
 		}),
-	saveBoard: adminProcedure.input(saveBoardInput).handler(async ({ input }) => {
-		const [existing] = await db
-			.select({ key: communityBoard.key })
-			.from(communityBoard)
-			.where(eq(communityBoard.key, input.key))
-			.limit(1);
-		if (!existing) {
-			throw new ORPCError("NOT_FOUND", {
-				message: "게시판을 찾을 수 없습니다.",
-			});
-		}
-		const postPoints = input.key === "notice" ? 0 : input.postPoints;
-		if (postPoints === undefined) {
-			throw new ORPCError("BAD_REQUEST", {
-				message: "글 작성 포인트를 입력해 주세요.",
-			});
-		}
-		await db
-			.update(communityBoard)
-			.set({ commentPoints: input.commentPoints, postPoints })
-			.where(eq(communityBoard.key, input.key));
-		return { ...input, postPoints };
-	}),
 	saveAdmin: adminProcedure.input(saveInput).handler(async ({ input }) => {
 		const normalizedMin = input.jobPaymentMinPoints || null;
 		if (
@@ -424,6 +408,55 @@ export const pointSettingsRouter = {
 			});
 		}
 		return await db.transaction(async (tx) => {
+			const [existing] = await tx
+				.select({
+					premium: bambiSiteSettings.premiumPointJobRotationHours,
+					recommended: bambiSiteSettings.recommendedPointJobRotationHours,
+					special: bambiSiteSettings.specialPointJobRotationHours,
+				})
+				.from(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
+				.limit(1);
+			const now = new Date();
+			const rotationChanges = [
+				{
+					category: "premium" as const,
+					current: existing?.premium ?? null,
+					next: input.premiumPointJobRotationHours,
+				},
+				{
+					category: "special" as const,
+					current: existing?.special ?? null,
+					next: input.specialPointJobRotationHours,
+				},
+				{
+					category: "recommended" as const,
+					current: existing?.recommended ?? null,
+					next: input.recommendedPointJobRotationHours,
+				},
+			];
+			for (const change of rotationChanges) {
+				if (change.current === change.next) {
+					continue;
+				}
+				await tx
+					.update(bambiPointJobReward)
+					.set({
+						cooldownUntil: sql`case
+							when ${bambiPointJobReward.cooldownUntil} <= ${now.toISOString()}::timestamp + make_interval(hours => ${change.next}) then ${now.toISOString()}::timestamp
+							else ${bambiPointJobReward.cooldownUntil} - make_interval(hours => ${change.next})
+						end`,
+					})
+					.where(
+						and(
+							eq(bambiPointJobReward.category, change.category),
+							gt(bambiPointJobReward.cooldownUntil, now)
+						)
+					);
+				await tx
+					.delete(bambiPointJobDailySelection)
+					.where(eq(bambiPointJobDailySelection.category, change.category));
+			}
 			await tx
 				.insert(bambiSiteSettings)
 				.values({
@@ -433,6 +466,14 @@ export const pointSettingsRouter = {
 					jobPaymentMinPoints: normalizedMin,
 					reviewViewPoints: input.reviewViewPoints,
 					reviewWritePoints: input.reviewWritePoints,
+					premiumPointJobRewardPoints: input.premiumPointJobRewardPoints,
+					premiumPointJobRotationHours: input.premiumPointJobRotationHours,
+					recommendedPointJobRewardPoints:
+						input.recommendedPointJobRewardPoints,
+					recommendedPointJobRotationHours:
+						input.recommendedPointJobRotationHours,
+					specialPointJobRewardPoints: input.specialPointJobRewardPoints,
+					specialPointJobRotationHours: input.specialPointJobRotationHours,
 					signupPoints: input.signupPoints,
 				})
 				.onConflictDoUpdate({
@@ -442,6 +483,14 @@ export const pointSettingsRouter = {
 						jobPaymentMinPoints: normalizedMin,
 						reviewViewPoints: input.reviewViewPoints,
 						reviewWritePoints: input.reviewWritePoints,
+						premiumPointJobRewardPoints: input.premiumPointJobRewardPoints,
+						premiumPointJobRotationHours: input.premiumPointJobRotationHours,
+						recommendedPointJobRewardPoints:
+							input.recommendedPointJobRewardPoints,
+						recommendedPointJobRotationHours:
+							input.recommendedPointJobRotationHours,
+						specialPointJobRewardPoints: input.specialPointJobRewardPoints,
+						specialPointJobRotationHours: input.specialPointJobRotationHours,
 						signupPoints: input.signupPoints,
 					},
 					target: bambiSiteSettings.id,

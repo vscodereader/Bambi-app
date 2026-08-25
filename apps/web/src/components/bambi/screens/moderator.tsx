@@ -35,6 +35,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
+import { Separator } from "@bambi-app/ui/components/separator";
 import {
 	Sheet,
 	SheetClose,
@@ -243,7 +244,7 @@ function SevPill({ sev }: { sev: ReportSeverity }) {
 
 function MetaBox({ label, value }: { label: string; value: string }) {
 	return (
-		<div className="rounded-xl bg-secondary px-[14px] py-3">
+		<div className="rounded-xl bg-secondary px-3.5 py-3">
 			<div className="text-[11px] text-muted-foreground">{label}</div>
 			<div className="mt-[3px] font-extrabold text-[15px] text-foreground">
 				{value}
@@ -256,9 +257,9 @@ function EmptyState({ icon, text }: { icon: ReactNode; text: string }) {
 	return (
 		<div className="m-auto p-10 text-center">
 			<div className="mx-auto mt-0 mb-3 flex size-14 items-center justify-center rounded-[18px] bg-[color:var(--status-success-bg)] text-[color:var(--status-success-fg)]">
-				<span className="inline-flex size-[26px]">{icon}</span>
+				<span className="inline-flex size-6.5">{icon}</span>
 			</div>
-			<div className="font-bold text-[14px] text-[color:var(--text-default)]">
+			<div className="font-bold text-[color:var(--text-default)] text-sm">
 				{text}
 			</div>
 		</div>
@@ -271,8 +272,8 @@ export function ConsoleTop({
 	counts: { queue: number; reports: number; warned: number };
 }) {
 	return (
-		<div className="flex flex-col gap-[14px] px-6 pt-3 pb-3">
-			<h1 className="m-0 px-1 font-extrabold text-[24px] text-foreground">
+		<div className="flex flex-col gap-3.5 px-6 pt-3 pb-3">
+			<h1 className="m-0 px-1 font-extrabold text-2xl text-foreground">
 				운영자 콘솔
 			</h1>
 			<div className="px-1">
@@ -333,7 +334,7 @@ const QUEUE_SORT_LABEL: Record<QueueSortKey, string> = {
 const RISK_ORDER: Record<RiskLevel, number> = { high: 0, mid: 1, low: 2 };
 
 const QUEUE_TRIGGER_CLASS =
-	"h-10 gap-1.5 rounded-xl border-[color:var(--border-default)] bg-card px-[14px] font-semibold text-[13px] text-[color:var(--text-default)]";
+	"h-10 gap-1.5 rounded-xl border-[color:var(--border-default)] bg-card px-3.5 font-semibold text-[13px] text-[color:var(--text-default)]";
 
 function QueueFilterRow({
 	status,
@@ -459,7 +460,7 @@ function QueueRow({
 		// biome-ignore lint/a11y/useSemanticElements: 행 내부에 체크박스 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
 		<div
 			className={cn(
-				"flex cursor-pointer items-start gap-3 rounded-2xl p-[14px] text-[color:var(--text-default)] shadow-card",
+				"flex cursor-pointer items-start gap-3 rounded-2xl p-3.5 text-[color:var(--text-default)] shadow-card",
 				selected
 					? "border border-primary bg-coral-50"
 					: "border border-border bg-card"
@@ -508,7 +509,7 @@ function QueueRow({
 			</div>
 			<span
 				aria-hidden="true"
-				className="mt-px inline-flex size-[18px] text-[color:var(--text-subtle)]"
+				className="mt-px inline-flex size-4.5 text-[color:var(--text-subtle)]"
 			>
 				<ChevronRightIcon />
 			</span>
@@ -736,7 +737,7 @@ export function QueueDetail({
 			    데스크톱에 그 틀을 그대로 쓰면 내용이 짧을 때 뷰포트 높이만큼 빈 판이 생기고
 			    액션 바가 본문에서 수백 px 아래로 떨어진다. lg부터는 문서처럼 흐르게 두고
 			    카드 한 장으로 감싼다 — 페이지 배경이 bg-secondary라 이 카드가 경계를 만든다. */}
-			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-1 pb-5 lg:mb-6 lg:flex-none lg:gap-6 lg:overflow-visible lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:px-7 lg:pt-6 lg:pb-7 lg:shadow-[var(--shadow-card)]">
+			<div className="flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto px-6 pt-1 pb-5 lg:mb-6 lg:flex-none lg:gap-6 lg:overflow-visible lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:px-7 lg:pt-6 lg:pb-7 lg:shadow-[var(--shadow-card)]">
 				{/* 제목과 급여·접수는 "무엇을 심사하는가" 한 덩어리다. 데스크톱에서는 한 줄에
 				    붙여 판단 재료가 시작되는 지점을 위로 끌어올린다. 모바일 순서(제목 → 메타)는
 				    DOM 그대로여야 해서 래퍼를 display:contents로 접어 둔다. */}
@@ -759,9 +760,9 @@ export function QueueDetail({
 				</div>
 				{/* 이 공고가 큐에 온 이유라 데스크톱에서도 전체 폭 밴드로 둔다. 좁은 열에 넣으면
 				    RiskFlag가 whitespace-nowrap이라 긴 감지 문구가 열 밖으로 삐져나간다. */}
-				<div className="flex flex-col gap-2 rounded-[14px] bg-[color:var(--status-pending-bg)] p-[14px] lg:px-5 lg:py-4">
+				<div className="flex flex-col gap-2 rounded-md bg-[color:var(--status-pending-bg)] p-3.5 lg:px-5 lg:py-4">
 					<div className="flex items-center gap-2">
-						<span className="inline-flex size-[18px] text-[color:var(--status-pending-fg)]">
+						<span className="inline-flex size-4.5 text-[color:var(--status-pending-fg)]">
 							<AlertCircle />
 						</span>
 						<span className="font-extrabold text-[13.5px] text-[color:var(--status-pending-fg)]">
@@ -780,7 +781,7 @@ export function QueueDetail({
 						))}
 					</div>
 				</div>
-				<div className="flex flex-col gap-[18px] lg:flex-row lg:items-start lg:gap-7">
+				<div className="flex flex-col gap-4.5 lg:flex-row lg:items-start lg:gap-7">
 					<div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
 						{item.desc.trim().length > 0 ? (
 							<>
@@ -788,7 +789,7 @@ export function QueueDetail({
 									<div className="mb-2 font-bold text-[13px] text-foreground">
 										공고 본문 · 감지 표현 강조
 									</div>
-									<div className="rounded-[14px] border border-border bg-secondary p-4">
+									<div className="rounded-md border border-border bg-secondary p-4">
 										<HiText
 											level={item.riskLevel}
 											terms={item.detected}
@@ -801,8 +802,8 @@ export function QueueDetail({
 						) : (
 							<>
 								{/* 본문이 없으면 이미지가 유일한 판단 재료다 — 위로 올린다. */}
-								<div className="flex items-center gap-2 rounded-[14px] bg-secondary px-4 py-3">
-									<span className="inline-flex size-[18px] text-muted-foreground">
+								<div className="flex items-center gap-2 rounded-md bg-secondary px-4 py-3">
+									<span className="inline-flex size-4.5 text-muted-foreground">
 										<AlertCircle />
 									</span>
 									<span className="font-bold text-[13px] text-foreground">
@@ -946,11 +947,11 @@ function VerdictReasonSheet({
 			/>
 			{/* 선택지 5개 + 사유 입력칸이라 작은 화면에서는 시트가 뷰포트를 넘는다.
 			    안에서 스크롤시켜 확정 버튼이 화면 밖으로 밀리지 않게 한다. */}
-			<div className="relative max-h-[90vh] animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] overflow-y-auto rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:animate-none lg:rounded-3xl lg:pt-6 lg:shadow-[var(--shadow-card)]">
+			<div className="relative max-h-[90vh] animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] overflow-y-auto rounded-t-2xl bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:animate-none lg:rounded-3xl lg:pt-6 lg:shadow-[var(--shadow-card)]">
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
 					{config.title}
 				</h2>
-				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
+				<p className="mt-0 mr-0 mb-3.5 ml-0 text-[13px] text-muted-foreground">
 					{config.description}
 				</p>
 				<div className="mb-3 flex flex-col gap-2">
@@ -959,7 +960,7 @@ function VerdictReasonSheet({
 						return (
 							<button
 								className={cn(
-									"flex cursor-pointer items-center gap-2.5 rounded-xl px-[14px] py-3 text-left",
+									"flex cursor-pointer items-center gap-2.5 rounded-xl px-3.5 py-3 text-left",
 									on
 										? "border border-primary bg-coral-50"
 										: "border border-[color:var(--border-default)] bg-card"
@@ -968,11 +969,11 @@ function VerdictReasonSheet({
 								onClick={() => setReason(r)}
 								type="button"
 							>
-								<span className="flex-1 font-semibold text-[14px] text-foreground">
+								<span className="flex-1 font-semibold text-foreground text-sm">
 									{r}
 								</span>
 								{on ? (
-									<span className="inline-flex size-[18px] text-primary">
+									<span className="inline-flex size-4.5 text-primary">
 										<CheckIcon />
 									</span>
 								) : null}
@@ -987,7 +988,7 @@ function VerdictReasonSheet({
 					처리 사유
 				</label>
 				<textarea
-					className="min-h-[92px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+					className="min-h-23 w-full resize-none rounded-md border border-border bg-card px-3 py-2.5 text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
 					id={reasonFieldId}
 					onChange={(event) => setReason(event.target.value)}
 					placeholder="위 선택지를 고르거나 직접 작성해 주세요(2자 이상)."
@@ -1392,7 +1393,7 @@ function JobPostContext({
 			<ContextField label="상태" value={jobPostStatusLabel(jobPost.status)} />
 			<div className="flex flex-col gap-0.5">
 				<div className="text-[11px] text-muted-foreground">공고 본문</div>
-				<div className="line-clamp-4 text-[13.5px] text-[color:var(--text-default)] leading-[1.5]">
+				<div className="line-clamp-4 text-[13.5px] text-[color:var(--text-default)] leading-normal">
 					{jobPost.description}
 				</div>
 			</div>
@@ -1422,7 +1423,7 @@ function ReviewContext({
 					{reviewStatusLabel(review.status)}
 				</span>
 			</div>
-			<div className="whitespace-pre-wrap text-[13.5px] text-[color:var(--text-default)] leading-[1.5]">
+			<div className="whitespace-pre-wrap text-[13.5px] text-[color:var(--text-default)] leading-normal">
 				{review.body}
 			</div>
 		</ContextSection>
@@ -1495,7 +1496,7 @@ function ChatRoomContext({
 					{roomStatusLabel}
 				</Badge>
 			</div>
-			<div className="min-w-0 rounded-[12px] bg-card p-3">
+			<div className="min-w-0 rounded-sm bg-card p-3">
 				<ChatHistoryContent chatRoomId={chatRoom.id} constrained={false} />
 			</div>
 			{onBlock ? (
@@ -1507,7 +1508,7 @@ function ChatRoomContext({
 						{nextBlocked ? "방 차단" : "차단 해제"} 사유 (2자 이상)
 					</label>
 					<textarea
-						className="min-h-[72px] w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 text-[13.5px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+						className="min-h-18 w-full resize-none rounded-sm border border-border bg-card px-3 py-2.5 text-[13.5px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
 						id={reasonId}
 						onChange={(event) => setReason(event.target.value)}
 						placeholder="조치 사유는 감사 로그에 남아요."
@@ -1658,7 +1659,7 @@ function CommunityTargetPanel({
 	if (!target) {
 		return (
 			<div className="flex items-center gap-2 rounded-xl border border-border bg-secondary p-3">
-				<span className="inline-flex size-[18px] text-muted-foreground">
+				<span className="inline-flex size-4.5 text-muted-foreground">
 					<AlertCircle />
 				</span>
 				<span className="text-muted-foreground text-sm">
@@ -2082,11 +2083,11 @@ function ReportResolvedNotice({ className }: { className?: string }) {
 	return (
 		<div
 			className={cn(
-				"flex items-center gap-2 rounded-[14px] bg-[color:var(--status-success-bg)] p-[14px] text-[color:var(--status-success-fg)]",
+				"flex items-center gap-2 rounded-md bg-[color:var(--status-success-bg)] p-3.5 text-[color:var(--status-success-fg)]",
 				className
 			)}
 		>
-			<span className="inline-flex size-[18px]">
+			<span className="inline-flex size-4.5">
 				<CheckIcon />
 			</span>
 			<span className="font-bold text-[13px]">이미 처리된 신고예요</span>
@@ -2101,7 +2102,7 @@ function ReportThread({ item }: { item: Report }) {
 			<div className="mb-2 font-bold text-[13px] text-foreground">
 				신고된 대화
 			</div>
-			<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
+			<div className="flex flex-col gap-2 rounded-md border border-border bg-secondary p-3.5">
 				{item.thread.map((m) => (
 					<div
 						className={cn("max-w-[85%]", m.mine ? "self-end" : "self-start")}
@@ -2117,7 +2118,7 @@ function ReportThread({ item }: { item: Report }) {
 						</div>
 						<div
 							className={cn(
-								"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
+								"rounded-md px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
 								m.mine
 									? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
 									: "rounded-bl-[4px] bg-ink-800 text-white"
@@ -2155,7 +2156,7 @@ function ReportActions({
 	return (
 		<div>
 			{sanctionUserId ? null : (
-				<p className="m-0 mb-2.5 text-[12px] text-muted-foreground leading-[1.5]">
+				<p className="m-0 mb-2.5 text-[12px] text-muted-foreground leading-normal">
 					이 신고는 사용자 계정이 대상이 아니에요. 사용자 제재가 필요하면 사용자
 					관리에서 진행해 주세요.
 				</p>
@@ -2393,7 +2394,7 @@ function UserRow({
 					{u.role} · 신고 {u.reports}건 · 경고 {u.warnings}회
 				</div>
 			</div>
-			<span className="inline-flex size-[18px] text-[color:var(--text-subtle)]">
+			<span className="inline-flex size-4.5 text-[color:var(--text-subtle)]">
 				<ChevronRightIcon />
 			</span>
 		</div>
@@ -2445,7 +2446,7 @@ function SanctionBtn({
 	return (
 		<button
 			className={cn(
-				"flex cursor-pointer items-center gap-3 rounded-[14px] p-[14px] text-left",
+				"flex cursor-pointer items-center gap-3 rounded-md p-3.5 text-left",
 				strong
 					? "border border-[color:var(--red-500)] bg-[color:var(--status-danger-bg)]"
 					: "border border-[color:var(--border-default)] bg-card"
@@ -2468,7 +2469,7 @@ function SanctionBtn({
 			</div>
 			<span
 				className={cn(
-					"inline-flex size-[18px]",
+					"inline-flex size-4.5",
 					danger
 						? "text-[color:var(--red-500)]"
 						: "text-[color:var(--text-subtle)]"
@@ -2582,7 +2583,7 @@ export function ReasonConfirmSheet({
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
 					{title}
 				</h2>
-				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
+				<p className="mt-0 mr-0 mb-3.5 ml-0 text-[13px] text-muted-foreground">
 					{description}
 				</p>
 				<label
@@ -2592,7 +2593,7 @@ export function ReasonConfirmSheet({
 					{reasonLabel}
 				</label>
 				<textarea
-					className="min-h-[92px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+					className="min-h-23 w-full resize-none rounded-md border border-border bg-card px-3 py-2.5 text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
 					id={reasonFieldId}
 					maxLength={reasonMaxLength}
 					onChange={(event) => setReason(event.target.value)}
@@ -2660,11 +2661,11 @@ function SanctionSheet({
 				onClick={onCancel}
 				type="button"
 			/>
-			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
+			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-2xl bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
 					{target} 제재
 				</h2>
-				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
+				<p className="mt-0 mr-0 mb-3.5 ml-0 text-[13px] text-muted-foreground">
 					신고가 사실로 확인되면 단계별로 조치해요.
 				</p>
 				<div className="flex flex-col gap-2.5">
@@ -2688,7 +2689,11 @@ function SanctionSheet({
 	);
 }
 
-const USER_MODERATION_HISTORY_PAGE_SIZE = 10;
+const USER_MODERATION_HISTORY_PAGE_SIZE = 5;
+
+// 본인인증 생년월일은 YYYYMMDD 텍스트로 저장된다 — 화면에는 1990.01.01로 끊어 보여준다.
+const formatBirthDate = (d: string) =>
+	d.length === 8 ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d;
 
 // 계정 상세의 제재 이력(감사 로그, 페이지당 10건). 액션 코드는 라벨 맵으로만 노출한다.
 function UserModerationHistory({ userId }: { userId: string }) {
@@ -2791,10 +2796,10 @@ function UserContentHistory({ userId }: { userId: string }) {
 	const [filter, setFilter] = useState<ContentHistoryFilter>("all");
 	const query = useQuery(
 		orpc.bambi.contentHistory.listAdminMemberContent.queryOptions({
-			input: { filter, page, pageSize: 10, userId },
+			input: { filter, page, pageSize: 5, userId },
 		})
 	);
-	const pageCount = Math.max(1, Math.ceil((query.data?.totalCount ?? 0) / 10));
+	const pageCount = Math.max(1, Math.ceil((query.data?.totalCount ?? 0) / 5));
 	return (
 		<Accordion>
 			<AccordionItem value="content-history">
@@ -2838,6 +2843,9 @@ function UserContentHistory({ userId }: { userId: string }) {
 										{CONTENT_STATUS_LABELS[item.status]}
 									</span>
 								</div>
+								<span className="text-muted-foreground text-xs">
+									{formatDateTime(item.createdAt)}
+								</span>
 								<p className="mb-0 line-clamp-3 text-sm">{item.body}</p>
 							</li>
 						))}
@@ -2910,7 +2918,7 @@ function UserWithdrawalPanel({
 			<div className="mb-2.5 font-bold text-[13px] text-foreground">
 				탈퇴 계정
 			</div>
-			<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
+			<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-normal">
 				{decision.canRestore
 					? "실수로 탈퇴했거나 운영자 판단으로 되살려야 하는 계정이면 복구할 수 있어요. 복구하면 본인이 기존 아이디로 다시 로그인할 수 있어요. 팀 소속과 내려간 공고는 함께 돌아오지 않아요."
 					: decision.message}
@@ -2966,120 +2974,144 @@ export function UserDetail({
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="사용자 상세" />
-			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-2 pb-5">
-				<div className="flex flex-col items-center gap-2.5 py-1 text-center">
-					<Avatar name={item.name} size="xl" square={item.role === "구인자"} />
-					<div>
-						<div className="font-extrabold text-[21px] text-foreground">
-							{item.name}
-						</div>
-						<div className="mt-[3px] text-[13px] text-muted-foreground">
-							{item.role} · 가입 {item.joined}
-						</div>
-					</div>
-					<div className="flex items-center gap-2">
-						<Badge dot tone={c.tone}>
-							{c.label}
-						</Badge>
-						{item.deletedAt ? <Badge tone="neutral">탈퇴</Badge> : null}
-					</div>
-				</div>
-				<div className="flex flex-col gap-2">
-					<div className="grid grid-cols-2 gap-2.5">
-						<MetaBox label="누적 신고" value={`${item.reports}건`} />
-						<MetaBox label="경고 횟수" value={`${item.warnings}회`} />
-						<MetaBox label="차단당한 횟수" value={`${item.blockedByCount}회`} />
-					</div>
-					<Link
-						className="self-start text-[12.5px] text-primary underline-offset-4 hover:underline"
-						href={`/moderator/reports?user=${item.id}` as Route}
-					>
-						신고 내역 보기
-					</Link>
-				</div>
-				<ContextSection title="계정 정보">
-					<ContextField label="이메일" value={item.email} />
-					<ContextField
-						label="로그인 아이디"
-						value={item.loginId ?? "미설정"}
-					/>
-					{item.organizationNames.length > 0 ? (
-						<ContextField
-							label="소속 업소"
-							value={item.organizationNames.join(", ")}
+			<div className="flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto px-6 pt-2 pb-5 md:grid md:grid-cols-[340px_minmax(0,1fr)] md:items-start md:gap-5">
+				{/* 왼쪽 컬럼 — 프로필 카드 (데스크톱에서만 카드 스타일, 모바일은 배경 없이 지금과 동일) */}
+				<div className="flex flex-col gap-4.5 md:rounded-xl md:border md:border-border md:bg-card md:p-5">
+					<div className="flex flex-col items-center gap-2.5 py-1 text-center">
+						<Avatar
+							name={item.name}
+							size="xl"
+							square={item.role === "구인자"}
 						/>
-					) : null}
-					{item.deletedAt ? (
-						<ContextField
-							label="탈퇴 시각"
-							value={formatDateTime(item.deletedAt)}
-						/>
-					) : null}
-				</ContextSection>
-				<div className="flex gap-2 rounded-[14px] bg-secondary p-[14px]">
-					<span className="mt-px inline-flex size-4 flex-[0_0_16px] text-muted-foreground">
-						<AlertCircle />
-					</span>
-					<span className="text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
-						{item.note}
-					</span>
-				</div>
-				{item.deletedAt ? (
-					<UserWithdrawalPanel item={item} onRestore={onRestore} />
-				) : null}
-				{item.status === "active" ? null : (
-					<div>
-						<div className="mb-2.5 font-bold text-[13px] text-foreground">
-							계정 상태 복구
+						<div>
+							<div className="font-extrabold text-[21px] text-foreground">
+								{item.name}
+							</div>
+							<div className="mt-[3px] text-[13px] text-muted-foreground">
+								{item.role} · 가입 {item.joined}
+							</div>
 						</div>
-						<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
-							현재 {c.label} 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
-							상태로 되돌릴 수 있어요.
-						</p>
-						<Button
-							block
-							leftIcon={<CheckIcon />}
-							onClick={() =>
-								onSanction(item.id, "active", "계정을 정상으로 복구했어요")
-							}
-							size="lg"
-							variant="primary"
-						>
-							정상으로 복구
-						</Button>
-					</div>
-				)}
-				{item.warnings > 0 ? (
-					<div>
-						<div className="mb-2.5 font-bold text-[13px] text-foreground">
-							경고 되돌리기
+						<div className="flex items-center gap-2">
+							<Badge dot tone={c.tone}>
+								{c.label}
+							</Badge>
+							{item.deletedAt ? <Badge tone="neutral">탈퇴</Badge> : null}
 						</div>
-						<Button
-							block
-							onClick={() => setRevertingWarning(true)}
-							size="lg"
-							variant="secondary"
-						>
-							최근 경고 1회 되돌리기
-						</Button>
 					</div>
-				) : null}
-				<UserModerationHistory key={item.id} userId={item.id} />
-				<UserContentHistory userId={item.id} />
-				<div>
-					<div className="mb-2.5 font-bold text-[13px] text-foreground">
-						제재 적용
-					</div>
-					<div className="flex flex-col gap-2.5">
-						{SANCTION_CHOICES.map((choice) => (
-							<SanctionBtn
-								desc={choice.desc}
-								key={choice.status}
-								label={choice.title}
-								onClick={() => setPending(choice)}
-								tone={choice.tone}
+					<div className="flex flex-col gap-2">
+						<div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+							<MetaBox label="누적 신고" value={`${item.reports}건`} />
+							<MetaBox label="경고 횟수" value={`${item.warnings}회`} />
+							<MetaBox
+								label="차단당한 횟수"
+								value={`${item.blockedByCount}회`}
 							/>
-						))}
+						</div>
+						<Link
+							className="self-start text-[12.5px] text-primary underline-offset-4 hover:underline"
+							href={`/moderator/reports?user=${item.id}` as Route}
+						>
+							신고 내역 보기
+						</Link>
+					</div>
+					<Separator className="hidden md:block" />
+					<ContextSection title="계정 정보">
+						<ContextField
+							label="인증 번호"
+							value={item.phoneNumber ?? "미인증"}
+						/>
+						<ContextField
+							label="생년월일"
+							value={
+								item.birthDate ? formatBirthDate(item.birthDate) : "미등록"
+							}
+						/>
+						<ContextField label="이메일" value={item.email} />
+						<ContextField
+							label="로그인 아이디"
+							value={item.loginId ?? "미설정"}
+						/>
+						{item.organizationNames.length > 0 ? (
+							<ContextField
+								label="소속 업소"
+								value={item.organizationNames.join(", ")}
+							/>
+						) : null}
+						{item.deletedAt ? (
+							<ContextField
+								label="탈퇴 시각"
+								value={formatDateTime(item.deletedAt)}
+							/>
+						) : null}
+					</ContextSection>
+				</div>
+				{/* 오른쪽 컬럼 — 메모·조치 패널·이력·제재 세로 스택 */}
+				<div className="flex flex-col gap-4.5">
+					<div className="flex gap-2 rounded-md bg-secondary p-3.5">
+						<span className="mt-px inline-flex size-4 flex-[0_0_16px] text-muted-foreground">
+							<AlertCircle />
+						</span>
+						<span className="text-[12.5px] text-[color:var(--text-default)] leading-normal">
+							{item.note}
+						</span>
+					</div>
+					{item.deletedAt ? (
+						<UserWithdrawalPanel item={item} onRestore={onRestore} />
+					) : null}
+					{item.status === "active" ? null : (
+						<div>
+							<div className="mb-2.5 font-bold text-[13px] text-foreground">
+								계정 상태 복구
+							</div>
+							<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-normal">
+								현재 {c.label} 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
+								상태로 되돌릴 수 있어요.
+							</p>
+							<Button
+								block
+								leftIcon={<CheckIcon />}
+								onClick={() =>
+									onSanction(item.id, "active", "계정을 정상으로 복구했어요")
+								}
+								size="lg"
+								variant="primary"
+							>
+								정상으로 복구
+							</Button>
+						</div>
+					)}
+					{item.warnings > 0 ? (
+						<div>
+							<div className="mb-2.5 font-bold text-[13px] text-foreground">
+								경고 되돌리기
+							</div>
+							<Button
+								block
+								onClick={() => setRevertingWarning(true)}
+								size="lg"
+								variant="secondary"
+							>
+								최근 경고 1회 되돌리기
+							</Button>
+						</div>
+					) : null}
+					<UserModerationHistory key={item.id} userId={item.id} />
+					<UserContentHistory userId={item.id} />
+					<div>
+						<div className="mb-2.5 font-bold text-[13px] text-foreground">
+							제재 적용
+						</div>
+						<div className="flex flex-col gap-2.5 md:grid md:grid-cols-3 md:gap-2.5">
+							{SANCTION_CHOICES.map((choice) => (
+								<SanctionBtn
+									desc={choice.desc}
+									key={choice.status}
+									label={choice.title}
+									onClick={() => setPending(choice)}
+									tone={choice.tone}
+								/>
+							))}
+						</div>
 					</div>
 				</div>
 			</div>
@@ -3411,7 +3443,7 @@ export function ConsoleToast({ message }: { message: string }) {
 				BOTTOM_NAV_STACK_OFFSET
 			)}
 		>
-			<div className="flex max-w-[420px] items-center gap-2 rounded-[18px] bg-ink-800 px-[18px] py-[11px] font-bold text-[13px] text-white shadow-lg">
+			<div className="flex max-w-105 items-center gap-2 rounded-[18px] bg-ink-800 px-4.5 py-[11px] font-bold text-[13px] text-white shadow-lg">
 				<span className="inline-flex size-4 flex-[0_0_16px] text-green-500">
 					<CheckIcon />
 				</span>
@@ -3606,8 +3638,8 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 				</div>
 			)}
 			{toast ? (
-				<div className="pointer-events-none absolute right-0 bottom-[84px] left-0 z-30 flex justify-center">
-					<div className="flex items-center gap-2 rounded-full bg-ink-800 px-[18px] py-[11px] font-bold text-[13px] text-white shadow-lg">
+				<div className="pointer-events-none absolute right-0 bottom-21 left-0 z-30 flex justify-center">
+					<div className="flex items-center gap-2 rounded-full bg-ink-800 px-4.5 py-[11px] font-bold text-[13px] text-white shadow-lg">
 						<span className="inline-flex size-4 text-green-500">
 							<CheckIcon />
 						</span>

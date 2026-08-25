@@ -64,6 +64,11 @@ import {
 } from "../../services/bambi-chat-realtime";
 import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
+import {
+	jobLandingPingPaths,
+	pingIndexNow,
+	pingJobLanding,
+} from "../../services/bambi-indexnow";
 import { jobDetailDesignStatuses } from "../../services/bambi-job-detail-design";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
 import {
@@ -2220,6 +2225,7 @@ export const moderationRouter = {
 					>`coalesce(${bambiProfile.status}, 'active')`,
 					isPhoneVerified: sql<boolean>`coalesce(${bambiProfile.isPhoneVerified}, false)`,
 					phoneNumber: bambiProfile.phoneNumber,
+					birthDate: bambiProfile.birthDate,
 					reportsCount: reportsCountSql,
 					warningsCount: warningsCountSql,
 					organizationNames: organizationNamesSql,
@@ -2685,6 +2691,12 @@ export const moderationRouter = {
 				targetType: "job_post",
 			});
 
+			// 공개 게이트(published)에 걸친 전이에서만 랜딩을 재색인 요청한다 — 승인(→published)·
+			// 숨김/반려/보류(published→…) 어느 쪽이든 이전·이후 중 한쪽이 published면 노출이 바뀐다.
+			if (previousStatus === "published" || updated.status === "published") {
+				pingJobLanding(updated);
+			}
+
 			return updated;
 		}),
 
@@ -2817,6 +2829,10 @@ export const moderationRouter = {
 					targetId: input.jobPostId,
 					targetType: "job_post",
 				});
+
+				// 결제 상태 전환은 공개 게이트(published AND paid)를 넘나든다 — 노출이 바뀌었으니
+				// 랜딩 재색인을 요청한다. changed=false(멱등 재확정)면 이 블록에 오지 않는다.
+				pingJobLanding(updated);
 			}
 
 			return updated;
@@ -3308,6 +3324,12 @@ export const moderationRouter = {
 				string,
 				ReturnType<typeof buildJobPostStatusNotificationMetadata>
 			>();
+			// 공개 게이트(published)를 넘나든 공고의 지역·업종 — 커밋 후 한 번에 랜딩 재색인.
+			// 단건 setJobPostStatus의 previousStatus/updated.status 가드와 같은 조건이다.
+			const reindexJobsById = new Map<
+				string,
+				{ industryCategory: string | null; regionCode: string | null }
+			>();
 
 			const result = await db.transaction(
 				async (tx) =>
@@ -3322,6 +3344,16 @@ export const moderationRouter = {
 							if (!existing) {
 								throw new ORPCError("NOT_FOUND", {
 									message: "Job post was not found.",
+								});
+							}
+
+							if (
+								existing.status === "published" ||
+								input.status === "published"
+							) {
+								reindexJobsById.set(jobPostId, {
+									industryCategory: existing.industryCategory,
+									regionCode: existing.regionCode,
 								});
 							}
 
@@ -3379,6 +3411,18 @@ export const moderationRouter = {
 					targetId: jobPostId,
 					targetType: "job_post",
 				});
+			}
+
+			// 성공한 공고 중 게이트를 넘나든 것들의 랜딩 경로를 모아 1회 핑한다(순수 빌더가 dedupe).
+			const reindexPaths = succeededBulkTargetIds(
+				input.jobPostIds,
+				result
+			).flatMap((jobPostId) => {
+				const job = reindexJobsById.get(jobPostId);
+				return job ? jobLandingPingPaths(job) : [];
+			});
+			if (reindexPaths.length > 0) {
+				pingIndexNow(reindexPaths);
 			}
 
 			return result;
@@ -3507,7 +3551,10 @@ export const moderationRouter = {
 								exposureEndsAt: jobPost.exposureEndsAt,
 								exposureType: jobPost.exposureType,
 								id: jobPost.id,
+								// 랜딩 재색인 핑 경로 산정용(지역×업종).
+								industryCategory: jobPost.industryCategory,
 								listingPaidAt: jobPost.listingPaidAt,
+								regionCode: jobPost.regionCode,
 								title: jobPost.title,
 							})
 							.from(jobPost)
@@ -3540,6 +3587,18 @@ export const moderationRouter = {
 					targetId: jobPostId,
 					targetType: "job_post",
 				});
+			}
+
+			// 결제 전환(no-op 제외)한 공고들의 랜딩 경로를 모아 1회 핑한다 — 단건 setJobPostPayment의
+			// changed 가드와 같은 대상(순수 빌더가 dedupe). 커밋 후 반영된 행을 재사용한다.
+			const reindexPaths = succeededIds
+				.filter((jobPostId) => !noopJobPostIds.has(jobPostId))
+				.flatMap((jobPostId) => {
+					const row = succeededRowById.get(jobPostId);
+					return row ? jobLandingPingPaths(row) : [];
+				});
+			if (reindexPaths.length > 0) {
+				pingIndexNow(reindexPaths);
 			}
 
 			return result;

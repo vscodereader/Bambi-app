@@ -213,6 +213,44 @@ export const breadcrumbJsonLd = (items: readonly BreadcrumbItem[]) => ({
 	})),
 });
 
+// 공개 랜딩의 CollectionPage + 내부 ItemList. 화면에 보이는 공고 카드와 같은 상세 경로를
+// itemListElement로 실어(화면에 없는 URL을 구조화 데이터가 주장하면 리치 결과에서 빠진다),
+// numberOfItems는 실제 배열 길이로 낸다(하드코딩 금지). isPartOf로 WebSite 노드에 잇는다.
+export const collectionPageJsonLd = ({
+	description,
+	items,
+	name,
+	path,
+}: {
+	description: string;
+	// 사이트 루트 기준 상세 경로 목록 — 절대 URL은 여기서 붙인다.
+	items: readonly string[];
+	name: string;
+	path: string;
+}) => {
+	const url = `${BAMBI_COMPANY.url}${path}`;
+
+	return {
+		"@context": "https://schema.org",
+		"@type": "CollectionPage",
+		"@id": `${url}#collection`,
+		url,
+		name,
+		description,
+		inLanguage: "ko-KR",
+		isPartOf: { "@id": WEBSITE_ID },
+		mainEntity: {
+			"@type": "ItemList",
+			numberOfItems: items.length,
+			itemListElement: items.map((itemPath, index) => ({
+				"@type": "ListItem",
+				position: index + 1,
+				url: `${BAMBI_COMPANY.url}${itemPath}`,
+			})),
+		},
+	};
+};
+
 // script 본문에 "</script>"가 섞이면 태그가 조기에 닫혀 뒤 내용이 마크업으로 실행된다.
 // `<`를 유니코드 이스케이프하면 JSON 의미는 그대로 두고 파서 탈출만 막는다.
 export const toJsonLdScriptContent = (data: object): string =>

@@ -54,6 +54,7 @@ import {
 } from "../icons";
 import {
 	ATTENDANCE_HREF,
+	canUseAttendance,
 	isMyPageItemVisible,
 	MyPageShell,
 } from "../my-page-shell";
@@ -609,7 +610,10 @@ export function SeekerMe() {
 		isMyPageItemVisible(section.href, role)
 	);
 	return (
-		<MyPageShell hubSummary={<MyPointsSummaryCard />} title="내 정보">
+		<MyPageShell
+			hubSummary={canUseAttendance(role) ? <MyPointsSummaryCard /> : null}
+			title="내 정보"
+		>
 			<div className="hidden gap-4 md:grid md:grid-cols-2">
 				{sections.map((section) => (
 					<Link

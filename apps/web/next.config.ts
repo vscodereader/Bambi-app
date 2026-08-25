@@ -35,6 +35,22 @@ const nextConfig: NextConfig = {
 	// /api/guest 라우트가 포트원 본인인증 서비스(services/portone-identity)와
 	// 레이트리밋 카운터(services/rate-limit)를 런타임 import 하므로 트랜스파일 대상에 넣는다.
 	transpilePackages: ["shiki", "@bambi-app/api"],
+	headers() {
+		return Promise.resolve([
+			{
+				source: "/(.*)",
+				headers: [
+					{ key: "X-Content-Type-Options", value: "nosniff" },
+					{
+						key: "Referrer-Policy",
+						value: "strict-origin-when-cross-origin",
+					},
+					// DENY가 아니라 SAMEORIGIN: 프리뷰·에디터 화면이 자기 출처를 iframe에 띄울 수 있어야 한다.
+					{ key: "X-Frame-Options", value: "SAMEORIGIN" },
+				],
+			},
+		]);
+	},
 	// 옛 진입 경로. 로그인·회원가입 UI가 /seeker 위 오버레이로 옮겨가 두 페이지는
 	// 사라졌지만, 외부 북마크·검색엔진 색인이 남아 있어 영구 리다이렉트로 흡수한다.
 	// next.config의 redirects는 프록시(미들웨어)보다 먼저 실행되므로 게이트에 걸리지 않는다.

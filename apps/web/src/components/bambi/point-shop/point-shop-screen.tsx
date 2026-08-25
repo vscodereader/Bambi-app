@@ -364,10 +364,6 @@ export function PointShopScreen() {
 	const [selected, setSelected] = useState<null | PointShopItem>(null);
 
 	const itemsQuery = useQuery(orpc.bambi.pointShop.listItems.queryOptions());
-	const balanceQuery = useQuery({
-		...orpc.bambi.pointShop.getMyBalance.queryOptions(),
-		enabled: isAuthenticated,
-	});
 	// 쿠폰형 본인인증 게이트·자격 안내에 쓸 프로필(역할·본인인증·성별). auth-provider의
 	// getMine과 같은 키라 캐시를 공유한다.
 	const mineQuery = useQuery({
@@ -376,6 +372,10 @@ export function PointShopScreen() {
 	});
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	const role = profile?.role ?? null;
+	const balanceQuery = useQuery({
+		...orpc.bambi.pointShop.getMyBalance.queryOptions(),
+		enabled: isAuthenticated && (role === "job_seeker" || role === "employer"),
+	});
 	const isPhoneVerified = Boolean(profile?.isPhoneVerified);
 	const defaultGender = (profile?.gender ?? null) as BambiGenderValue | null;
 
@@ -432,6 +432,9 @@ export function PointShopScreen() {
 		// 세션 판정 전(하이드레이션 직후)에는 비로그인으로 보여, 눌러도 아무것도 하지 않는다 —
 		// 여기서 바로 보내면 로그인한 사용자가 인증 화면으로 튕긴다.
 		if (isAuthPending) {
+			return;
+		}
+		if (role === "admin") {
 			return;
 		}
 		if (isAuthenticated) {

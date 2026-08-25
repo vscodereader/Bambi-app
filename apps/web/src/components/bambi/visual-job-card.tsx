@@ -29,6 +29,7 @@ import { AdPeriodTierIcon } from "./ad-period-tier-icon";
 import { Badge } from "./ds";
 import { MapPinIcon } from "./icons";
 import { JobCoverImage } from "./job-cover-image";
+import { PointJobSticker, usePointJobReward } from "./point-job-sticker";
 
 interface VisualJobCardProps {
 	active?: boolean;
@@ -176,6 +177,13 @@ export function VisualJobCard({
 	tone,
 }: VisualJobCardProps) {
 	const { amount: payAmount, unit: payUnit } = splitPay(job.pay);
+	const pointReward = usePointJobReward({
+		category: tone === "special" ? "special" : "recommended",
+		targetId: job.id,
+		targetSource: job.crawled ? "crawled_job_post" : "job_post",
+	});
+	const pointRewardVisible =
+		(tone === "special" || tone === "recommended") && pointReward.points > 0;
 	// organic엔 리본 없음. Hit이고 tone이 special/urgent/recommended일 때만 표시.
 	const showHitRibbon = shouldShowHitRibbon(job, tone);
 	const hitRibbonClassName =
@@ -219,6 +227,9 @@ export function VisualJobCard({
 		trackAnalytics && analyticsContext ? handleImpression : null
 	);
 	const handleOpen = () => {
+		if (pointRewardVisible) {
+			pointReward.claim();
+		}
 		if (trackAnalytics && analyticsContext) {
 			trackJobSelect(job, analyticsContext);
 			if (
@@ -241,6 +252,7 @@ export function VisualJobCard({
 			)}
 			ref={impressionRef}
 		>
+			{pointRewardVisible ? <PointJobSticker /> : null}
 			{showHitRibbon ? (
 				// 카드 우측 상단을 대각선으로 가로지르는 얇은 코너 리본. article의 overflow-hidden이
 				// 양끝을 삼각 코너로 잘라주고, 코너에 대칭 배치해 HIT를 중앙에 둔다.

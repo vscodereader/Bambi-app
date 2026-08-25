@@ -35,7 +35,7 @@ export function MemberPointAdjustDialog({
 	onSubmit: (values: { amount: number; reason: string }) => void;
 	open: boolean;
 	pending: boolean;
-	pointBalance: number;
+	pointBalance?: number;
 }): React.JSX.Element {
 	const [direction, setDirection] = useState(defaultDirection);
 	const [amount, setAmount] = useState("");
@@ -54,8 +54,9 @@ export function MemberPointAdjustDialog({
 						포인트 {lockDirection ? label : "지급·차감"}
 					</DialogTitle>
 					<DialogDescription>
-						{memberName} 회원의 현재 잔액은{" "}
-						{pointBalance.toLocaleString("ko-KR")}P예요.
+						{pointBalance === undefined
+							? `${memberName} 회원에게 포인트를 지급·차감해요.`
+							: `${memberName} 회원의 현재 잔액은 ${pointBalance.toLocaleString("ko-KR")}P예요.`}
 					</DialogDescription>
 				</div>
 				{lockDirection ? null : (

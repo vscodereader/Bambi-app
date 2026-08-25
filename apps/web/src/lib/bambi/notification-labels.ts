@@ -7,7 +7,7 @@ import {
 	communityCrawledPath,
 	communityPostPath,
 } from "./community";
-import { LISTING_QUEUE_SHORT_LABELS } from "./exposure";
+import { EXPOSURE_TYPE_LABELS, LISTING_QUEUE_SHORT_LABELS } from "./exposure";
 import { organizationRoleLabel } from "./team-labels";
 
 export const NOTIFICATIONS_HREF = "/seeker/notifications";
@@ -70,6 +70,16 @@ const pointTransactionTitle = (item: BambiNotificationView): null | string => {
 	}
 	if (action(item) === "review_republished") {
 		return `포인트 ${amount.toLocaleString("ko-KR")}가 지급되었어요! - 후기 재게시`;
+	}
+	if (action(item) === "point_job_reward") {
+		const category = readString(item.metadata, "category");
+		const label =
+			category === "premium"
+				? EXPOSURE_TYPE_LABELS["premium-banner"].replace(" 배너", "")
+				: LISTING_QUEUE_SHORT_LABELS[
+						category as keyof typeof LISTING_QUEUE_SHORT_LABELS
+					];
+		return `${label ?? "포인트"} 포인트 공고를 확인해 ${amount.toLocaleString("ko-KR")}포인트를 받았어요.`;
 	}
 	return action(item) === "admin_awarded"
 		? `운영자로부터 ${amount.toLocaleString("ko-KR")} 포인트가 지급되었습니다!`
@@ -402,6 +412,15 @@ export function notificationHref(item: BambiNotificationView): null | string {
 		case "point_shop_order":
 			return "/seeker/attendance";
 		case "point_transaction":
+			if (action(item) === "point_job_reward") {
+				const jobPostId = readString(item.metadata, "jobPostId");
+				if (jobPostId) {
+					return readString(item.metadata, "targetSource") ===
+						"crawled_job_post"
+						? `/seeker/jobs/crawled/${jobPostId}`
+						: `/seeker/jobs/${jobPostId}`;
+				}
+			}
 			return "/seeker/attendance#point-history";
 		case "report":
 			return "/seeker/me/reports";

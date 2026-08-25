@@ -52,6 +52,10 @@ export const env = createEnv({
 		// 실제 값에는 인증한 사람의 실명·생년월일·휴대폰번호가 들어 있으므로, 공유 리포나
 		// 배포 환경에서는 코드가 아니라 이쪽에 넣는 편이 안전하다(이 값이 코드보다 우선한다).
 		QUEENALBA_COOKIE: z.string().optional(),
+		// IndexNow(빙·네이버 계열 즉시 색인) 제출 키. 미설정이면 핑 기능 전체가 조용히
+		// no-op이 된다(로그도 남기지 않는다) — 개발·검증 환경에서 불필요한 외부 호출을 막는다.
+		// web(web.ts)이 같은 키를 /{key}.txt로 서빙해 검증에 응답하므로 두 값은 같아야 한다.
+		INDEXNOW_KEY: z.string().optional(),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,

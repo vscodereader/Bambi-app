@@ -75,6 +75,7 @@ import {
 import { detectBannedTerms } from "../../services/bambi-banned-words";
 import { loadCrawledAdBannerPools } from "../../services/bambi-crawled-ad-banner-slots";
 import { readCrawledLimits } from "../../services/bambi-crawled-limits";
+import { pingJobLanding } from "../../services/bambi-indexnow";
 import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
 import {
 	type BoostPurchaseLike,
@@ -103,6 +104,7 @@ import {
 	isCrawledJobFeedEnabled,
 	type JobFeedRow,
 	listCrawledSectionRows,
+	listLandingJobSummary,
 	minHourlyPayFilter,
 	ratingAverageSql,
 	ratingCountSql,
@@ -1013,6 +1015,17 @@ const syncBoostPurchases = async ({
 // jobs.update와 운영자 편집(moderation.adminUpdateJobPost)이 공유하는 갱신·노출확정 로직.
 // 호출자는 대상 공고(existing)를 먼저 조회·권한 확인한 뒤 넘긴다 — 이 함수는 권한 검사를 하지
 // 않으므로(조직 멤버십 우회가 목적) 반드시 호출부에서 게이트를 통과시켜야 한다.
+// published였던 공고가 구인자 수정으로 강등되면(published→pending_review) 랜딩에서 즉시 빠지므로
+// 재색인을 요청한다. 빠져나간 옛 위치를 갱신하려 수정 전 행(existing)으로 핑한다. 삭제 경로의
+// existing.status==="published" 가드와 대칭. (applyJobPostUpdate 인지복잡도 예산상 가드를 분리한다.)
+const pingJobLandingForUpdatedPost = (
+	existing: typeof jobPost.$inferSelect
+): void => {
+	if (existing.status === "published") {
+		pingJobLanding(existing);
+	}
+};
+
 export const applyJobPostUpdate = async ({
 	actorUserId,
 	data,
@@ -1297,6 +1310,10 @@ export const applyJobPostUpdate = async ({
 			previousStorageKeys.filter((key) => !retainedKeys.has(key))
 		);
 	}
+
+	// 게시 중이던 공고를 구인자가 수정하면 재검수로 강등돼 랜딩에서 빠진다(운영자 편집은 status
+	// 보존이라 강등 없음). 강등 전 published였을 때만 재색인을 요청한다 — 가드는 헬퍼로 분리했다.
+	pingJobLandingForUpdatedPost(existing);
 
 	return result;
 };
@@ -1699,6 +1716,12 @@ export const jobsRouter = {
 			},
 		};
 	}),
+
+	// 사이트맵 전용 경량 집계. 지역×업종별 공개 노출 자격 공고 수·최신 갱신 시각을 목록과 같은
+	// 자격 조건으로 세어, 0건 조합 제외와 lastmod 산정에 쓴다(공고 본문·미디어는 싣지 않는다).
+	landingSummary: publicProcedure.handler(
+		async () => await listLandingJobSummary()
+	),
 
 	search: publicProcedure
 		.input(
@@ -2698,6 +2721,12 @@ export const jobsRouter = {
 				await tx.delete(jobPost).where(eq(jobPost.id, input.id));
 			});
 			await deletePublicObjects(storageKeys);
+
+			// 노출 중이던 공고가 사라졌으면 랜딩 재색인을 요청한다(집계에서 빠져야 한다).
+			// 검수 전(pending_review 등) 비공개 공고 삭제는 랜딩에 영향이 없어 건너뛴다.
+			if (existing.status === "published") {
+				pingJobLanding(existing);
+			}
 
 			return { id: input.id };
 		}),

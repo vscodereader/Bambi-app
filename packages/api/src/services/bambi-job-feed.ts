@@ -468,3 +468,50 @@ export const searchJobFeed = async (
 
 	return [...own, ...crawled].slice(0, input.limit);
 };
+
+export interface LandingSummaryRow {
+	count: number;
+	industryCategory: JobIndustryCategory;
+	// 그룹 내 최신 갱신 시각. 사이트맵 lastmod로 쓴다(빈 그룹은 group by가 아예 안 만든다).
+	lastModified: Date | null;
+	// 수집 공고는 regionCode가 null일 수 있다(지역 텍스트만 확인). null 그룹은 사이트맵의
+	// 16개 지역 코드와 매칭되지 않아 조합·지역 항목에선 무시되고 인덱스 최신 계산에만 기여한다.
+	regionCode: null | string;
+}
+
+// 지역×업종별 공개 노출 자격 공고 수와 최신 갱신 시각. 사이트맵이 0건 조합을 빼고 lastmod를
+// 채우는 데 쓴다. 목록(list)과 같은 자격 조건 빌더(jobPostFeedConditions·crawledJobFeedConditions)를
+// 재사용해 "목록엔 없는데 사이트맵엔 있는" 조합이 생기지 않게 한다. 자체 공고·수집 공고를 각각
+// 한 번씩 group by 하고(둘 다 limit·offset 없는 경량 집계), 호출부가 조합 단위로 합친다.
+export const listLandingJobSummary = async (): Promise<LandingSummaryRow[]> => {
+	const includeCrawled = await isCrawledJobFeedEnabled();
+
+	const [ownRows, crawledRows] = await Promise.all([
+		db
+			.select({
+				count: count(),
+				industryCategory: jobPost.industryCategory,
+				lastModified: sql<Date | null>`max(${jobPost.updatedAt})`,
+				regionCode: jobPost.regionCode,
+			})
+			.from(jobPost)
+			.innerJoin(
+				employerOrganizationProfile,
+				eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+			)
+			.where(and(...jobPostFeedConditions({ limit: 0 })))
+			.groupBy(jobPost.regionCode, jobPost.industryCategory),
+		db
+			.select({
+				count: count(),
+				industryCategory: sql<JobIndustryCategory>`${crawledJobPost.industryCategory}`,
+				lastModified: sql<Date | null>`max(${crawledJobPost.updatedAt})`,
+				regionCode: crawledJobPost.regionCode,
+			})
+			.from(crawledJobPost)
+			.where(and(...crawledJobFeedConditions({ limit: 0 }, includeCrawled)))
+			.groupBy(crawledJobPost.regionCode, crawledJobPost.industryCategory),
+	]);
+
+	return [...ownRows, ...crawledRows];
+};
