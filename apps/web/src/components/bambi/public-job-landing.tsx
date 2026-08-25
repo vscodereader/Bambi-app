@@ -45,7 +45,7 @@ import {
 	collectionPageJsonLd,
 } from "@/lib/bambi/seo";
 import type { Job } from "@/lib/bambi/types";
-import { client } from "@/utils/orpc";
+import { publicClient } from "@/utils/orpc-public";
 import { JobCoverImage } from "./job-cover-image";
 import { JsonLd } from "./json-ld";
 
@@ -67,7 +67,7 @@ const loadLandingJobsBySlug = cache(
 			: undefined;
 
 		try {
-			const { sections } = await client.bambi.jobs.list({
+			const { sections } = await publicClient.bambi.jobs.list({
 				limit: LANDING_JOB_LIMIT,
 				...(industry ? { industryCategory: industry.label } : {}),
 				...(region ? { regionCode: region.code } : {}),
