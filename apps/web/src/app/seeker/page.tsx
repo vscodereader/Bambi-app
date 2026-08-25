@@ -41,12 +41,14 @@ export default async function SeekerHomePage({
 		searchParams,
 		readVisitorState(),
 	]);
+	const isAnon = visitor === "anon";
 	const isGuest = visitor === "guest";
 	// 본인인증만 마친 게스트가 로그인·가입이 필요한 곳(내 정보·수다방·공고 상세)을 누르면
 	// 게이트가 ?auth=…를 달아 여기로 돌려보낸다. 그때는 목록 위에 작은 다이얼로그를
 	// 띄우지 않고 anon이 처음 보던 것과 같은 블러 게이트 화면을 보여준다 — 로그인 요구
 	// 상황의 화면이 방문자 종류에 따라 갈리지 않도록.
-	const showGate = isGuest && (auth === "login" || auth === "signup");
+	const showGate =
+		isAnon || (isGuest && (auth === "login" || auth === "signup"));
 	const body = showGate ? (
 		<SeekerAuthGateScreen />
 	) : (

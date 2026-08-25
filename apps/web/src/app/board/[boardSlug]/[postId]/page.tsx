@@ -6,6 +6,7 @@ import { ChevronLeftIcon, EyeIcon, ThumbsUpIcon } from "lucide-react";
 import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CommunityPostNavigation } from "@/components/bambi/community-post-navigation";
 import { Avatar } from "@/components/bambi/ds";
 import { JsonLd } from "@/components/bambi/json-ld";
 import { PublicPostBody } from "@/components/bambi/public-post-body";
@@ -282,6 +283,15 @@ export default async function PublicPostPage({ params }: PageProps) {
 					postId={postId}
 				/>
 			)}
+			{board ? (
+				<CommunityPostNavigation
+					boardKey={board.key}
+					boardSlug={board.slug}
+					currentId={postId}
+					publicView
+					source="native"
+				/>
+			) : null}
 		</article>
 	);
 }
