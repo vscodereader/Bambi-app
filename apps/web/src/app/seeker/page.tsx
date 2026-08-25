@@ -11,11 +11,12 @@ import {
 } from "@/lib/bambi/seo";
 import { readVisitorState } from "@/lib/bambi/visitor";
 
-// /seeker는 사이트맵 1순위 정적 경로다. 루트와 title·description이 겹치지 않게
-// 이 라우트 고유 metadata를 둔다. anon 방문자에겐 layout이 children을 버리고
-// 게이트를 그리지만, 이 export는 렌더 분기와 무관하게 라우트에 그대로 적용된다.
-const SEEKER_TITLE =
-	"밤비알바 채용정보 - 퀸알바·여우알바·밤알바 유흥알바 구인구직";
+// /seeker는 사이트맵 1순위 정적 경로다. title은 루트 SITE_TITLE과 구분자만 다른 사실상
+// 중복이지만 사용자 확정 문구라 그대로 두고, description으로 차별화한다 — 실중복 노출은
+// 없다: 루트 `/`는 redirect()로 /seeker에 보내져 색인·SERP에 뜨는 건 이 경로뿐이다.
+// anon 방문자에겐 layout이 children을 버리고 게이트를 그리지만, 이 export는 렌더 분기와
+// 무관하게 라우트에 그대로 적용된다.
+const SEEKER_TITLE = "밤비알바 - 퀸알바·여우알바·밤알바·유흥알바 구인구직";
 const SEEKER_DESCRIPTION =
 	"밤비알바 채용정보에서 퀸알바·여우알바·밤알바 관련 유흥알바·룸알바 공고를 지역·업종별로 살펴보세요. 회원가입 후 전체 공고 열람과 구인자와 1:1 채팅 문의가 가능합니다.";
 

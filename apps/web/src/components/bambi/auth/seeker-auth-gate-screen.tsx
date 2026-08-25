@@ -57,7 +57,15 @@ export async function SeekerAuthGateScreen() {
 				    겹쳐 띄운 층은 화면에서 잘라낸 고정 높이라, 카드가 그보다 길면(가입 폼
 				    1열) 넘친 부분이 아래 푸터를 덮는다 — overflow-y-auto로 그 층 안에서
 				    스크롤되게 해 푸터를 침범하지 않게 한다(카드의 my-auto가 짝이다). */}
-				<div className="flex flex-1 items-center justify-center p-4 md:absolute md:inset-0 md:overflow-y-auto md:bg-background/60 md:p-6">
+				{/* min-h로 카드 자리를 미리 잡아, Suspense가 걸린 AuthPanel(클라이언트 섬)이
+				    붙기 전 빈 상태에서 이 영역이 접혔다 카드(min-h-[620px])만큼 펴지는 레이아웃
+				    이동(CLS)을 막는다. min-h는 border-box라 p-4(상하 32px)만큼 콘텐츠 영역이
+				    줄어드니, 카드 620 + 상하 패딩 32 = 652(min-h-163)로 예약해야 카드가 붙어도
+				    시프트가 남지 않는다. md 이상은 md:min-h-0으로 이 예약을 풀어야 한다 —
+				    absolute inset-0이라도 min-height는 inset 산출 높이를 이겨서, 뷰포트가
+				    652px보다 짧은 md+ 화면(가로모드 폰·짧은 창)에서 이 층이 relative
+				    컨테이너 밖으로 삐져나와 소개·푸터를 덮기 때문이다. */}
+				<div className="flex min-h-163 flex-1 items-center justify-center p-4 md:absolute md:inset-0 md:min-h-0 md:overflow-y-auto md:bg-background/60 md:p-6">
 					{/* AuthPanel이 useSearchParams를 쓰므로 Suspense가 필요하다. */}
 					<Suspense>
 						<AuthPanel />
@@ -77,8 +85,10 @@ export async function SeekerAuthGateScreen() {
 					지역·업종별로 모아 보여주고, 마음에 드는 공고와 1:1 채팅으로 연결해
 					주는 여성 구인구직 플랫폼입니다.
 				</p>
+				{/* 모바일 탭 타깃을 44px 이상으로(min-h-11) 넓히되, 채운 버튼이 아니라 muted
+				    링크 룩은 그대로 둔다 — 이 링크가 위 로그인/가입 CTA와 위계를 다투지 않게. */}
 				<Link
-					className="font-bold text-primary text-sm underline underline-offset-4 hover:no-underline"
+					className="inline-flex min-h-11 items-center justify-center px-3 font-bold text-primary text-sm underline underline-offset-4 hover:no-underline"
 					href="/jobs"
 				>
 					로그인 없이 지역·업종별 채용정보 둘러보기
