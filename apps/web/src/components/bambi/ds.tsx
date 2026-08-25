@@ -856,6 +856,7 @@ export function BottomNav({
 				const count = badges[it.value];
 				return (
 					<button
+						aria-current={on ? "page" : undefined}
 						aria-disabled={it.disabled || undefined}
 						className={cn(
 							"flex flex-1 cursor-pointer flex-col items-center gap-1 border-none bg-none px-0 py-1",
@@ -870,13 +871,16 @@ export function BottomNav({
 						<span className="relative inline-flex size-6">
 							<Icon />
 							{count ? (
-								<span className="absolute top-[-5px] right-[-8px] inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-coral-500 px-1 font-bold text-[10px] text-white shadow-[0_0_0_2px_var(--surface-card)]">
+								<span
+									aria-label={`읽지 않은 메시지 ${count}개`}
+									className="absolute -top-1 -right-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-coral-500 px-1 font-bold text-[10px] text-white shadow-[0_0_0_2px_var(--surface-card)]"
+								>
 									{count}
 								</span>
 							) : null}
 						</span>
 						<span
-							className={cn("text-[10px]", on ? "font-bold" : "font-medium")}
+							className={cn("text-xs", on ? "font-bold" : "font-medium")}
 						>
 							{it.label}
 						</span>

@@ -45,12 +45,14 @@ describe("visual job marketplace components", () => {
 		// 카드의 채팅 버튼은 제거됨 — 채팅 진입은 공고 상세에서만 한다
 		expect(source).not.toContain("채팅");
 		expect(source).not.toContain("onChat");
-		// 모든 노출 구역이 공유하는 카드에서 제목 → 업체 → 위치 순서와 7자 말줄임을 유지한다.
-		expect(source).toContain("const JOB_CARD_TEXT_LIMIT = 7");
-		expect(source).toContain("truncateJobCardText(job.title)");
-		expect(source).toContain("truncateJobCardText(job.company)");
-		expect(source).toContain("title={fullTextTitle(job.title)}");
-		expect(source).toContain("title={fullTextTitle(job.company)}");
+		// 모든 노출 구역이 공유하는 카드에서 제목 → 업체 → 위치 순서를 유지하고, 잘림은
+		// CSS truncate(폭 기준)에 맡긴다 — JS 글자 수 하드컷(JOB_CARD_TEXT_LIMIT)은 폭과
+		// 무관하게 잘라 제거됐다. title 속성은 항상 전체 값으로 호버 복원 경로를 준다.
+		expect(source).not.toContain("JOB_CARD_TEXT_LIMIT");
+		expect(source).not.toContain("truncateJobCardText");
+		expect(source).toContain("truncate font-extrabold");
+		expect(source).toContain("title={job.title}");
+		expect(source).toContain("title={job.company}");
 		// 최신(organic) 배지는 중립 톤 — 사용 색상 최소화
 		expect(source).toContain("tone={toneBadge[tone]}");
 		expect(source).toContain('organic: "neutral"');
@@ -165,9 +167,9 @@ describe("visual job marketplace components", () => {
 	// 수집 배너는 방향과 무관하게 결제 배너와 같은 규격 슬롯에 채워 그린다.
 	// 세로: 원본 실측 80×180 = 정확히 4:9라 규격(aspect-[4/9] h-52)을 object-cover로 채워도
 	// 잘리는 곳이 없다.
-	// 가로: 슬롯을 object-fill로 채운다 — 원본 실측 240×117(≈2.05)이 슬롯 비율과 달라 눌리지만,
-	// 슬롯이 이미지 크기대로 늘었다 줄었다 하면 옆 결제 슬롯·레일과 높이가 어긋난다(사용자 결정)
-	// — 그래서 원본 비율(h-auto) 분기는 양쪽 다 없다.
+	// 가로: 슬롯을 object-cover로 채운다 — 원본 비율이 슬롯과 다르면 넘치는 부분만 잘리고
+	// 눌림은 없다. 슬롯이 이미지 크기대로 늘었다 줄었다 하면 옆 결제 슬롯·레일과 높이가
+	// 어긋난다(사용자 결정) — 그래서 원본 비율(h-auto) 분기는 양쪽 다 없다.
 	it("renders crawled banners at our spec slots in both orientations", () => {
 		const banner = readComponent("ad-banner.tsx");
 		const vertical = blockBetween(
@@ -190,7 +192,7 @@ describe("visual job marketplace components", () => {
 		// 3칸이 쓰는 값이라 좌측 레일 높이를 맞추더라도 여기서 바뀌면 안 된다.
 		expect(horizontal).toContain("aspect-[16/9] w-full rounded-lg border");
 		expect(horizontal).not.toContain("aspect-[259/122]");
-		expect(horizontal).toContain('"object-fill"');
+		expect(horizontal).toContain('"object-cover"');
 		expect(horizontal).not.toContain("item.crawled");
 		expect(horizontal).not.toContain("h-auto");
 		// 갈 곳 없는 배너는 이제 없다(매퍼가 수집 전용 상세 주소를 만든다).
@@ -283,13 +285,15 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("SEEKER_CONTENT_WIDTH");
 		expect(source).not.toContain("max-w-[80%]");
 		expect(source).not.toContain("조건에 맞는 안전한 자리를 찾아요");
-		// 탐색 바(세그먼트 탭·퀵칩·본문 검색·필터 버튼·필터 시트)는 전부 걷어냈다.
-		// 검색은 헤더(SeekerAppShell)로, 필터는 1720px+ 사이드바로만 남는다.
+		// 탐색 바(세그먼트 탭·퀵칩·본문 검색)는 걷어냈다 — 검색은 헤더(SeekerAppShell)로.
+		// 필터는 1720px+ 사이드바 + 그 미만에서는 목록 상단 트리거의 시트로 제공한다
+		// (트리거는 min-[1720px]:hidden으로 사이드바와 상보 — 필터 소실 구간이 없다).
 		expect(source).toContain("useSeekerFilters");
 		expect(source).toContain("MarketplaceFilterControls");
 		expect(source).not.toContain("MarketplaceDiscoveryBar");
 		expect(source).not.toContain("MarketplaceDiscoveryAxisChips");
-		expect(source).not.toContain("MarketplaceFilterSheet");
+		expect(source).toContain("MarketplaceFilterSheet");
+		expect(source).toContain("min-[1720px]:hidden");
 		expect(source).not.toContain("MarketplaceSearch");
 	});
 
