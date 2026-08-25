@@ -1,6 +1,6 @@
 {
-  "id": "5a95aafb-6592-47dd-b9d2-853a9ffd0bf5",
-  "prevId": "732934db-04f9-459b-ab05-7826ebd0b9c2",
+  "id": "059db163-8585-4dbb-bd09-45c204c24486",
+  "prevId": "fba2c39d-e64d-434f-b92b-c2c65f890fd9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1579,6 +1579,140 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.bambi_comment_milestone": {
+      "name": "bambi_comment_milestone",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "comment_count": {
+          "name": "comment_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bonus_points": {
+          "name": "bonus_points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "bambi_comment_milestone_comment_count_unique": {
+          "name": "bambi_comment_milestone_comment_count_unique",
+          "nullsNotDistinct": false,
+          "columns": ["comment_count"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bambi_comment_milestone_award": {
+      "name": "bambi_comment_milestone_award",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "milestone_id": {
+          "name": "milestone_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "comment_id": {
+          "name": "comment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "bambi_comment_milestone_award_milestone_uidx": {
+          "name": "bambi_comment_milestone_award_milestone_uidx",
+          "columns": [
+            {
+              "expression": "milestone_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "bambi_comment_milestone_award_user_id_user_id_fk": {
+          "name": "bambi_comment_milestone_award_user_id_user_id_fk",
+          "tableFrom": "bambi_comment_milestone_award",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "bambi_comment_milestone_award_milestone_id_bambi_comment_milestone_id_fk": {
+          "name": "bambi_comment_milestone_award_milestone_id_bambi_comment_milestone_id_fk",
+          "tableFrom": "bambi_comment_milestone_award",
+          "tableTo": "bambi_comment_milestone",
+          "columnsFrom": ["milestone_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "bambi_comment_milestone_award_comment_id_community_comment_id_fk": {
+          "name": "bambi_comment_milestone_award_comment_id_community_comment_id_fk",
+          "tableFrom": "bambi_comment_milestone_award",
+          "tableTo": "community_comment",
+          "columnsFrom": ["comment_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.bambi_identity_verification": {
       "name": "bambi_identity_verification",
       "schema": "",
@@ -3138,6 +3272,34 @@
           "notNull": true,
           "default": 10
         },
+        "comment_bonus_enabled": {
+          "name": "comment_bonus_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "comment_bonus_chance_percent": {
+          "name": "comment_bonus_chance_percent",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 10
+        },
+        "comment_bonus_min_points": {
+          "name": "comment_bonus_min_points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 5
+        },
+        "comment_bonus_max_points": {
+          "name": "comment_bonus_max_points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 50
+        },
         "point_job_reward_points": {
           "name": "point_job_reward_points",
           "type": "integer",
@@ -4422,6 +4584,20 @@
         },
         "points_awarded": {
           "name": "points_awarded",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "bonus_points": {
+          "name": "bonus_points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "bonus_points_awarded": {
+          "name": "bonus_points_awarded",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -9585,11 +9761,6 @@
       "schema": "public",
       "values": ["image", "pdf"]
     },
-    "public.community_board_layout_surface": {
-      "name": "community_board_layout_surface",
-      "schema": "public",
-      "values": ["main", "community"]
-    },
     "public.community_content_status": {
       "name": "community_content_status",
       "schema": "public",
@@ -9832,6 +10003,11 @@
       "name": "support_inquiry_status",
       "schema": "public",
       "values": ["open", "answered", "closed"]
+    },
+    "public.community_board_layout_surface": {
+      "name": "community_board_layout_surface",
+      "schema": "public",
+      "values": ["main", "community"]
     }
   },
   "schemas": {},

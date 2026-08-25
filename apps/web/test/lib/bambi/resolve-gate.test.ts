@@ -62,10 +62,12 @@ describe("resolveGate", () => {
 			to: "/seeker?auth=signup&guestBlocked=1",
 		});
 	});
-	it("sends an unqualified guest from community to signup with guestBlocked signal", () => {
+	it("lets every visitor open the community home preview", () => {
 		expect(resolveGate({ pathname: "/seeker/community", ...guest })).toEqual({
-			type: "redirect",
-			to: "/seeker?auth=signup&guestBlocked=1",
+			type: "next",
+		});
+		expect(resolveGate({ pathname: "/seeker/community", ...fresh })).toEqual({
+			type: "next",
 		});
 	});
 	it("lets a verified female guest into the member community area", () => {
@@ -93,8 +95,10 @@ describe("resolveGate", () => {
 			});
 		}
 	});
-	it("still blocks anonymous visitors from the member community area", () => {
-		expect(resolveGate({ pathname: "/seeker/community", ...fresh })).toEqual({
+	it("still blocks anonymous visitors from community boards and details", () => {
+		expect(
+			resolveGate({ pathname: "/seeker/community/free", ...fresh })
+		).toEqual({
 			type: "redirect",
 			to: "/seeker?auth=login",
 		});

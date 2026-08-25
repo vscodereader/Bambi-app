@@ -7,6 +7,7 @@ import {
 	bambiSiteSettings,
 	communityBoard,
 	communityBoardHomeLayout,
+	communityBoardLayoutSurface,
 	communityComment,
 	communityNoticeBoardPlacement,
 	communityPost,
@@ -21,10 +22,13 @@ import {
 	count,
 	desc,
 	eq,
+	gt,
 	gte,
 	ilike,
 	inArray,
 	isNull,
+	lt,
+	ne,
 	notInArray,
 	or,
 	type SQL,
@@ -60,6 +64,10 @@ import {
 	resolveLockedForBoard,
 	SECRET_AUTHOR_NAME,
 } from "../../services/bambi-community-authz";
+import {
+	type CommunityNavigationCandidate,
+	pickCommunityNavigationNeighbor,
+} from "../../services/bambi-community-navigation";
 import {
 	hashCommunityPassword,
 	verifyCommunityPassword,
@@ -111,6 +119,9 @@ const COMMENTS_CAP = 200;
 // 존재·활성·쓰기 가능 여부는 핸들러의 assertBoard가 DB를 보고 판정한다(운영자가
 // 게시판을 추가할 때마다 zod enum을 고치고 배포해야 하던 구조를 걷어냈다).
 const boardKeySchema = z.string().trim().min(1).max(40);
+const overviewInput = z.object({
+	surface: z.enum(communityBoardLayoutSurface.enumValues),
+});
 
 // 저장 게시판이 아닌 가상 큐레이션. 읽기 경로에서만 허용한다(글은 여기에 못 쓴다).
 const BEST_BOARD = "best";
@@ -153,6 +164,13 @@ const listPostsInput = z.object({
 	q: z.string().trim().max(50).optional(),
 	showEmployer: z.boolean().default(false),
 	showPromotion: z.boolean().default(false),
+});
+
+const postNavigationInput = z.object({
+	board: boardKeySchema,
+	currentId: z.uuid(),
+	publicView: z.boolean().default(false),
+	source: z.enum(["native", "crawled"]),
 });
 
 const postIdInput = z.object({
@@ -603,6 +621,38 @@ const buildBoardFilters = (board: string, windowStart: Date): SQL[] => {
 			)
 		) as SQL,
 	];
+};
+
+// 상세의 이전글·다음글은 목록의 공지 우선/추천수 우선이 아니라 등록시간 총순서만 쓴다.
+// 다른 게시판에 교차 노출된 공지는 후보에서 제외하고, 공지 게시판에서만 공지끼리 찾는다.
+const buildNavigationBoardFilters = (
+	board: string,
+	windowStart: Date
+): SQL[] => {
+	if (board === BEST_BOARD) {
+		return buildBoardFilters(board, windowStart);
+	}
+	return [
+		eq(communityPost.status, "published"),
+		eq(communityPost.board, board),
+	];
+};
+
+type NavigationDirection = "next" | "previous";
+
+const navigationBoundary = (
+	columnCreatedAt: typeof communityPost.createdAt,
+	columnId: typeof communityPost.id,
+	currentCreatedAt: Date,
+	currentId: string,
+	direction: NavigationDirection
+): SQL => {
+	const compareCreatedAt = direction === "previous" ? lt : gt;
+	const compareId = direction === "previous" ? lt : gt;
+	return or(
+		compareCreatedAt(columnCreatedAt, currentCreatedAt),
+		and(eq(columnCreatedAt, currentCreatedAt), compareId(columnId, currentId))
+	) as SQL;
 };
 
 // 목록·count 쿼리에 동일하게 적용되는 필터 조건. 켜진 토글들의 합집합(OR)으로 좁히고,
@@ -1379,116 +1429,317 @@ export const communityRouter = {
 	// 게시판이 고정 6종이 아니게 되면서 응답도 고정 키 객체가 아니라 배열이다 — 운영자가
 	// 게시판을 늘리면 홈 미리보기에 자동으로 따라 붙는다. 순서는 best(가상, 선두) →
 	// 활성 게시판 sort_order asc.
-	overview: publicProcedure.handler(async ({ context }) => {
-		const profile = await findCommunityMember(context.session);
+	overview: publicProcedure
+		.input(overviewInput)
+		.handler(async ({ context, input }) => {
+			const profile = await findCommunityMember(context.session);
 
-		const windowStart = bestWindowStart();
-		// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
-		const [communityFeedOn, bestIcon, boards, homeLayout] = await Promise.all([
-			isCrawledCommunityFeedEnabled(),
-			getBestBoardIcon(),
-			db
-				.select({
-					description: communityBoard.description,
-					icon: communityBoard.icon,
-					key: communityBoard.key,
-					label: communityBoard.label,
-					slug: communityBoard.slug,
-				})
-				.from(communityBoard)
-				.where(eq(communityBoard.isActive, true))
-				.orderBy(asc(communityBoard.sortOrder)),
-			db
-				.select({
-					boardKey: communityBoardHomeLayout.boardKey,
-					position: communityBoardHomeLayout.position,
-					rowIndex: communityBoardHomeLayout.rowIndex,
-				})
-				.from(communityBoardHomeLayout)
-				.orderBy(
-					asc(communityBoardHomeLayout.rowIndex),
-					asc(communityBoardHomeLayout.position)
-				),
-		]);
-		const layoutByKey = new Map(
-			homeLayout.map((item) => [item.boardKey, item] as const)
-		);
-
-		// 법률 자문처럼 전 글이 잠긴 게시판도 같은 마스킹 규칙을 그대로 탄다
-		// (작성자·운영자·법률자문만 실제 제목을 본다).
-		const previews = [
-			{
-				description: BEST_BOARD_DESCRIPTION,
-				// 가상 게시판이라 DB 행이 없다 — 운영자 지정 아이콘은 site_settings에서 읽는다.
-				// 미지정(null)이면 기존 코럴 액센트 바 모양을 유지한다.
-				icon: bestIcon,
-				key: BEST_BOARD,
-				label: BEST_BOARD_LABEL,
-				position: layoutByKey.get(BEST_BOARD)?.position,
-				rowIndex: layoutByKey.get(BEST_BOARD)?.rowIndex,
-				slug: BEST_BOARD,
-			},
-			...boards.map((board) => ({
-				...board,
-				position: layoutByKey.get(board.key)?.position,
-				rowIndex: layoutByKey.get(board.key)?.rowIndex,
-			})),
-		]
-			.filter((board) => {
-				if (board.rowIndex === undefined || board.position === undefined) {
-					return false;
-				}
-				if (profile?.role === "job_seeker" && profile.gender === "male") {
-					return board.key === "notice" || board.key === "secret";
-				}
-				if (profile?.role === "legal_advisor") {
-					return (
-						board.key === "legal" ||
-						board.key === "secret" ||
-						(profile.gender === "male" && board.key === "notice")
-					);
-				}
-				return true;
-			})
-			.sort(
-				(left, right) =>
-					(left.rowIndex ?? 0) - (right.rowIndex ?? 0) ||
-					(left.position ?? 0) - (right.position ?? 0)
+			const windowStart = bestWindowStart();
+			// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
+			const [communityFeedOn, bestIcon, boards, homeLayout] = await Promise.all(
+				[
+					isCrawledCommunityFeedEnabled(),
+					getBestBoardIcon(),
+					db
+						.select({
+							description: communityBoard.description,
+							icon: communityBoard.icon,
+							key: communityBoard.key,
+							label: communityBoard.label,
+							slug: communityBoard.slug,
+						})
+						.from(communityBoard)
+						.where(eq(communityBoard.isActive, true))
+						.orderBy(asc(communityBoard.sortOrder)),
+					db
+						.select({
+							boardKey: communityBoardHomeLayout.boardKey,
+							position: communityBoardHomeLayout.position,
+							rowIndex: communityBoardHomeLayout.rowIndex,
+						})
+						.from(communityBoardHomeLayout)
+						.where(eq(communityBoardHomeLayout.surface, input.surface))
+						.orderBy(
+							asc(communityBoardHomeLayout.rowIndex),
+							asc(communityBoardHomeLayout.position)
+						),
+				]
+			);
+			const layoutByKey = new Map(
+				homeLayout.map((item) => [item.boardKey, item] as const)
 			);
 
-		const postsPerBoard = await Promise.all(
-			previews.map((board) =>
-				board.key === CRAWLED_COMMUNITY_BOARD && communityFeedOn
-					? selectWorkTalkFeedUnion({
-							limit: OVERVIEW_LIMIT,
-							nativeFilters: [eq(communityPost.board, CRAWLED_COMMUNITY_BOARD)],
-							offset: 0,
-							windowStart,
-						})
-					: selectBoardPosts(board.key, {
-							filters:
-								board.key === BEST_BOARD
-									? []
-									: [eq(communityPost.board, board.key)],
-							limit: OVERVIEW_LIMIT,
-							windowStart,
-						})
-			)
-		);
+			// 법률 자문처럼 전 글이 잠긴 게시판도 같은 마스킹 규칙을 그대로 탄다
+			// (작성자·운영자·법률자문만 실제 제목을 본다).
+			const previews = [
+				{
+					description: BEST_BOARD_DESCRIPTION,
+					// 가상 게시판이라 DB 행이 없다 — 운영자 지정 아이콘은 site_settings에서 읽는다.
+					// 미지정(null)이면 기존 코럴 액센트 바 모양을 유지한다.
+					icon: bestIcon,
+					key: BEST_BOARD,
+					label: BEST_BOARD_LABEL,
+					position: layoutByKey.get(BEST_BOARD)?.position,
+					rowIndex: layoutByKey.get(BEST_BOARD)?.rowIndex,
+					slug: BEST_BOARD,
+				},
+				...boards.map((board) => ({
+					...board,
+					position: layoutByKey.get(board.key)?.position,
+					rowIndex: layoutByKey.get(board.key)?.rowIndex,
+				})),
+			]
+				.filter((board) => {
+					if (board.rowIndex === undefined || board.position === undefined) {
+						return false;
+					}
+					if (profile?.role === "job_seeker" && profile.gender === "male") {
+						return board.key === "notice" || board.key === "secret";
+					}
+					if (profile?.role === "legal_advisor") {
+						return (
+							board.key === "legal" ||
+							board.key === "secret" ||
+							(profile.gender === "male" && board.key === "notice")
+						);
+					}
+					return true;
+				})
+				.sort(
+					(left, right) =>
+						(left.rowIndex ?? 0) - (right.rowIndex ?? 0) ||
+						(left.position ?? 0) - (right.position ?? 0)
+				);
 
-		return {
-			boards: previews.map((board, index) => ({
-				...board,
-				position: board.position ?? 0,
-				rowIndex: board.rowIndex ?? 0,
-				// 홈 미리보기(요약)는 등급 뱃지를 싣지 않는다 — 게시판마다 배치 조회를 더하지
-				// 않는다. 등급은 목록·상세에서만 노출한다.
-				posts: maskLockedSummaries(postsPerBoard[index] ?? [], profile).map(
-					(post) => toPublicSummary(post)
-				),
-			})),
-		};
-	}),
+			const postsPerBoard = await Promise.all(
+				previews.map((board) =>
+					board.key === CRAWLED_COMMUNITY_BOARD && communityFeedOn
+						? selectWorkTalkFeedUnion({
+								limit: OVERVIEW_LIMIT,
+								nativeFilters: [
+									eq(communityPost.board, CRAWLED_COMMUNITY_BOARD),
+								],
+								offset: 0,
+								windowStart,
+							})
+						: selectBoardPosts(board.key, {
+								filters:
+									board.key === BEST_BOARD
+										? []
+										: [eq(communityPost.board, board.key)],
+								limit: OVERVIEW_LIMIT,
+								windowStart,
+							})
+				)
+			);
+
+			return {
+				boards: previews.map((board, index) => ({
+					...board,
+					position: board.position ?? 0,
+					rowIndex: board.rowIndex ?? 0,
+					// 홈 미리보기(요약)는 등급 뱃지를 싣지 않는다 — 게시판마다 배치 조회를 더하지
+					// 않는다. 등급은 목록·상세에서만 노출한다.
+					posts: maskLockedSummaries(postsPerBoard[index] ?? [], profile).map(
+						(post) => toPublicSummary(post)
+					),
+				})),
+			};
+		}),
+
+	getPostNavigation: publicProcedure
+		.input(postNavigationInput)
+		.handler(async ({ context, input }) => {
+			await assertBoard(input.board, { allowBest: true });
+			if (
+				input.publicView &&
+				(!isPublicBoard(input.board) || input.source !== "native")
+			) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "게시글을 찾을 수 없습니다.",
+				});
+			}
+			const actor = input.publicView
+				? null
+				: await resolveCommunityReaderForBoard(context, input.board);
+			const profile = actor?.kind === "member" ? actor.profile : null;
+			if (!input.publicView) {
+				assertLegalAdvisorBoardScope(profile, input.board);
+			}
+			const windowStart = bestWindowStart();
+
+			let currentCreatedAt: Date;
+			if (input.source === "native") {
+				const current = await findPublishedPost(input.currentId);
+				if (input.publicView && current.isLocked) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "게시글을 찾을 수 없습니다.",
+					});
+				}
+				currentCreatedAt = current.createdAt;
+			} else {
+				if (
+					input.board !== CRAWLED_COMMUNITY_BOARD ||
+					!(await isCrawledCommunityFeedEnabled())
+				) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "게시글을 찾을 수 없습니다.",
+					});
+				}
+				const [current] = await db
+					.select({ createdAt: crawledCommunityTopic.sourcePostedAt })
+					.from(crawledCommunityTopic)
+					.where(
+						and(
+							eq(crawledCommunityTopic.id, input.currentId),
+							...crawledTopicFeedFilters(windowStart)
+						)
+					)
+					.limit(1);
+				if (!current?.createdAt) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "게시글을 찾을 수 없습니다.",
+					});
+				}
+				currentCreatedAt = current.createdAt;
+			}
+
+			const selectNativeCandidate = async (
+				direction: NavigationDirection
+			): Promise<CommunityNavigationCandidate | null> => {
+				const [candidate] = await db
+					.select(postSummarySelection)
+					.from(communityPost)
+					.where(
+						and(
+							...buildNavigationBoardFilters(input.board, windowStart),
+							ne(communityPost.id, input.currentId),
+							...(input.publicView ? [eq(communityPost.isLocked, false)] : []),
+							navigationBoundary(
+								communityPost.createdAt,
+								communityPost.id,
+								currentCreatedAt,
+								input.currentId,
+								direction
+							)
+						)
+					)
+					.orderBy(
+						direction === "previous"
+							? desc(communityPost.createdAt)
+							: asc(communityPost.createdAt),
+						direction === "previous"
+							? desc(communityPost.id)
+							: asc(communityPost.id)
+					)
+					.limit(1);
+				if (!candidate) {
+					return null;
+				}
+				const [masked] = maskLockedSummaries([candidate], profile);
+				return masked
+					? {
+							boardKey: masked.board,
+							createdAt: masked.createdAt,
+							id: masked.id,
+							source: "native",
+							title: masked.title,
+						}
+					: null;
+			};
+
+			const includeCrawled =
+				!input.publicView &&
+				input.board === CRAWLED_COMMUNITY_BOARD &&
+				(await isCrawledCommunityFeedEnabled());
+			const selectCrawledCandidate = async (
+				direction: NavigationDirection
+			): Promise<CommunityNavigationCandidate | null> => {
+				if (!includeCrawled) {
+					return null;
+				}
+				const compareCreatedAt = direction === "previous" ? lt : gt;
+				const compareId = direction === "previous" ? lt : gt;
+				const boundary = or(
+					compareCreatedAt(
+						crawledCommunityTopic.sourcePostedAt,
+						currentCreatedAt
+					),
+					and(
+						eq(crawledCommunityTopic.sourcePostedAt, currentCreatedAt),
+						compareId(crawledCommunityTopic.id, input.currentId)
+					)
+				) as SQL;
+				const [candidate] = await db
+					.select({
+						createdAt: crawledCommunityTopic.sourcePostedAt,
+						id: crawledCommunityTopic.id,
+						title: crawledCommunityTopic.title,
+					})
+					.from(crawledCommunityTopic)
+					.where(
+						and(
+							...crawledTopicFeedFilters(windowStart),
+							ne(crawledCommunityTopic.id, input.currentId),
+							boundary
+						)
+					)
+					.orderBy(
+						direction === "previous"
+							? desc(crawledCommunityTopic.sourcePostedAt)
+							: asc(crawledCommunityTopic.sourcePostedAt),
+						direction === "previous"
+							? desc(crawledCommunityTopic.id)
+							: asc(crawledCommunityTopic.id)
+					)
+					.limit(1);
+				return candidate?.createdAt
+					? {
+							boardKey: CRAWLED_COMMUNITY_BOARD,
+							createdAt: candidate.createdAt,
+							id: candidate.id,
+							source: "crawled",
+							title: candidate.title,
+						}
+					: null;
+			};
+
+			const [nativePrevious, nativeNext, crawledPrevious, crawledNext] =
+				await Promise.all([
+					selectNativeCandidate("previous"),
+					selectNativeCandidate("next"),
+					selectCrawledCandidate("previous"),
+					selectCrawledCandidate("next"),
+				]);
+			const previous = pickCommunityNavigationNeighbor(
+				[nativePrevious, crawledPrevious],
+				"previous"
+			);
+			const next = pickCommunityNavigationNeighbor(
+				[nativeNext, crawledNext],
+				"next"
+			);
+			const boardKeys = [
+				...new Set([previous?.boardKey, next?.boardKey]),
+			].filter((key): key is string => Boolean(key));
+			const boardRows =
+				boardKeys.length > 0
+					? await db
+							.select({ key: communityBoard.key, slug: communityBoard.slug })
+							.from(communityBoard)
+							.where(inArray(communityBoard.key, boardKeys))
+					: [];
+			const slugs = new Map(boardRows.map((row) => [row.key, row.slug]));
+			const toOutput = (candidate?: CommunityNavigationCandidate) =>
+				candidate
+					? {
+							...candidate,
+							boardSlug: slugs.get(candidate.boardKey) ?? candidate.boardKey,
+						}
+					: null;
+
+			return { next: toOutput(next), previous: toOutput(previous) };
+		}),
 
 	// 비로그인 공개 목록(SEO). 공개 보드(PUBLIC_COMMUNITY_BOARDS)의 published 글만,
 	// 필터·검색·내 글 없이 최신순으로 내려준다. 비밀글은 마스킹이 아니라 아예 뺀다 —

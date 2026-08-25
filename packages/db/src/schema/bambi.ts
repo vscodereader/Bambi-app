@@ -239,12 +239,21 @@ export const communityBoard = pgTable("community_board", {
 		.notNull(),
 });
 
-// 수다방 홈의 행·행 안 순서. best는 가상 게시판이라 FK를 걸지 않고 API가 유효 key를 검증한다.
+// 구직자 메인과 수다방 홈의 독립 배치 표면. 호출부가 문자열을 직접 만들지 않고 이 enum을
+// 단일 소스로 사용한다.
+export const communityBoardLayoutSurface = pgEnum(
+	"community_board_layout_surface",
+	["main", "community"]
+);
+
+// 구직자 메인·수다방 홈의 행과 행 안 순서. best는 가상 게시판이라 FK를 걸지 않고 API가
+// 유효 key를 검증한다. 같은 게시판은 표면별로 한 번씩 배치할 수 있다.
 export const communityBoardHomeLayout = pgTable(
 	"community_board_home_layout",
 	{
-		boardKey: text("board_key").primaryKey(),
+		boardKey: text("board_key").notNull(),
 		rowIndex: integer("row_index").notNull(),
+		surface: communityBoardLayoutSurface("surface").notNull(),
 		position: integer("position").notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -252,7 +261,9 @@ export const communityBoardHomeLayout = pgTable(
 			.notNull(),
 	},
 	(table) => [
+		primaryKey({ columns: [table.surface, table.boardKey] }),
 		uniqueIndex("community_board_home_layout_row_position_uidx").on(
+			table.surface,
 			table.rowIndex,
 			table.position
 		),

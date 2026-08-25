@@ -28,6 +28,7 @@ import {
 	PostHeader,
 	ReportDialog,
 } from "@/components/bambi/community-post-detail-parts";
+import { CommunityPostNavigation } from "@/components/bambi/community-post-navigation";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PublicPostInteractions } from "@/components/bambi/public-post-interactions";
 import { toastCommentRewards } from "@/lib/bambi/comment-rewards";
@@ -119,6 +120,12 @@ function GuestPostDetailView({
 				participable={participable}
 				password={appliedPassword}
 				postId={postId}
+			/>
+			<CommunityPostNavigation
+				boardKey={board.key}
+				boardSlug={board.slug}
+				currentId={postId}
+				source="native"
 			/>
 		</div>
 	);
@@ -351,6 +358,12 @@ function PostDetailView({
 					/>
 				)}
 			</div>
+			<CommunityPostNavigation
+				boardKey={board.key}
+				boardSlug={board.slug}
+				currentId={postId}
+				source="native"
+			/>
 		</div>
 	);
 }

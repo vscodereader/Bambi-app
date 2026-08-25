@@ -1,6 +1,6 @@
 {
-  "id": "059db163-8585-4dbb-bd09-45c204c24486",
-  "prevId": "fba2c39d-e64d-434f-b92b-c2c65f890fd9",
+  "id": "fba2c39d-e64d-434f-b92b-c2c65f890fd9",
+  "prevId": "5a95aafb-6592-47dd-b9d2-853a9ffd0bf5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1647,12 +1647,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "comment_id": {
-          "name": "comment_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -1662,9 +1656,15 @@
         }
       },
       "indexes": {
-        "bambi_comment_milestone_award_milestone_uidx": {
-          "name": "bambi_comment_milestone_award_milestone_uidx",
+        "bambi_comment_milestone_award_user_milestone_uidx": {
+          "name": "bambi_comment_milestone_award_user_milestone_uidx",
           "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
             {
               "expression": "milestone_id",
               "isExpression": false,
@@ -1695,15 +1695,6 @@
           "columnsFrom": ["milestone_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "bambi_comment_milestone_award_comment_id_community_comment_id_fk": {
-          "name": "bambi_comment_milestone_award_comment_id_community_comment_id_fk",
-          "tableFrom": "bambi_comment_milestone_award",
-          "tableTo": "community_comment",
-          "columnsFrom": ["comment_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -4443,12 +4434,19 @@
         "board_key": {
           "name": "board_key",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "row_index": {
           "name": "row_index",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "surface": {
+          "name": "surface",
+          "type": "community_board_layout_surface",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
@@ -4471,6 +4469,12 @@
           "name": "community_board_home_layout_row_position_uidx",
           "columns": [
             {
+              "expression": "surface",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
               "expression": "row_index",
               "isExpression": false,
               "asc": true,
@@ -4490,7 +4494,12 @@
         }
       },
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "community_board_home_layout_surface_board_key_pk": {
+          "name": "community_board_home_layout_surface_board_key_pk",
+          "columns": ["surface", "board_key"]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -9985,6 +9994,11 @@
       "name": "support_inquiry_status",
       "schema": "public",
       "values": ["open", "answered", "closed"]
+    },
+    "public.community_board_layout_surface": {
+      "name": "community_board_layout_surface",
+      "schema": "public",
+      "values": ["main", "community"]
     }
   },
   "schemas": {},

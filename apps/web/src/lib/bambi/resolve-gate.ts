@@ -111,6 +111,11 @@ export const resolveGate = ({
 	if (pathname === SEEKER_ROOT) {
 		return next;
 	}
+	// 수다방 홈의 게시판 미리보기는 로그인 여부와 관계없이 공개한다. 게시판 목록·상세·
+	// 쓰기는 아래 기존 게이트와 API 권한 검사를 그대로 통과해야 한다.
+	if (pathname === COMMUNITY_ROOT) {
+		return next;
+	}
 	// 비공개 최상위 라우트 밑이 아니면 게이트 대상이 아니다 — next로 흘려 404를 낸다.
 	if (!isGated(pathname)) {
 		return next;
