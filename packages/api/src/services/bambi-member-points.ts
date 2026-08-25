@@ -1,12 +1,14 @@
 import { db } from "@bambi-app/db";
 import {
+	bambiCommentMilestone,
+	bambiCommentMilestoneAward,
 	bambiMemberGrade,
 	bambiPointTransaction,
 	bambiProfile,
 	bambiSiteSettings,
 	communityBoard,
 } from "@bambi-app/db/schema/bambi";
-import { and, asc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, ne, notInArray, sql } from "drizzle-orm";
 
 import { lockMemberPoints } from "./bambi-point-ledger";
 import { resolveGradeIconUrl } from "./bambi-storage";
@@ -32,7 +34,14 @@ export interface GradeBadge {
 export const POINT_REASONS = {
 	post: { award: "community_post", revoke: "community_post_revoke" },
 	comment: { award: "community_comment", revoke: "community_comment_revoke" },
+	commentBonus: {
+		award: "community_comment_bonus",
+		revoke: "community_comment_bonus_revoke",
+	},
 } as const;
+
+// 댓글 수 마일스톤 보너스 원장 reason. 회수 없음(단조 누적)이라 award 하나만 둔다.
+export const COMMENT_MILESTONE_REASON = "community_comment_milestone";
 
 // 포인트몰 구매·환불 reason. 등급 계산에서 제외한다 — 구매(−)·환불(+)이 등급에 중립이어야
 // 하고, 글/댓글 회수(*_revoke, 음수)는 기존대로 등급에서 빠진다("양수만 합산"이면 회수가
@@ -71,6 +80,30 @@ export function resolveCommentAward(
 		return 0;
 	}
 	return boardCommentPoints;
+}
+
+// 순수: 댓글 랜덤 보너스 당첨액. 비활성·기본 적립 0(꽝인 게스트/셀프)·확률 0 이하면 0. random()*100이
+// chancePercent 미만이면 당첨 → min~max 균등 정수, 그 외 꽝(0). random 주입으로 결정적 테스트가 된다.
+// min>max·음수는 방어한다(min=max(0,min), max=max(min,max)) — 운영자 오입력에도 음수·역구간이 안 나온다.
+export function rollCommentBonus(
+	settings: {
+		enabled: boolean;
+		chancePercent: number;
+		minPoints: number;
+		maxPoints: number;
+	},
+	baseAward: number,
+	random: () => number = Math.random
+): number {
+	if (baseAward <= 0 || !settings.enabled || settings.chancePercent <= 0) {
+		return 0;
+	}
+	if (random() * 100 >= settings.chancePercent) {
+		return 0;
+	}
+	const min = Math.max(0, settings.minPoints);
+	const max = Math.max(min, settings.maxPoints);
+	return min + Math.floor(random() * (max - min + 1));
 }
 
 // 순수: 적립 델타를 회원 누적 상한 여유분까지만 반영한다. cap null(무제한)이거나 회수(delta<=0)면
@@ -185,6 +218,73 @@ export async function reconcileContentPoints(
 	return args.currentAwarded + appliedDelta;
 }
 
+// DB: 도달한 댓글 수 마일스톤 중 이 회원에게 아직 안 준 것을 전부 지급한다(멱등). award 행을
+// onConflictDoNothing으로 넣어 실제 삽입된 건만 원장에 쌓으므로 경합에서도 중복 지급이 없다.
+// 마일스톤은 회수 없음(단조 누적)이라 적립만 하고, cap을 넘지 않게 잘라 반영한다. bonusPoints는
+// 실제 반영된 금액(cap에 걸리면 그만큼 줄고, 다 막히면 0)이며, award 행은 그래도 남아 재지급하지 않는다.
+export async function awardCommentMilestones(
+	tx: TxHandle,
+	userId: string,
+	totalCommentCount: number
+): Promise<Array<{ commentCount: number; bonusPoints: number }>> {
+	// 이미 지급받은 마일스톤은 제외하고 도달한 것만 오름차순으로 훑는다.
+	const awardedIds = tx
+		.select({ milestoneId: bambiCommentMilestoneAward.milestoneId })
+		.from(bambiCommentMilestoneAward)
+		.where(eq(bambiCommentMilestoneAward.userId, userId));
+	const milestones = await tx
+		.select({
+			id: bambiCommentMilestone.id,
+			commentCount: bambiCommentMilestone.commentCount,
+			bonusPoints: bambiCommentMilestone.bonusPoints,
+		})
+		.from(bambiCommentMilestone)
+		.where(
+			and(
+				lte(bambiCommentMilestone.commentCount, totalCommentCount),
+				notInArray(bambiCommentMilestone.id, awardedIds)
+			)
+		)
+		.orderBy(asc(bambiCommentMilestone.commentCount));
+	if (milestones.length === 0) {
+		return [];
+	}
+	await lockMemberPoints(tx, userId);
+	const cap = await getMemberPointsCap();
+	const awarded: Array<{ commentCount: number; bonusPoints: number }> = [];
+	for (const milestone of milestones) {
+		// award 행이 실제로 생긴 경우에만 지급한다 — 동시 실행이 같은 마일스톤을 노려도 unique
+		// 충돌로 두 번째는 스킵돼 중복 지급이 없다(출석 적립과 같은 가드).
+		const inserted = await tx
+			.insert(bambiCommentMilestoneAward)
+			.values({ userId, milestoneId: milestone.id })
+			.onConflictDoNothing()
+			.returning({ id: bambiCommentMilestoneAward.id });
+		if (inserted.length === 0) {
+			continue;
+		}
+		// 잔액은 매 지급마다 다시 읽는다(직전 지급으로 늘어 cap 여유가 줄기 때문).
+		const balance = await getMemberBalanceTx(tx, userId);
+		const appliedDelta =
+			cap === null
+				? milestone.bonusPoints
+				: applyPointsCap(milestone.bonusPoints, balance, cap);
+		if (appliedDelta > 0) {
+			await tx.insert(bambiPointTransaction).values({
+				amount: appliedDelta,
+				balanceAfter: balance + appliedDelta,
+				reason: COMMENT_MILESTONE_REASON,
+				userId,
+			});
+		}
+		awarded.push({
+			commentCount: milestone.commentCount,
+			bonusPoints: appliedDelta,
+		});
+	}
+	return awarded;
+}
+
 // DB: 게시판의 글/댓글 적립 금액. 없으면 0/0. 설정 읽기라 트랜잭션 밖 db로 충분하다.
 export async function getBoardContentPoints(
 	board: string
@@ -211,6 +311,31 @@ export async function getMemberPointsCap(): Promise<number | null> {
 		.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 		.limit(1);
 	return row?.cap ?? null;
+}
+
+// DB: 댓글 랜덤 보너스 설정(단일 행). 미조회 시 스키마 기본값과 같은 안전값으로 폴백한다.
+export async function getCommentBonusSettings(): Promise<{
+	enabled: boolean;
+	chancePercent: number;
+	minPoints: number;
+	maxPoints: number;
+}> {
+	const [row] = await db
+		.select({
+			enabled: bambiSiteSettings.commentBonusEnabled,
+			chancePercent: bambiSiteSettings.commentBonusChancePercent,
+			minPoints: bambiSiteSettings.commentBonusMinPoints,
+			maxPoints: bambiSiteSettings.commentBonusMaxPoints,
+		})
+		.from(bambiSiteSettings)
+		.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
+		.limit(1);
+	return {
+		enabled: row?.enabled ?? false,
+		chancePercent: row?.chancePercent ?? 0,
+		minPoints: row?.minPoints ?? 0,
+		maxPoints: row?.maxPoints ?? 0,
+	};
 }
 
 // DB: 여러 회원의 포인트 잔액(순합계). 결과에 없는 userId는 0으로 취급한다.

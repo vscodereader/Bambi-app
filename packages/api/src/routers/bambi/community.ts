@@ -72,12 +72,15 @@ import {
 	validateJobPostImageUpload,
 } from "../../services/bambi-job-media-policy";
 import {
+	awardCommentMilestones,
 	type GradeBadge,
 	getBoardContentPoints,
+	getCommentBonusSettings,
 	loadGradeBadges,
 	POINT_REASONS,
 	reconcileContentPoints,
 	resolveCommentAward,
+	rollCommentBonus,
 } from "../../services/bambi-member-points";
 import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
 import {
@@ -1217,25 +1220,36 @@ const reconcileCommentPointsOnStatusChange = async (
 		board: string | null;
 		commentId: string;
 		currentAwarded: number;
+		// 보너스 축: 저장된 당첨액(불변)과 현재 반영 스냅샷.
+		bonusPoints: number;
+		bonusCurrentAwarded: number;
 		willVisible: boolean;
 	}
 ) => {
 	const { commentPoints } = args.willVisible
 		? await getBoardContentPoints(args.board ?? "")
 		: { commentPoints: 0 };
+	const baseTarget = resolveCommentAward(
+		args.authorUserId,
+		args.postAuthorUserId,
+		commentPoints
+	);
 	const nextAwarded = await reconcileContentPoints(tx, {
 		userId: args.authorUserId,
 		currentAwarded: args.currentAwarded,
-		targetAmount: resolveCommentAward(
-			args.authorUserId,
-			args.postAuthorUserId,
-			commentPoints
-		),
+		targetAmount: baseTarget,
 		reasons: POINT_REASONS.comment,
+	});
+	// 보너스는 base 적립이 살아 있을 때만 유지된다 — 노출 이탈이거나 base가 0이면 회수(target 0).
+	const nextBonusAwarded = await reconcileContentPoints(tx, {
+		userId: args.authorUserId,
+		currentAwarded: args.bonusCurrentAwarded,
+		targetAmount: args.willVisible && baseTarget > 0 ? args.bonusPoints : 0,
+		reasons: POINT_REASONS.commentBonus,
 	});
 	await tx
 		.update(communityComment)
-		.set({ pointsAwarded: nextAwarded })
+		.set({ pointsAwarded: nextAwarded, bonusPointsAwarded: nextBonusAwarded })
 		.where(eq(communityComment.id, args.commentId));
 };
 
@@ -2339,6 +2353,12 @@ export const communityRouter = {
 				post.authorUserId,
 				commentPoints
 			);
+			// 보너스는 base 적립을 받는 회원 댓글만 롤한다 — 게스트·셀프 댓글·0포인트 게시판은
+			// base가 0이라 대상이 아니다(당첨액은 댓글 row에 불변으로 저장한다).
+			const bonusRoll =
+				commentAuthorUserId && commentTarget > 0
+					? rollCommentBonus(await getCommentBonusSettings(), commentTarget)
+					: 0;
 
 			const created = await db.transaction(async (tx) => {
 				await tx.execute(
@@ -2367,6 +2387,8 @@ export const communityRouter = {
 						passwordHash: guestPassword
 							? hashCommunityPassword(guestPassword)
 							: "",
+						// 당첨 확정액(불변). 실제 원장 반영액은 상한에 잘릴 수 있어 별도 스냅샷으로 둔다.
+						bonusPoints: bonusRoll,
 						pointsAwarded: commentTarget,
 						postId: input.postId,
 					})
@@ -2381,7 +2403,33 @@ export const communityRouter = {
 					targetAmount: commentTarget,
 					reasons: POINT_REASONS.comment,
 				});
-				return row;
+				// 보너스 당첨액을 원장에 반영하고 실반영액을 스냅샷·응답에 쓴다(상한 클립 반영).
+				const bonusPointsAwarded = await reconcileContentPoints(tx, {
+					userId: commentAuthorUserId,
+					currentAwarded: 0,
+					targetAmount: bonusRoll,
+					reasons: POINT_REASONS.commentBonus,
+				});
+				if (bonusPointsAwarded > 0 && row) {
+					await tx
+						.update(communityComment)
+						.set({ bonusPointsAwarded })
+						.where(eq(communityComment.id, row.id));
+				}
+				// 마일스톤은 셀프 댓글 포함 모든 회원 댓글에서 누적 수(status 무관)로 catch-up 지급한다.
+				let milestones: Awaited<ReturnType<typeof awardCommentMilestones>> = [];
+				if (commentAuthorUserId) {
+					const [countRow] = await tx
+						.select({ value: count() })
+						.from(communityComment)
+						.where(eq(communityComment.authorUserId, commentAuthorUserId));
+					milestones = await awardCommentMilestones(
+						tx,
+						commentAuthorUserId,
+						countRow?.value ?? 0
+					);
+				}
+				return { bonusPoints: bonusPointsAwarded, id: row?.id, milestones };
 			});
 
 			// 알림은 커밋 뒤에 보낸다 — 알림 실패로 댓글이 롤백되면 안 된다.
@@ -2392,6 +2440,27 @@ export const communityRouter = {
 				parentCommentId: input.parentCommentId ?? null,
 				post,
 			});
+
+			// 마일스톤 도달 알림(attendance.ts 패턴 — point_transaction, 커밋 뒤·best-effort).
+			if (commentAuthorUserId) {
+				for (const milestone of created.milestones) {
+					// 상한에 완전히 막혀 실반영 0인 마일스톤은 알림하지 않는다(지급 목록엔 남는다).
+					if (milestone.bonusPoints <= 0) {
+						continue;
+					}
+					await notifyBambiNotification({
+						actorUserId: commentAuthorUserId,
+						metadata: {
+							action: "comment_milestone",
+							amount: milestone.bonusPoints,
+							commentCount: milestone.commentCount,
+						},
+						recipientUserId: commentAuthorUserId,
+						targetId: created.id ?? input.postId,
+						targetType: "point_transaction",
+					});
+				}
+			}
 
 			return created;
 		}),
@@ -2521,7 +2590,12 @@ export const communityRouter = {
 			await db.transaction(async (tx) => {
 				await tx
 					.update(communityComment)
-					.set({ status: "deleted", pointsAwarded: 0, updatedAt: new Date() })
+					.set({
+						status: "deleted",
+						pointsAwarded: 0,
+						bonusPointsAwarded: 0,
+						updatedAt: new Date(),
+					})
 					.where(eq(communityComment.id, input.commentId));
 				// 수집 글 댓글(post_id null)은 줄일 캐시가 없다 — 수집 글의 댓글 수는 원본
 				// 값이고 상세가 두 원천을 합산한다.
@@ -2538,6 +2612,13 @@ export const communityRouter = {
 					currentAwarded: comment.pointsAwarded,
 					targetAmount: 0,
 					reasons: POINT_REASONS.comment,
+				});
+				// 보너스도 함께 회수한다(base와 나란히 — target 0).
+				await reconcileContentPoints(tx, {
+					userId: comment.authorUserId,
+					currentAwarded: comment.bonusPointsAwarded,
+					targetAmount: 0,
+					reasons: POINT_REASONS.commentBonus,
 				});
 			});
 
@@ -2702,6 +2783,8 @@ export const communityRouter = {
 						// 회수·재적립 대상과 금액 스냅샷.
 						authorUserId: communityComment.authorUserId,
 						board: communityPost.board,
+						bonusPoints: communityComment.bonusPoints,
+						bonusPointsAwarded: communityComment.bonusPointsAwarded,
 						crawledTopicId: communityComment.crawledTopicId,
 						postAuthorUserId: communityPost.authorUserId,
 						pointsAwarded: communityComment.pointsAwarded,
@@ -2770,6 +2853,8 @@ export const communityRouter = {
 						board: existing.board,
 						commentId: input.commentId,
 						currentAwarded: existing.pointsAwarded,
+						bonusPoints: existing.bonusPoints,
+						bonusCurrentAwarded: existing.bonusPointsAwarded,
 						willVisible,
 					});
 				}
