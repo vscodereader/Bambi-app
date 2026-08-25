@@ -249,7 +249,9 @@ function LandingJobCard({ job }: { job: Job }) {
 				/>
 			) : null}
 			<div className="flex min-w-0 flex-1 flex-col gap-1">
-				<h3 className="m-0 truncate font-extrabold text-base text-foreground">
+				{/* 모바일(1열)은 제목을 2줄까지 보여준다 — 한 줄 truncate면 좁은 폭에서 핵심
+				    키워드가 잘린다. 다열 그리드(sm+)는 행 높이 정렬을 위해 한 줄 유지. */}
+				<h3 className="m-0 line-clamp-2 font-extrabold text-base text-foreground sm:line-clamp-1">
 					{job.title}
 				</h3>
 				{/* 시/도·시군구(세부지역). 상세 주소(동·번지)는 싣지 않는다. */}
