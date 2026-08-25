@@ -283,6 +283,64 @@ const updateExposureSectionConfigInput = z.object({
 	urgentHidden: z.boolean(),
 });
 
+// 댓글 랜덤 보너스 설정. 네 컬럼 모두 not null(스키마 기본값 false/10/5/50)이라 행이 있으면
+// 항상 값이 있고, 행이 없으면(마이그레이션 전·미저장) 같은 기본값으로 폴백한다.
+const COMMENT_BONUS_COLUMNS = {
+	commentBonusEnabled: bambiSiteSettings.commentBonusEnabled,
+	commentBonusChancePercent: bambiSiteSettings.commentBonusChancePercent,
+	commentBonusMinPoints: bambiSiteSettings.commentBonusMinPoints,
+	commentBonusMaxPoints: bambiSiteSettings.commentBonusMaxPoints,
+} as const;
+
+const COMMENT_BONUS_DEFAULTS = {
+	commentBonusEnabled: false,
+	commentBonusChancePercent: 10,
+	commentBonusMinPoints: 5,
+	commentBonusMaxPoints: 50,
+} as const;
+
+// 트러스트 바운더리라 확률(0~100 정수)·포인트 구간을 서버에서 검증한다. 상한은 한 댓글이
+// 과도한 포인트를 얹지 못하게 두는 안전선이다. min ≤ max는 교차 검증으로 막는다.
+const COMMENT_BONUS_MAX_POINTS = 1_000_000;
+const commentBonusPoints = (label: string) =>
+	z
+		.number()
+		.int(`${label}는 정수로 입력해 주세요.`)
+		.min(0, `${label}는 0 이상으로 입력해 주세요.`)
+		.max(
+			COMMENT_BONUS_MAX_POINTS,
+			`${label}가 너무 큽니다. 자릿수를 확인해 주세요.`
+		);
+
+const updateCommentBonusInput = z
+	.object({
+		enabled: z.boolean(),
+		chancePercent: z
+			.number()
+			.int("당첨 확률은 정수로 입력해 주세요.")
+			.min(0, "당첨 확률은 0~100 사이로 입력해 주세요.")
+			.max(100, "당첨 확률은 0~100 사이로 입력해 주세요."),
+		minPoints: commentBonusPoints("최소 포인트"),
+		maxPoints: commentBonusPoints("최대 포인트"),
+	})
+	.refine((value) => value.minPoints <= value.maxPoints, {
+		message: "최소 포인트는 최대 포인트보다 클 수 없습니다.",
+		path: ["maxPoints"],
+	});
+
+// 조회·저장 응답 형태를 한 곳에서 맞춘다 — 운영자 UI가 두 프로시저에서 같은 키를 기대한다.
+const toCommentBonusOutput = (row: {
+	commentBonusEnabled: boolean;
+	commentBonusChancePercent: number;
+	commentBonusMinPoints: number;
+	commentBonusMaxPoints: number;
+}) => ({
+	chancePercent: row.commentBonusChancePercent,
+	enabled: row.commentBonusEnabled,
+	maxPoints: row.commentBonusMaxPoints,
+	minPoints: row.commentBonusMinPoints,
+});
+
 // 조회·저장 응답 형태를 한 곳에서 맞춘다 — 클라(운영자 UI·메인 렌더)가 두 프로시저에서
 // 같은 키(urgentHidden/specialSlots/recommendedSlots)를 기대한다.
 const toExposureSectionConfigOutput = (
@@ -601,5 +659,34 @@ export const siteSettingsRouter = {
 				.onConflictDoUpdate({ set: values, target: bambiSiteSettings.id })
 				.returning(EXPOSURE_SECTION_COLUMNS);
 			return toExposureSectionConfigOutput(saved ?? values);
+		}),
+
+	// 댓글 랜덤 보너스 설정 조회. 운영자 전용이다 — 당첨 확률·구간이 공개되면 어뷰징 여지가
+	// 커진다. 행이 없으면 스키마 기본값으로 폴백한다.
+	getCommentBonus: adminProcedure.handler(async () => {
+		const [row] = await db
+			.select(COMMENT_BONUS_COLUMNS)
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+		return toCommentBonusOutput(row ?? COMMENT_BONUS_DEFAULTS);
+	}),
+
+	// 운영자 전용 저장. 같은 단일 행을 upsert 하되 댓글 보너스 컬럼만 갱신한다.
+	updateCommentBonus: adminProcedure
+		.input(updateCommentBonusInput)
+		.handler(async ({ input }) => {
+			const values = {
+				commentBonusChancePercent: input.chancePercent,
+				commentBonusEnabled: input.enabled,
+				commentBonusMaxPoints: input.maxPoints,
+				commentBonusMinPoints: input.minPoints,
+			};
+			const [saved] = await db
+				.insert(bambiSiteSettings)
+				.values({ id: SETTINGS_ROW_ID, ...values })
+				.onConflictDoUpdate({ set: values, target: bambiSiteSettings.id })
+				.returning(COMMENT_BONUS_COLUMNS);
+			return toCommentBonusOutput(saved ?? values);
 		}),
 };

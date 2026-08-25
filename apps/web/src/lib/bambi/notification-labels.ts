@@ -71,6 +71,12 @@ const pointTransactionTitle = (item: BambiNotificationView): null | string => {
 	if (action(item) === "review_republished") {
 		return `포인트 ${amount.toLocaleString("ko-KR")}가 지급되었어요! - 후기 재게시`;
 	}
+	if (action(item) === "comment_milestone") {
+		const commentCount = readNumber(item.metadata, "commentCount");
+		return commentCount === null
+			? `댓글 마일스톤 보너스 ${amount.toLocaleString("ko-KR")}P가 지급됐어요!`
+			: `🏆 ${commentCount.toLocaleString("ko-KR")}번째 댓글 달성! 보너스 ${amount.toLocaleString("ko-KR")}P가 지급됐어요`;
+	}
 	if (action(item) === "point_job_reward") {
 		const category = readString(item.metadata, "category");
 		const label =

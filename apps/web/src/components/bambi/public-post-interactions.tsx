@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { Avatar } from "@/components/bambi/ds";
 import { GuestVerifyCard } from "@/components/bambi/guest-verify-card";
 import { SecretAuthorMark } from "@/components/bambi/secret-author-mark";
+import { toastCommentRewards } from "@/lib/bambi/comment-rewards";
 import {
 	communityAuthorRoleLabel,
 	formatCommunityDate,
@@ -535,7 +536,8 @@ export function PublicPostInteractions({
 					toast(error.message || "댓글을 등록하지 못했어요.");
 				}
 			},
-			onSuccess: async () => {
+			onSuccess: async (data) => {
+				toastCommentRewards(data);
 				setReplyTo(null);
 				await refreshComments();
 			},

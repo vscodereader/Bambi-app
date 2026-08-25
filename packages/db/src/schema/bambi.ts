@@ -1450,6 +1450,21 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 후기 저장 성공 시 지급할 포인트와 다른 구직자 후기 한 건 열람 비용.
 	reviewWritePoints: integer("review_write_points").default(0).notNull(),
 	reviewViewPoints: integer("review_view_points").default(10).notNull(),
+	// 댓글 포인트 보너스(랜덤 당첨). 켜지면 댓글 적립 시 확률에 따라 추가 포인트를 얹는다.
+	// 당첨액은 댓글 생성 시 확정(community_comment.bonus_points)돼 숨김·복구에도 불변이다.
+	commentBonusEnabled: boolean("comment_bonus_enabled")
+		.default(false)
+		.notNull(),
+	// 당첨 확률(%)·당첨 시 지급 구간(min~max 균등). 운영자가 사이트 설정에서 편집한다.
+	commentBonusChancePercent: integer("comment_bonus_chance_percent")
+		.default(10)
+		.notNull(),
+	commentBonusMinPoints: integer("comment_bonus_min_points")
+		.default(5)
+		.notNull(),
+	commentBonusMaxPoints: integer("comment_bonus_max_points")
+		.default(50)
+		.notNull(),
 	// 구 단일 포인트 광고 금액. 유형별 컬럼 이관 근거로만 남기고 신규 경로에서는 읽지 않는다.
 	pointJobRewardPoints: integer("point_job_reward_points"),
 	premiumPointJobRewardPoints: integer("premium_point_job_reward_points"),
@@ -2100,6 +2115,38 @@ export const bambiMemberGrade = pgTable("bambi_member_grade", {
 		.notNull(),
 });
 
+// 누적 댓글 수 마일스톤 → 일회성 보너스 포인트. 운영자 CRUD(코드 하드코딩 대신 배포 없이 편집).
+// comment_count UNIQUE로 같은 기준선 중복을 DB가 거른다. 회수 없음(단조 누적 기준이라 삭제·숨김에도
+// 마일스톤은 되돌리지 않는다).
+export const bambiCommentMilestone = pgTable("bambi_comment_milestone", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	commentCount: integer("comment_count").notNull().unique(),
+	bonusPoints: integer("bonus_points").notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// 회원별 마일스톤 지급 이력(멱등). (user_id, milestone_id) UNIQUE로 같은 마일스톤 중복 지급을
+// DB가 막는다 — 지급 판정과 원장 insert 사이 경합이 나도 두 번째는 unique 위반으로 스킵된다.
+export const bambiCommentMilestoneAward = pgTable(
+	"bambi_comment_milestone_award",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		milestoneId: uuid("milestone_id")
+			.notNull()
+			.references(() => bambiCommentMilestone.id, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("bambi_comment_milestone_award_user_milestone_uidx").on(
+			table.userId,
+			table.milestoneId
+		),
+	]
+);
+
 // 누적 광고일수 등급 아이콘 판별자. 카드 배지·구인자 안내가 이 값으로 lucide 아이콘을
 // 고른다(원값 직접 렌더 금지 — 화면은 라벨 맵 경유).
 export const bambiAdPeriodTierIcon = pgEnum("bambi_ad_period_tier_icon", [
@@ -2348,6 +2395,11 @@ export const communityComment = pgTable(
 		body: text("body").notNull(),
 		// 이 댓글에 현재 적립돼 있는 포인트(회수·재적립 기준). 게스트는 0.
 		pointsAwarded: integer("points_awarded").default(0).notNull(),
+		// 생성 시 확정된 랜덤 보너스 당첨액(불변). 숨김 후 복구 시 다시 얹을 근거라 원장 스냅샷과
+		// 분리한다 — pointsAwarded처럼 재추첨하면 복구 때마다 값이 달라진다. 게스트·꽝은 0.
+		bonusPoints: integer("bonus_points").default(0).notNull(),
+		// 위 보너스가 현재 원장에 반영돼 있는 스냅샷(회수·재적립 기준). pointsAwarded의 보너스 축.
+		bonusPointsAwarded: integer("bonus_points_awarded").default(0).notNull(),
 		status: communityContentStatus("status").default("published").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),

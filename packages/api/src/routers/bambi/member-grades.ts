@@ -1,5 +1,6 @@
 import { db } from "@bambi-app/db";
 import {
+	bambiCommentMilestone,
 	bambiMemberGrade,
 	bambiSiteSettings,
 } from "@bambi-app/db/schema/bambi";
@@ -63,7 +64,101 @@ const gradeIdInput = z.object({ id: z.string().uuid() });
 
 const DUP_MIN_POINTS = "이미 같은 기준 포인트의 등급이 있습니다.";
 
+// 댓글 마일스톤 — 누적 댓글 회차에 도달하면 1회성 보너스 포인트를 지급한다. comment_count는
+// unique라 같은 회차를 두 벌 만들 수 없다(위반 시 사용자 문구로 바꿔 던진다).
+const MILESTONE_COUNT_MAX = 1_000_000;
+const MILESTONE_BONUS_MAX = 1_000_000;
+const createMilestoneInput = z.object({
+	bonusPoints: z
+		.number()
+		.int("보너스 포인트는 정수로 입력해 주세요.")
+		.min(1, "보너스 포인트는 1 이상으로 입력해 주세요.")
+		.max(
+			MILESTONE_BONUS_MAX,
+			"보너스 포인트가 너무 큽니다. 자릿수를 확인해 주세요."
+		),
+	commentCount: z
+		.number()
+		.int("댓글 회차는 정수로 입력해 주세요.")
+		.min(1, "댓글 회차는 1 이상으로 입력해 주세요.")
+		.max(
+			MILESTONE_COUNT_MAX,
+			"댓글 회차가 너무 큽니다. 자릿수를 확인해 주세요."
+		),
+});
+const updateMilestoneInput = createMilestoneInput.extend({
+	id: z.string().uuid(),
+});
+const milestoneIdInput = z.object({ id: z.string().uuid() });
+const DUP_MILESTONE = "이미 같은 댓글 회차의 마일스톤이 있습니다.";
+
+// 댓글 마일스톤 CRUD. 등급 라우터 안에 두어 index.ts를 건드리지 않는다 — 운영자 UI는
+// memberGrades.commentMilestones.* 로 접근한다. 삭제는 자유이며 지급 기록(award)은
+// FK cascade가 함께 지운다.
+const commentMilestonesRouter = {
+	list: adminProcedure.handler(async () =>
+		db
+			.select()
+			.from(bambiCommentMilestone)
+			.orderBy(asc(bambiCommentMilestone.commentCount))
+	),
+
+	create: adminProcedure
+		.input(createMilestoneInput)
+		.handler(async ({ input }) => {
+			try {
+				const [created] = await db
+					.insert(bambiCommentMilestone)
+					.values({
+						bonusPoints: input.bonusPoints,
+						commentCount: input.commentCount,
+					})
+					.returning({ id: bambiCommentMilestone.id });
+				return created;
+			} catch {
+				// comment_count UNIQUE 위반을 사용자 문구로 바꾼다.
+				throw new ORPCError("CONFLICT", { message: DUP_MILESTONE });
+			}
+		}),
+
+	update: adminProcedure
+		.input(updateMilestoneInput)
+		.handler(async ({ input }) => {
+			try {
+				const [updated] = await db
+					.update(bambiCommentMilestone)
+					.set({
+						bonusPoints: input.bonusPoints,
+						commentCount: input.commentCount,
+					})
+					.where(eq(bambiCommentMilestone.id, input.id))
+					.returning({ id: bambiCommentMilestone.id });
+				if (!updated) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "마일스톤을 찾을 수 없습니다.",
+					});
+				}
+				return updated;
+			} catch (error) {
+				if (error instanceof ORPCError) {
+					throw error;
+				}
+				throw new ORPCError("CONFLICT", { message: DUP_MILESTONE });
+			}
+		}),
+
+	remove: adminProcedure.input(milestoneIdInput).handler(async ({ input }) => {
+		await db
+			.delete(bambiCommentMilestone)
+			.where(eq(bambiCommentMilestone.id, input.id));
+		return { id: input.id };
+	}),
+};
+
 export const memberGradesRouter = {
+	// 댓글 마일스톤 CRUD(운영자). 등급과 같은 화면에서 관리한다.
+	commentMilestones: commentMilestonesRouter,
+
 	// 회원 누적 포인트 상한 조회. null이면 상한 없음(무제한).
 	getPointsCap: adminProcedure.handler(async () => ({
 		maxPoints: await getMemberPointsCap(),
