@@ -64,6 +64,7 @@ import {
 } from "../../services/bambi-community-password";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
+import { pingCommunityPost } from "../../services/bambi-indexnow";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
 import {
 	JOB_POST_IMAGE_MAX_BYTES,
@@ -1864,7 +1865,7 @@ export const communityRouter = {
 			// 회원이고 게시판 적립 금액이 있으면 그만큼, 아니면 0(게스트·0포인트 게시판).
 			const target = authorUserId ? postPoints : 0;
 
-			let created: { board: string; id: string } | undefined;
+			let created: { board: string; id: string; isLocked: boolean } | undefined;
 			try {
 				created = await db.transaction(async (tx) => {
 					const [row] = await tx
@@ -1891,7 +1892,11 @@ export const communityRouter = {
 							pointsAwarded: target,
 							title: input.title,
 						})
-						.returning({ board: communityPost.board, id: communityPost.id });
+						.returning({
+							board: communityPost.board,
+							id: communityPost.id,
+							isLocked: communityPost.isLocked,
+						});
 					if (row && noticeBoardKeys.length > 0) {
 						await tx.insert(communityNoticeBoardPlacement).values(
 							noticeBoardKeys.map((boardKey) => ({
@@ -1931,6 +1936,10 @@ export const communityRouter = {
 					targetType: "community_post",
 				});
 			}
+
+			// 새 글은 즉시 published라 공개 URL이 생긴다 — 공개 게시판이면 글 상세·목록 재색인
+			// 요청(비공개 게시판·행 없음이면 pingCommunityPost가 no-op).
+			pingCommunityPost(created);
 
 			return created;
 		}),
@@ -2042,6 +2051,7 @@ export const communityRouter = {
 					.returning({
 						board: communityPost.board,
 						id: communityPost.id,
+						isLocked: communityPost.isLocked,
 					});
 				if (noticeBoardKeys !== undefined) {
 					await tx
@@ -2058,6 +2068,9 @@ export const communityRouter = {
 				}
 				return row;
 			});
+
+			// 본문 수정은 상세 페이지 콘텐츠를 바꾼다 — 공개 게시판 글이면 재색인 요청.
+			pingCommunityPost(updated);
 
 			return updated;
 		}),
@@ -2094,6 +2107,14 @@ export const communityRouter = {
 					targetAmount: 0,
 					reasons: POINT_REASONS.post,
 				});
+			});
+
+			// 글이 목록·상세에서 사라졌으니(soft delete) 재색인을 요청한다 — 공개 게시판만.
+			// 잠금 글이면 공개 경로에 애초에 없던 글이라 pingCommunityPost가 no-op.
+			pingCommunityPost({
+				board: post.board,
+				id: post.id,
+				isLocked: post.isLocked,
 			});
 
 			return { id: post.id };
@@ -2572,6 +2593,8 @@ export const communityRouter = {
 						authorUserId: communityPost.authorUserId,
 						// 알림 딥링크(/seeker/community/{slug}/{postId})에 필요하다.
 						board: communityPost.board,
+						// 잠금 글은 공개 URL이 없어 재색인 핑 대상에서 뺀다.
+						isLocked: communityPost.isLocked,
 						pointsAwarded: communityPost.pointsAwarded,
 						status: communityPost.status,
 					})
@@ -2638,6 +2661,7 @@ export const communityRouter = {
 				return {
 					board: existing.board,
 					id: updated.id,
+					isLocked: existing.isLocked,
 					status: updated.status,
 				};
 			});
@@ -2649,6 +2673,14 @@ export const communityRouter = {
 				reason: input.reason,
 				targetId: input.postId,
 				targetType: "community_post",
+			});
+
+			// 운영자 숨김/복구는 공개 목록·상세 노출을 바꾼다 — 공개 게시판이면 재색인 요청.
+			// 잠금 글은 공개 경로에 노출되지 않으므로 pingCommunityPost가 no-op.
+			pingCommunityPost({
+				board: result.board,
+				id: result.id,
+				isLocked: result.isLocked,
 			});
 
 			return { id: result.id, status: result.status };
