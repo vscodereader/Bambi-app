@@ -207,6 +207,23 @@ export const crawlerRouter = {
 			return row ?? null;
 		}),
 
+	// 영업 리드 일괄 내보내기(운영자 CSV 추출 → 외부 전달용). LIST_COLUMNS가 연락처를 뺀
+	// 원칙의 명시적 예외다 — 운영자 결정으로 열되, 목록에 섞지 않고 별도 프로시저로 격리해
+	// 일괄 열람이 호출 단위(1회 = 전체)로 로그에 남게 한다. 상태 무관 전체를 내린다.
+	exportLeads: adminProcedure.handler(() =>
+		db
+			.select({
+				contactPhone: crawledJobPost.contactPhone,
+				district: crawledJobPost.district,
+				industryCategory: crawledJobPost.industryCategory,
+				industryRaw: crawledJobPost.industryRaw,
+				region: crawledJobPost.region,
+				shopName: crawledJobPost.shopName,
+			})
+			.from(crawledJobPost)
+			.orderBy(desc(crawledJobPost.lastSeenAt), desc(crawledJobPost.id))
+	),
+
 	getPostImagesForEdit: adminProcedure
 		.input(imageEditIdInput)
 		.handler(async ({ input }) => {
