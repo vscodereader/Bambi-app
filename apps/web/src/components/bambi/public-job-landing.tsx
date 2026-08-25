@@ -418,8 +418,10 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 				<h2 className="m-0 font-extrabold text-lg">
 					모집 중인 공고 {jobs.length}개
 				</h2>
+				{/* 그리드 기본 구간에도 grid-cols-1(minmax(0,1fr))을 명시한다 — 안 주면 auto 트랙이
+				    카드 안 truncate(nowrap) 텍스트 폭만큼 벌어져 모바일에서 가로 스크롤이 생긴다. */}
 				{jobs.length > 0 ? (
-					<div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+					<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
 						{jobs.map((job) => (
 							<LandingJobCard job={job} key={job.id} />
 						))}
