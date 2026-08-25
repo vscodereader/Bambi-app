@@ -8,7 +8,7 @@ import {
 	bambiSiteSettings,
 	communityBoard,
 } from "@bambi-app/db/schema/bambi";
-import { and, asc, eq, inArray, lte, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 
 import { lockMemberPoints } from "./bambi-point-ledger";
 import { resolveGradeIconUrl } from "./bambi-storage";
@@ -218,71 +218,59 @@ export async function reconcileContentPoints(
 	return args.currentAwarded + appliedDelta;
 }
 
-// DB: 도달한 댓글 수 마일스톤 중 이 회원에게 아직 안 준 것을 전부 지급한다(멱등). award 행을
-// onConflictDoNothing으로 넣어 실제 삽입된 건만 원장에 쌓으므로 경합에서도 중복 지급이 없다.
-// 마일스톤은 회수 없음(단조 누적)이라 적립만 하고, cap을 넘지 않게 잘라 반영한다. bonusPoints는
-// 실제 반영된 금액(cap에 걸리면 그만큼 줄고, 다 막히면 0)이며, award 행은 그래도 남아 재지급하지 않는다.
+// DB: 전역 선착 마일스톤. 사이트 전체 통산 댓글 수가 이번 댓글로 정확히 어느 회차와 일치하면,
+// 그 댓글을 단 회원이 보너스를 가져간다. milestone_id UNIQUE + onConflictDoNothing이 마일스톤당
+// 1회·경합 이중지급을 막는다. award 행에 당첨 댓글(commentId)을 기록해 배지 렌더의 근거로 쓴다.
+//
+// 정확 일치(== )만 지급한다 — 지나간 회차는 소급 지급하지 않는다(전역 모델에서 catch-up은 배포
+// 직후 미지급분을 한 회원이 싹쓸이하는 사고가 된다). 이미 지나간 회차 행은 영원히 미달성으로 남는다.
+// ponytail: count 경합으로 두 댓글이 같은 순번을 읽거나 서로의 삽입 사이에 끼면 그 회차를 아무도
+// 못 받고 넘어갈 수 있다 — 전역 정확 일치의 알려진 한계. 정합이 필요하면 순번을 원장으로 직렬화.
 export async function awardCommentMilestones(
 	tx: TxHandle,
 	userId: string,
-	totalCommentCount: number
+	totalCommentCount: number,
+	commentId: string
 ): Promise<Array<{ commentCount: number; bonusPoints: number }>> {
-	// 이미 지급받은 마일스톤은 제외하고 도달한 것만 오름차순으로 훑는다.
-	const awardedIds = tx
-		.select({ milestoneId: bambiCommentMilestoneAward.milestoneId })
-		.from(bambiCommentMilestoneAward)
-		.where(eq(bambiCommentMilestoneAward.userId, userId));
-	const milestones = await tx
+	// comment_count는 UNIQUE라 정확 일치는 최대 한 행이다.
+	const [milestone] = await tx
 		.select({
 			id: bambiCommentMilestone.id,
 			commentCount: bambiCommentMilestone.commentCount,
 			bonusPoints: bambiCommentMilestone.bonusPoints,
 		})
 		.from(bambiCommentMilestone)
-		.where(
-			and(
-				lte(bambiCommentMilestone.commentCount, totalCommentCount),
-				notInArray(bambiCommentMilestone.id, awardedIds)
-			)
-		)
-		.orderBy(asc(bambiCommentMilestone.commentCount));
-	if (milestones.length === 0) {
+		.where(eq(bambiCommentMilestone.commentCount, totalCommentCount))
+		.limit(1);
+	if (!milestone) {
+		return [];
+	}
+	// award 행이 실제로 생긴 경우에만 지급한다 — 동시 실행이 같은 마일스톤을 노려도 unique
+	// 충돌로 두 번째는 스킵돼 중복 지급이 없다(출석 적립과 같은 가드).
+	const inserted = await tx
+		.insert(bambiCommentMilestoneAward)
+		.values({ userId, milestoneId: milestone.id, commentId })
+		.onConflictDoNothing()
+		.returning({ id: bambiCommentMilestoneAward.id });
+	if (inserted.length === 0) {
 		return [];
 	}
 	await lockMemberPoints(tx, userId);
 	const cap = await getMemberPointsCap();
-	const awarded: Array<{ commentCount: number; bonusPoints: number }> = [];
-	for (const milestone of milestones) {
-		// award 행이 실제로 생긴 경우에만 지급한다 — 동시 실행이 같은 마일스톤을 노려도 unique
-		// 충돌로 두 번째는 스킵돼 중복 지급이 없다(출석 적립과 같은 가드).
-		const inserted = await tx
-			.insert(bambiCommentMilestoneAward)
-			.values({ userId, milestoneId: milestone.id })
-			.onConflictDoNothing()
-			.returning({ id: bambiCommentMilestoneAward.id });
-		if (inserted.length === 0) {
-			continue;
-		}
-		// 잔액은 매 지급마다 다시 읽는다(직전 지급으로 늘어 cap 여유가 줄기 때문).
-		const balance = await getMemberBalanceTx(tx, userId);
-		const appliedDelta =
-			cap === null
-				? milestone.bonusPoints
-				: applyPointsCap(milestone.bonusPoints, balance, cap);
-		if (appliedDelta > 0) {
-			await tx.insert(bambiPointTransaction).values({
-				amount: appliedDelta,
-				balanceAfter: balance + appliedDelta,
-				reason: COMMENT_MILESTONE_REASON,
-				userId,
-			});
-		}
-		awarded.push({
-			commentCount: milestone.commentCount,
-			bonusPoints: appliedDelta,
+	const balance = await getMemberBalanceTx(tx, userId);
+	const appliedDelta =
+		cap === null
+			? milestone.bonusPoints
+			: applyPointsCap(milestone.bonusPoints, balance, cap);
+	if (appliedDelta > 0) {
+		await tx.insert(bambiPointTransaction).values({
+			amount: appliedDelta,
+			balanceAfter: balance + appliedDelta,
+			reason: COMMENT_MILESTONE_REASON,
+			userId,
 		});
 	}
-	return awarded;
+	return [{ commentCount: milestone.commentCount, bonusPoints: appliedDelta }];
 }
 
 // DB: 게시판의 글/댓글 적립 금액. 없으면 0/0. 설정 읽기라 트랜잭션 밖 db로 충분하다.

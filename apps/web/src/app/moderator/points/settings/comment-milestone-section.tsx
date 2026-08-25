@@ -14,6 +14,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@bambi-app/ui/components/alert-dialog";
+import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Dialog,
@@ -35,7 +36,7 @@ type MilestoneRow = Awaited<
 	ReturnType<
 		AppRouterClient["bambi"]["memberGrades"]["commentMilestones"]["list"]
 	>
->[number];
+>["milestones"][number];
 
 // 서버(member-grades.ts)의 마일스톤 입력 한계와 같은 값 — 왕복 전에 막는다.
 const MILESTONE_COUNT_MAX = 1_000_000;
@@ -60,12 +61,45 @@ function isValidMilestoneValue(raw: string, max: number): boolean {
 	return Number.isInteger(parsed) && parsed >= 1 && parsed <= max;
 }
 
+// 정렬 키: 당첨 완료(2) > 지나감(1) > 대기(0). 배지와 같은 판정을 숫자로만 편다.
+function milestoneStatusRank(
+	row: MilestoneRow,
+	totalCommentCount: number
+): number {
+	if (row.awarded) {
+		return 2;
+	}
+	return row.commentCount <= totalCommentCount ? 1 : 0;
+}
+
+// 전역 선착 모델의 달성 상태 배지. award가 있으면 당첨 완료, 없으면 현재 전체 댓글 수와
+// 회차를 비교해 이미 지나갔는지(지나감·영구 미달성) 아직 안 왔는지(대기)를 가른다.
+function MilestoneStatusBadge({
+	awarded,
+	commentCount,
+	totalCommentCount,
+}: {
+	awarded: boolean;
+	commentCount: number;
+	totalCommentCount: number;
+}) {
+	if (awarded) {
+		return <Badge variant="success">당첨 완료</Badge>;
+	}
+	if (commentCount <= totalCommentCount) {
+		return <Badge variant="outline">지나감</Badge>;
+	}
+	return <Badge variant="secondary">대기</Badge>;
+}
+
 function getMilestoneColumns({
 	onDelete,
 	onEdit,
+	totalCommentCount,
 }: {
 	onDelete: (row: MilestoneRow) => void;
 	onEdit: (row: MilestoneRow) => void;
+	totalCommentCount: number;
 }): DataColumn<MilestoneRow>[] {
 	return [
 		{
@@ -74,7 +108,7 @@ function getMilestoneColumns({
 			sortValue: (row) => row.commentCount,
 			cell: (row) => (
 				<span className="font-bold tabular-nums">
-					{row.commentCount.toLocaleString()}회
+					전체 {row.commentCount.toLocaleString()}번째
 				</span>
 			),
 		},
@@ -86,6 +120,18 @@ function getMilestoneColumns({
 				<span className="tabular-nums">
 					{row.bonusPoints.toLocaleString()}P
 				</span>
+			),
+		},
+		{
+			id: "status",
+			header: "달성 상태",
+			sortValue: (row) => milestoneStatusRank(row, totalCommentCount),
+			cell: (row) => (
+				<MilestoneStatusBadge
+					awarded={row.awarded}
+					commentCount={row.commentCount}
+					totalCommentCount={totalCommentCount}
+				/>
 			),
 		},
 		{
@@ -158,8 +204,9 @@ function MilestoneEditForm({
 					value={commentCount}
 				/>
 				<p className="m-0 text-muted-foreground text-xs">
-					회원의 누적 댓글 수가 이 회차에 도달하면 보너스를 한 번 지급해요. 같은
-					회차는 중복으로 만들 수 없어요.
+					전체 회원 통산 댓글 수가 이 회차에 정확히 도달할 때, 그 댓글을 단 회원
+					한 명에게 보너스를 한 번 지급해요. 같은 회차는 중복으로 만들 수
+					없어요.
 				</p>
 			</div>
 			<div className="flex flex-col gap-2">
@@ -258,7 +305,8 @@ export function CommentMilestoneSection() {
 		})
 	);
 
-	const milestones = listQuery.data ?? [];
+	const milestones = listQuery.data?.milestones ?? [];
+	const totalCommentCount = listQuery.data?.totalCommentCount ?? 0;
 	const canCreate =
 		isValidMilestoneValue(commentCount, MILESTONE_COUNT_MAX) &&
 		isValidMilestoneValue(bonusPoints, MILESTONE_BONUS_MAX) &&
@@ -267,6 +315,7 @@ export function CommentMilestoneSection() {
 	const columns = getMilestoneColumns({
 		onDelete: setDeleting,
 		onEdit: setEditing,
+		totalCommentCount,
 	});
 
 	return (
@@ -274,9 +323,10 @@ export function CommentMilestoneSection() {
 			<div className="flex flex-col gap-1">
 				<h2 className="m-0 font-bold text-lg">댓글 마일스톤</h2>
 				<p className="m-0 text-muted-foreground text-sm">
-					회원의 누적 댓글 수가 정해진 회차에 도달하면 보너스 포인트를 한 번
-					지급합니다. 회차별로 지급 포인트를 자유롭게 추가·수정·삭제할 수
-					있어요.
+					사이트 전체 회원의 통산 댓글 수가 정해진 회차에 정확히 도달할 때, 그
+					“전체 N번째 댓글”을 단 회원 한 명이 보너스 포인트를 가져가는 선착
+					이벤트예요. 회차별 지급 포인트를 자유롭게 추가·수정·삭제할 수 있고,
+					현재 전체 댓글 수는 {totalCommentCount.toLocaleString()}개예요.
 				</p>
 			</div>
 

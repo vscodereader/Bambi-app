@@ -15,7 +15,7 @@ export function toastCommentRewards(reward: {
 			continue;
 		}
 		toast(
-			`🏆 ${milestone.commentCount.toLocaleString("ko-KR")}번째 댓글 달성! 보너스 +${milestone.bonusPoints.toLocaleString("ko-KR")}P`
+			`🏆 전체 ${milestone.commentCount.toLocaleString("ko-KR")}번째 댓글 달성! 보너스 +${milestone.bonusPoints.toLocaleString("ko-KR")}P`
 		);
 	}
 }

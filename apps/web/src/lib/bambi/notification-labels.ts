@@ -75,7 +75,7 @@ const pointTransactionTitle = (item: BambiNotificationView): null | string => {
 		const commentCount = readNumber(item.metadata, "commentCount");
 		return commentCount === null
 			? `댓글 마일스톤 보너스 ${amount.toLocaleString("ko-KR")}P가 지급됐어요!`
-			: `🏆 ${commentCount.toLocaleString("ko-KR")}번째 댓글 달성! 보너스 ${amount.toLocaleString("ko-KR")}P가 지급됐어요`;
+			: `🏆 전체 ${commentCount.toLocaleString("ko-KR")}번째 댓글 달성! 보너스 ${amount.toLocaleString("ko-KR")}P가 지급됐어요`;
 	}
 	if (action(item) === "point_job_reward") {
 		const category = readString(item.metadata, "category");

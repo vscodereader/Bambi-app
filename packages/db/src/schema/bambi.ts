@@ -2125,8 +2125,9 @@ export const bambiCommentMilestone = pgTable("bambi_comment_milestone", {
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// 회원별 마일스톤 지급 이력(멱등). (user_id, milestone_id) UNIQUE로 같은 마일스톤 중복 지급을
-// DB가 막는다 — 지급 판정과 원장 insert 사이 경합이 나도 두 번째는 unique 위반으로 스킵된다.
+// 전역 선착 마일스톤 지급 이력(멱등). milestone_id UNIQUE로 마일스톤당 전 사이트 1회만
+// 지급된다 — "전체 N번째 댓글"을 처음 단 회원이 가져가고, 지급 판정과 원장 insert 사이
+// 경합이 나도 두 번째는 unique 위반으로 스킵된다.
 export const bambiCommentMilestoneAward = pgTable(
 	"bambi_comment_milestone_award",
 	{
@@ -2137,11 +2138,16 @@ export const bambiCommentMilestoneAward = pgTable(
 		milestoneId: uuid("milestone_id")
 			.notNull()
 			.references(() => bambiCommentMilestone.id, { onDelete: "cascade" }),
+		// 당첨 댓글(전역 선착의 근거). 배지 렌더가 이 링크로 회차를 표시한다. 댓글이
+		// 하드삭제되면 null로 끊되 award 행은 남긴다 — 회차는 이미 소진돼 재지급하지 않는다.
+		commentId: uuid("comment_id").references(
+			(): AnyPgColumn => communityComment.id,
+			{ onDelete: "set null" }
+		),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
-		uniqueIndex("bambi_comment_milestone_award_user_milestone_uidx").on(
-			table.userId,
+		uniqueIndex("bambi_comment_milestone_award_milestone_uidx").on(
 			table.milestoneId
 		),
 	]
