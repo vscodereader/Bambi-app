@@ -359,6 +359,7 @@ export function CrawledJobPostsCard() {
 										) : null}
 										<TableHead>제목</TableHead>
 										<TableHead>업소명</TableHead>
+										<TableHead>전화번호</TableHead>
 										<TableHead>지역</TableHead>
 										<TableHead>상태</TableHead>
 										<TableHead>마지막 수집</TableHead>
@@ -411,6 +412,9 @@ export function CrawledJobPostsCard() {
 												)}
 											</TableCell>
 											<TableCell>{item.shopName ?? "—"}</TableCell>
+											<TableCell className="whitespace-nowrap">
+												{item.contactPhone ?? "—"}
+											</TableCell>
 											<TableCell className="whitespace-nowrap">
 												{[item.region, item.district]
 													.filter(Boolean)
