@@ -7,6 +7,12 @@
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@bambi-app/ui/components/accordion";
+import {
 	AlertDialog,
 	AlertDialogAction,
 	AlertDialogCancel,
@@ -67,7 +73,6 @@ const SORT_ORDER_MAX = 10_000;
 const POINTS_MAX = 100_000;
 const NOTICE_BOARD_KEY = "notice";
 const BEST_BOARD_KEY = "best";
-const FIXED_HOME_BOARD_KEYS = new Set([NOTICE_BOARD_KEY, BEST_BOARD_KEY]);
 
 // 서버(community-boards.ts)의 SLUG_PATTERN·RESERVED_SLUGS와 같은 말 — 왕복 전에 알려 준다.
 const SLUG_HINT =
@@ -469,7 +474,7 @@ function NativeBoardDropTarget({
 	);
 }
 
-function HomeLayoutEditor({
+function BoardLayoutEditor({
 	boards,
 	isPending,
 	onSave,
@@ -494,21 +499,15 @@ function HomeLayoutEditor({
 		targetRow: number,
 		targetIndex?: number
 	) => {
-		if (FIXED_HOME_BOARD_KEYS.has(boardKey) || targetRow === 0) {
-			return;
-		}
 		const next = rows.map((row) => row.filter((key) => key !== boardKey));
 		const requestedInsertion = targetIndex ?? next[targetRow]?.length ?? 0;
-		const insertion =
-			targetRow === 1 ? Math.max(1, requestedInsertion) : requestedInsertion;
-		next[targetRow]?.splice(insertion, 0, boardKey);
+		next[targetRow]?.splice(requestedInsertion, 0, boardKey);
 		setRows(next.filter((row) => row.length > 0));
 	};
 	return (
 		<section className="flex flex-col gap-3 rounded-xl border border-border p-4">
 			<div className="flex flex-wrap items-start justify-between gap-3">
 				<div>
-					<h2 className="m-0 font-bold text-lg">수다방 홈 행 배치</h2>
 					<p className="m-0 text-muted-foreground text-sm">
 						게시판을 드래그하거나 각 행의 + 선택기로 넣으세요. 행에서 제거해도
 						게시판과 글은 삭제되지 않습니다.
@@ -540,12 +539,8 @@ function HomeLayoutEditor({
 						</span>
 						{row.map((boardKey, position) => (
 							<NativeBoardDropTarget
-								className={`flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm ${
-									FIXED_HOME_BOARD_KEYS.has(boardKey) ? "" : "cursor-grab"
-								}`}
-								dragKey={
-									FIXED_HOME_BOARD_KEYS.has(boardKey) ? undefined : boardKey
-								}
+								className="flex cursor-grab items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm"
+								dragKey={boardKey}
 								key={boardKey}
 								onBoardDrop={(droppedBoardKey) =>
 									moveBoard(droppedBoardKey, rowIndex, position)
@@ -555,23 +550,19 @@ function HomeLayoutEditor({
 								<span className="font-bold text-sm">
 									{labels.get(boardKey) ?? boardKey}
 								</span>
-								{FIXED_HOME_BOARD_KEYS.has(boardKey) ? (
-									<span className="text-muted-foreground text-xs">고정</span>
-								) : (
-									<button
-										aria-label={`${labels.get(boardKey) ?? boardKey} 홈 배치에서 제거`}
-										className="text-muted-foreground hover:text-foreground"
-										onClick={() => {
-											const next = rows
-												.map((item) => item.filter((key) => key !== boardKey))
-												.filter((item) => item.length > 0);
-											setRows(next);
-										}}
-										type="button"
-									>
-										×
-									</button>
-								)}
+								<button
+									aria-label={`${labels.get(boardKey) ?? boardKey} 홈 배치에서 제거`}
+									className="text-muted-foreground hover:text-foreground"
+									onClick={() => {
+										const next = rows
+											.map((item) => item.filter((key) => key !== boardKey))
+											.filter((item) => item.length > 0);
+										setRows(next);
+									}}
+									type="button"
+								>
+									×
+								</button>
 							</NativeBoardDropTarget>
 						))}
 						{unassigned.length > 0 ? (
@@ -646,6 +637,21 @@ function HomeLayoutEditor({
 	);
 }
 
+const toLayoutRows = (
+	items: { boardKey: string; rowIndex: number }[]
+): string[][] => {
+	const grouped = new Map<number, string[]>();
+	for (const item of items) {
+		grouped.set(item.rowIndex, [
+			...(grouped.get(item.rowIndex) ?? []),
+			item.boardKey,
+		]);
+	}
+	return [...grouped.entries()]
+		.sort(([left], [right]) => left - right)
+		.map(([, row]) => row);
+};
+
 export default function ModeratorCommunityBoardsPage() {
 	const queryClient = useQueryClient();
 	const [label, setLabel] = useState("");
@@ -658,46 +664,28 @@ export default function ModeratorCommunityBoardsPage() {
 	const [deleting, setDeleting] = useState<BoardRow | null>(null);
 
 	const listQuery = useQuery(orpc.bambi.communityBoards.list.queryOptions());
-	const homeLayoutQuery = useQuery(
-		orpc.bambi.communityBoards.getHomeLayout.queryOptions()
+	const mainLayoutQuery = useQuery(
+		orpc.bambi.communityBoards.getHomeLayout.queryOptions({
+			input: { surface: "main" },
+		})
 	);
-	const [homeRows, setHomeRows] = useState<string[][]>([]);
+	const communityLayoutQuery = useQuery(
+		orpc.bambi.communityBoards.getHomeLayout.queryOptions({
+			input: { surface: "community" },
+		})
+	);
+	const [mainRows, setMainRows] = useState<string[][]>([]);
+	const [communityRows, setCommunityRows] = useState<string[][]>([]);
 	useEffect(() => {
-		if (!homeLayoutQuery.data) {
-			return;
+		if (mainLayoutQuery.data) {
+			setMainRows(toLayoutRows(mainLayoutQuery.data));
 		}
-		const grouped = new Map<number, string[]>();
-		for (const item of homeLayoutQuery.data) {
-			grouped.set(item.rowIndex, [
-				...(grouped.get(item.rowIndex) ?? []),
-				item.boardKey,
-			]);
+	}, [mainLayoutQuery.data]);
+	useEffect(() => {
+		if (communityLayoutQuery.data) {
+			setCommunityRows(toLayoutRows(communityLayoutQuery.data));
 		}
-		const storedRows = [...grouped.entries()]
-			.sort(([a], [b]) => a - b)
-			.map(([, row]) => row);
-		const bestRowIndex = storedRows.findIndex((row) =>
-			row.includes(BEST_BOARD_KEY)
-		);
-		const bestRow =
-			bestRowIndex >= 0
-				? (storedRows[bestRowIndex]?.filter(
-						(key) => !FIXED_HOME_BOARD_KEYS.has(key)
-					) ?? [])
-				: [];
-		const remainingRows = storedRows
-			.map((row, index) =>
-				index === bestRowIndex
-					? []
-					: row.filter((key) => !FIXED_HOME_BOARD_KEYS.has(key))
-			)
-			.filter((row) => row.length > 0);
-		setHomeRows([
-			[NOTICE_BOARD_KEY],
-			[BEST_BOARD_KEY, ...bestRow],
-			...remainingRows,
-		]);
-	}, [homeLayoutQuery.data]);
+	}, [communityLayoutQuery.data]);
 
 	const invalidate = async () => {
 		await queryClient.invalidateQueries({
@@ -755,12 +743,16 @@ export default function ModeratorCommunityBoardsPage() {
 			},
 		})
 	);
-	const homeLayoutMutation = useMutation(
+	const layoutMutation = useMutation(
 		orpc.bambi.communityBoards.updateHomeLayout.mutationOptions({
 			onError: (error) =>
-				toast(error.message || "홈 배치를 저장하지 못했어요."),
-			onSuccess: async () => {
-				toast("수다방 홈 배치를 저장했어요.");
+				toast(error.message || "게시판 배치를 저장하지 못했어요."),
+			onSuccess: async (_data, variables) => {
+				toast(
+					variables.surface === "main"
+						? "메인페이지 배치를 저장했어요."
+						: "수다방 배치를 저장했어요."
+				);
 				await invalidate();
 			},
 		})
@@ -823,20 +815,60 @@ export default function ModeratorCommunityBoardsPage() {
 				</p>
 			</div>
 
-			<HomeLayoutEditor
-				boards={[
-					{ key: BEST_BOARD_KEY, label: "베스트글" },
-					...boards.map((board) => ({ key: board.key, label: board.label })),
-				]}
-				isPending={homeLayoutMutation.isPending}
-				onSave={() =>
-					homeLayoutMutation.mutate({
-						rows: homeRows.filter((row) => row.length > 0),
-					})
-				}
-				rows={homeRows}
-				setRows={setHomeRows}
-			/>
+			<Accordion className="rounded-xl border border-border px-4" multiple>
+				<AccordionItem value="main-layout">
+					<AccordionTrigger className="font-bold text-lg">
+						메인페이지 행 배치
+					</AccordionTrigger>
+					<AccordionContent>
+						<BoardLayoutEditor
+							boards={[
+								{ key: BEST_BOARD_KEY, label: "베스트글" },
+								...boards.map((board) => ({
+									key: board.key,
+									label: board.label,
+								})),
+							]}
+							isPending={layoutMutation.isPending || mainLayoutQuery.isPending}
+							onSave={() =>
+								layoutMutation.mutate({
+									rows: mainRows.filter((row) => row.length > 0),
+									surface: "main",
+								})
+							}
+							rows={mainRows}
+							setRows={setMainRows}
+						/>
+					</AccordionContent>
+				</AccordionItem>
+				<AccordionItem value="community-layout">
+					<AccordionTrigger className="font-bold text-lg">
+						수다방 행 배치
+					</AccordionTrigger>
+					<AccordionContent>
+						<BoardLayoutEditor
+							boards={[
+								{ key: BEST_BOARD_KEY, label: "베스트글" },
+								...boards.map((board) => ({
+									key: board.key,
+									label: board.label,
+								})),
+							]}
+							isPending={
+								layoutMutation.isPending || communityLayoutQuery.isPending
+							}
+							onSave={() =>
+								layoutMutation.mutate({
+									rows: communityRows.filter((row) => row.length > 0),
+									surface: "community",
+								})
+							}
+							rows={communityRows}
+							setRows={setCommunityRows}
+						/>
+					</AccordionContent>
+				</AccordionItem>
+			</Accordion>
 
 			<div className="flex flex-col gap-2">
 				<div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
