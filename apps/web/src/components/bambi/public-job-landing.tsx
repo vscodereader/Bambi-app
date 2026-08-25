@@ -16,7 +16,10 @@ import {
 import type { Route } from "next";
 import Link from "next/link";
 import { cache, Fragment } from "react";
-import { toMarketplaceJob } from "@/lib/bambi/api-job-mapper";
+import {
+	HOURS_PLACEHOLDER,
+	toMarketplaceJob,
+} from "@/lib/bambi/api-job-mapper";
 import {
 	findJobLandingIndustry,
 	findJobLandingRegion,
@@ -52,6 +55,10 @@ import { JsonLd } from "./json-ld";
 // 첫 화면에 실을 공고 수. 더보기·페이징은 두지 않는다 — 랜딩의 역할은 색인용 진입점이지
 // 전체 목록 열람이 아니고, 더 보려면 /seeker 목록으로 넘어가는 게 정상 동선이다.
 const LANDING_JOB_LIMIT = 24;
+
+// 근무시간 줄은 실제 값이 있을 때만 그리고, 매퍼가 채운 자리표시(HOURS_PLACEHOLDER)는
+// 줄째 생략한다 — 값이 없는데도 "채팅으로 확인"을 근무시간처럼 노출하지 않는다(색인
+// 텍스트가 사실만 담게). 상수는 매퍼에서 가져와 매퍼가 넣는 값과 어긋나지 않게 한다.
 
 // 가입 유도 목적지. anon이 눌러도 게이트 리다이렉트 없이 바로 가입 카드가 뜬다.
 const SIGNUP_HREF = "/seeker?auth=signup" as Route;
@@ -245,10 +252,17 @@ function LandingJobCard({ job }: { job: Job }) {
 				<h3 className="m-0 truncate font-extrabold text-base text-foreground">
 					{job.title}
 				</h3>
+				{/* 시/도·시군구(세부지역). 상세 주소(동·번지)는 싣지 않는다. */}
 				<p className="m-0 truncate text-muted-foreground text-sm">
 					{job.company} · {job.location}
 				</p>
+				{/* 급여는 DB 저장 표기 그대로(협의면 "급여 협의"), 근무시간은 실제 값이 있을 때만. */}
 				<p className="m-0 font-bold text-foreground text-sm">{job.pay}</p>
+				{job.hours && job.hours !== HOURS_PLACEHOLDER ? (
+					<p className="m-0 truncate text-muted-foreground text-sm">
+						근무시간 {job.hours}
+					</p>
+				) : null}
 				<div className="flex flex-wrap items-center gap-1">
 					<Badge variant="secondary">{job.type}</Badge>
 					{job.verified ? <Badge variant="success">인증 완료</Badge> : null}

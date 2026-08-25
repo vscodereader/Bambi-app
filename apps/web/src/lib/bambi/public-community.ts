@@ -31,6 +31,12 @@ export const getPublicBoardBySlug = (
 ): PublicBoardMeta | undefined =>
 	PUBLIC_BOARDS.find((board) => board.slug === slug);
 
+// 글의 board 키로 공개 보드 메타를 찾는다. 자유·일 이야기 목록엔 다른 게시판으로 배치된
+// 공지(board="notice")가 섞여 오므로, 링크는 카드 slug가 아니라 글 자신의 board slug로
+// 그려야 상세(slug↔board 일치 검사)에서 404가 나지 않는다.
+export const getPublicBoardByKey = (key: string): PublicBoardMeta | undefined =>
+	PUBLIC_BOARDS.find((board) => board.key === key);
+
 export const PUBLIC_BOARD_INDEX_PATH = "/board";
 
 // 지금 보고 있는 화면이 공개 영역(/board)인지. 글 폼·참여 UI가 공개 영역과 회원
