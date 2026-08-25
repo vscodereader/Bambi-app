@@ -103,6 +103,7 @@ import {
 	isCrawledJobFeedEnabled,
 	type JobFeedRow,
 	listCrawledSectionRows,
+	listLandingJobSummary,
 	minHourlyPayFilter,
 	ratingAverageSql,
 	ratingCountSql,
@@ -1699,6 +1700,12 @@ export const jobsRouter = {
 			},
 		};
 	}),
+
+	// 사이트맵 전용 경량 집계. 지역×업종별 공개 노출 자격 공고 수·최신 갱신 시각을 목록과 같은
+	// 자격 조건으로 세어, 0건 조합 제외와 lastmod 산정에 쓴다(공고 본문·미디어는 싣지 않는다).
+	landingSummary: publicProcedure.handler(
+		async () => await listLandingJobSummary()
+	),
 
 	search: publicProcedure
 		.input(
