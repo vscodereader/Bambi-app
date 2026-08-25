@@ -53,7 +53,10 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { isBuiltinBoardKey } from "@/lib/bambi/community";
+import {
+	COMMUNITY_LAYOUT_SURFACE,
+	isBuiltinBoardKey,
+} from "@/lib/bambi/community";
 import {
 	COMMUNITY_BOARD_ICONS,
 	type CommunityBoardIconName,
@@ -666,12 +669,12 @@ export default function ModeratorCommunityBoardsPage() {
 	const listQuery = useQuery(orpc.bambi.communityBoards.list.queryOptions());
 	const mainLayoutQuery = useQuery(
 		orpc.bambi.communityBoards.getHomeLayout.queryOptions({
-			input: { surface: "main" },
+			input: { surface: COMMUNITY_LAYOUT_SURFACE.main },
 		})
 	);
 	const communityLayoutQuery = useQuery(
 		orpc.bambi.communityBoards.getHomeLayout.queryOptions({
-			input: { surface: "community" },
+			input: { surface: COMMUNITY_LAYOUT_SURFACE.community },
 		})
 	);
 	const [mainRows, setMainRows] = useState<string[][]>([]);
@@ -749,7 +752,7 @@ export default function ModeratorCommunityBoardsPage() {
 				toast(error.message || "게시판 배치를 저장하지 못했어요."),
 			onSuccess: async (_data, variables) => {
 				toast(
-					variables.surface === "main"
+					variables.surface === COMMUNITY_LAYOUT_SURFACE.main
 						? "메인페이지 배치를 저장했어요."
 						: "수다방 배치를 저장했어요."
 				);
@@ -833,7 +836,7 @@ export default function ModeratorCommunityBoardsPage() {
 							onSave={() =>
 								layoutMutation.mutate({
 									rows: mainRows.filter((row) => row.length > 0),
-									surface: "main",
+									surface: COMMUNITY_LAYOUT_SURFACE.main,
 								})
 							}
 							rows={mainRows}
@@ -860,7 +863,7 @@ export default function ModeratorCommunityBoardsPage() {
 							onSave={() =>
 								layoutMutation.mutate({
 									rows: communityRows.filter((row) => row.length > 0),
-									surface: "community",
+									surface: COMMUNITY_LAYOUT_SURFACE.community,
 								})
 							}
 							rows={communityRows}

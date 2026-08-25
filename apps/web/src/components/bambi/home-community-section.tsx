@@ -24,7 +24,10 @@ import {
 	useLegalAdvisorNavGuard,
 } from "@/components/bambi/community-board-preview";
 import { PhoneVerifyDialog } from "@/components/bambi/phone-verify-dialog";
-import { COMMUNITY_ROOT_PATH } from "@/lib/bambi/community";
+import {
+	COMMUNITY_LAYOUT_SURFACE,
+	COMMUNITY_ROOT_PATH,
+} from "@/lib/bambi/community";
 import { trackNavigationClick } from "@/lib/bambi/ga-interaction";
 import { orpc } from "@/utils/orpc";
 
@@ -104,7 +107,7 @@ function CommunityContent({
 	const overviewQuery = useQuery(
 		orpc.bambi.community.overview.queryOptions({
 			enabled: true,
-			input: { surface: "main" },
+			input: { surface: COMMUNITY_LAYOUT_SURFACE.main },
 		})
 	);
 

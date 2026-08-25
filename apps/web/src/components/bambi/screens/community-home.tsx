@@ -10,12 +10,13 @@ import {
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PremiumAdBannerSection } from "@/components/bambi/premium-ad-banner-section";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
+import { COMMUNITY_LAYOUT_SURFACE } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
 export function CommunityHomeScreen() {
 	const overviewQuery = useQuery(
 		orpc.bambi.community.overview.queryOptions({
-			input: { surface: "community" },
+			input: { surface: COMMUNITY_LAYOUT_SURFACE.community },
 		})
 	);
 	const adBanners = useAdBannerJobs();

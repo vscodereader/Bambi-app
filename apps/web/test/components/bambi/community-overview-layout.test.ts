@@ -26,8 +26,10 @@ describe("수다방 홈 카드 외곽선", () => {
 	});
 
 	it("메인과 수다방이 서로 다른 배치 표면을 요청한다", () => {
-		expect(homeSource).toContain('input: { surface: "main" }');
-		expect(communityHomeSource).toContain('input: { surface: "community" }');
+		expect(homeSource).toContain("surface: COMMUNITY_LAYOUT_SURFACE.main");
+		expect(communityHomeSource).toContain(
+			"surface: COMMUNITY_LAYOUT_SURFACE.community"
+		);
 	});
 
 	it("운영자 배치는 기본 접힘 Accordion 두 개와 공용 편집기를 쓴다", () => {
