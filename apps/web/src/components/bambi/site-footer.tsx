@@ -7,6 +7,7 @@
 // query로 불러오되 폴백 값을 먼저 표시해 로딩 깜빡임을 없앤다.
 "use client";
 
+import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import {
 	Dialog,
 	DialogContent,
@@ -81,18 +82,33 @@ function FooterTel({ tel }: { tel: string }) {
 	);
 }
 
+// 서버에서 미리 조회한 푸터 설정(getFooter 응답). ISR 셸이 SSR HTML에 DB 값을
+// 박아 넣을 때 initialData로 내려준다.
+export type SiteFooterSettings = Awaited<
+	ReturnType<AppRouterClient["bambi"]["siteSettings"]["getFooter"]>
+>;
+
 interface SiteFooterProps {
 	// 콘텐츠 폭 — 헤더와 정렬. 기본은 앱 공통 고정폭.
 	contentWidthClassName?: string;
+	// 서버 컴포넌트 셸이 publicClient로 미리 조회해 내려주는 초기값. 없으면 기존처럼
+	// 클라이언트 조회 전까지 BAMBI_COMPANY 폴백을 그린다. JS를 실행하지 않는
+	// 크롤러(AI봇 등)는 SSR HTML만 보므로, 공개 SEO 표면(/jobs)은 이 값을 내려
+	// 사업자 정보 실값이 정적 HTML에 실리게 한다.
+	initialData?: SiteFooterSettings;
 	// 모바일 고정 하단 탭바가 있는 셸에서 겹침을 막기 위한 하단 여백.
 	withBottomNavClearance?: boolean;
 }
 
 export function SiteFooter({
 	contentWidthClassName = APP_CONTENT_MAX_W,
+	initialData,
 	withBottomNavClearance = false,
 }: SiteFooterProps) {
-	const { data } = useQuery(orpc.bambi.siteSettings.getFooter.queryOptions());
+	const { data } = useQuery({
+		...orpc.bambi.siteSettings.getFooter.queryOptions(),
+		initialData,
+	});
 
 	// DB에 값이 있으면 그 값, 없으면 코드 상수로 폴백.
 	const intro = data?.footerIntro ?? BAMBI_COMPANY.footerIntro;
