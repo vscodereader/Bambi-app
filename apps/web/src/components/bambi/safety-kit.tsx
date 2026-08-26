@@ -391,10 +391,10 @@ export function ReportForm({
 	const [detail, setDetail] = useState("");
 	const reasons = REPORT_REASONS;
 	return (
-		<div className={cn("flex flex-col", compact ? "gap-3" : "gap-4")}>
+		<div className={cn("flex flex-col", compact ? "gap-3" : "gap-3 md:gap-4")}>
 			{compact ? null : (
 				<div>
-					<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-foreground text-xl">
+					<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-foreground text-lg md:text-xl">
 						무엇을 신고할까요?
 					</h2>
 					<p className="m-0 text-[13px] text-muted-foreground">
@@ -402,7 +402,7 @@ export function ReportForm({
 					</p>
 				</div>
 			)}
-			<div className="flex flex-col gap-2">
+			<div className="flex flex-col gap-1.5 md:gap-2">
 				{reasons.map((r) => {
 					const on = sel === r.id;
 					const key: SevKey = r.sev === "high" ? "block" : "review";
@@ -410,7 +410,7 @@ export function ReportForm({
 					return (
 						<button
 							className={cn(
-								"flex cursor-pointer items-center gap-3 rounded-[14px] border px-3.5 py-3 text-left transition-all",
+								"flex min-h-11 cursor-pointer items-center gap-3 rounded-[14px] border px-3 py-2 text-left transition-all md:px-3.5 md:py-3",
 								on
 									? "border-[color:var(--color-primary)] bg-coral-50"
 									: "border-[color:var(--border-default)] bg-card"
@@ -419,7 +419,12 @@ export function ReportForm({
 							onClick={() => setSel(r.id)}
 							type="button"
 						>
-							<span className="flex-1 font-bold text-[14.5px] text-foreground">
+							<span
+								className={cn(
+									"flex-1 font-bold text-[14.5px]",
+									on ? "text-coral-700" : "text-foreground"
+								)}
+							>
 								{r.label}
 							</span>
 							{r.sev === "high" ? (
@@ -453,13 +458,13 @@ export function ReportForm({
 			<textarea
 				className={cn(
 					"box-border w-full resize-none rounded-[14px] border border-[color:var(--border-default)] bg-card p-3.5 text-base text-foreground leading-normal outline-none",
-					compact ? "min-h-14" : "min-h-20"
+					compact ? "min-h-14" : "min-h-16 md:min-h-20"
 				)}
 				onChange={(e) => setDetail(e.target.value)}
 				placeholder="구체적인 상황을 적어주시면 처리가 빨라져요 (선택)"
 				value={detail}
 			/>
-			<div className="flex flex-col gap-2.5 sm:flex-row">
+			<div className="grid grid-cols-2 gap-2.5">
 				<Button
 					block
 					className="sm:flex-1"
