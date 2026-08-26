@@ -47,6 +47,10 @@ const jobSearchSource = readFileSync(
 	srcPath("components/bambi/job-search-command.tsx"),
 	"utf8"
 );
+const supportFaqSource = readFileSync(
+	srcPath("components/bambi/support/faq-list.tsx"),
+	"utf8"
+);
 const buttonSource = readFileSync(
 	srcPath("../../../packages/ui/src/components/button.tsx"),
 	"utf8"
@@ -128,6 +132,12 @@ describe("web theme policy", () => {
 		expect(responsiveShellSource).toContain(
 			"dark:bg-card dark:text-foreground"
 		);
+	});
+
+	it("uses dark outline actions for inquiry history and the manual", () => {
+		expect(
+			supportFaqSource.match(/dark:bg-card dark:text-foreground/g)
+		).toHaveLength(2);
 	});
 
 	it("adds the moderator mode badge border only in dark mode", () => {
