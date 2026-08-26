@@ -31,10 +31,7 @@ export default function PublicBoardLayout({
 					<div className="flex items-center gap-2">
 						<ThemeToggle />
 						<Link
-							className={cn(
-								buttonVariants({ size: "sm", variant: "outline" }),
-								"dark:bg-card dark:text-foreground"
-							)}
+							className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
 							href="/seeker"
 						>
 							채용 공고 보기

@@ -22,6 +22,7 @@ import type { ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { MANUAL_PATH } from "@/lib/bambi/manual";
+import { LIGHT_OUTLINE_BUTTON_CLASS } from "@/lib/bambi/theme";
 import { orpc } from "@/utils/orpc";
 import { useBambiAuth } from "./auth-client-provider";
 import { Avatar, Badge } from "./ds";
@@ -215,7 +216,7 @@ function SignOutButton() {
 	};
 	return (
 		<Button
-			className="w-full"
+			className={cn("w-full", LIGHT_OUTLINE_BUTTON_CLASS)}
 			onClick={handleSignOut}
 			type="button"
 			variant="outline"

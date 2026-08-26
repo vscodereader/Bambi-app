@@ -15,7 +15,6 @@ import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
-import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
@@ -123,20 +122,14 @@ export function FaqList() {
 						문의 글 등록하기
 					</Link>
 					<Link
-						className={cn(
-							buttonVariants({ size: "lg", variant: "outline" }),
-							"dark:bg-card dark:text-foreground"
-						)}
+						className={buttonVariants({ size: "lg", variant: "outline" })}
 						href={SUPPORT_INQUIRIES_PATH}
 					>
 						내 문의 내역
 					</Link>
 					{/* /manual 인덱스가 역할별 기본 매뉴얼로 보내므로 여기서 역할 분기가 필요 없다. */}
 					<Link
-						className={cn(
-							buttonVariants({ size: "lg", variant: "outline" }),
-							"dark:bg-card dark:text-foreground"
-						)}
+						className={buttonVariants({ size: "lg", variant: "outline" })}
 						href={MANUAL_PATH}
 					>
 						이용 가이드

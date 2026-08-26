@@ -5,6 +5,7 @@ import {
 	BAMBI_THEME_STORAGE_KEY,
 	BAMBI_THEMES,
 	isBambiTheme,
+	LIGHT_OUTLINE_BUTTON_CLASS,
 } from "@/lib/bambi/theme";
 import { srcPath } from "../../src-path";
 
@@ -31,28 +32,24 @@ const responsiveShellSource = readFileSync(
 	srcPath("components/bambi/responsive-shell.tsx"),
 	"utf8"
 );
-const notificationBellSource = readFileSync(
-	srcPath("components/bambi/notification-bell.tsx"),
-	"utf8"
-);
 const chatRoomSource = readFileSync(
 	srcPath("components/bambi/screens/seeker-chat-room-responsive.tsx"),
 	"utf8"
 );
-const themeToggleSource = readFileSync(
-	srcPath("components/bambi/theme-toggle.tsx"),
-	"utf8"
-);
-const jobSearchSource = readFileSync(
-	srcPath("components/bambi/job-search-command.tsx"),
-	"utf8"
-);
-const supportFaqSource = readFileSync(
-	srcPath("components/bambi/support/faq-list.tsx"),
-	"utf8"
-);
 const buttonSource = readFileSync(
 	srcPath("../../../packages/ui/src/components/button.tsx"),
+	"utf8"
+);
+const myPageSource = readFileSync(
+	srcPath("components/bambi/my-page-shell.tsx"),
+	"utf8"
+);
+const accountSettingsSource = readFileSync(
+	srcPath("components/bambi/screens/account-settings-screen.tsx"),
+	"utf8"
+);
+const employerScreenSource = readFileSync(
+	srcPath("components/bambi/screens/employer.tsx"),
 	"utf8"
 );
 
@@ -112,32 +109,20 @@ describe("web theme policy", () => {
 		expect(popupPageSource).toContain("<PopupManagement />");
 	});
 
-	it("keeps dark card backgrounds and bright icons for chat and notification", () => {
-		expect(responsiveShellSource).toContain(
-			'className="bg-card text-foreground"'
-		);
-		expect(notificationBellSource).toContain(
-			'className="bg-card text-foreground"'
-		);
-		expect(notificationBellSource).toContain('variant="outline"');
-	});
-
-	it("uses dark card surfaces for every header action in dark mode", () => {
-		expect(themeToggleSource).toContain(
-			'className="dark:bg-card dark:text-foreground"'
-		);
-		expect(jobSearchSource).toContain(
-			'className="size-10 dark:bg-card dark:text-foreground"'
-		);
-		expect(responsiveShellSource).toContain(
-			"dark:bg-card dark:text-foreground"
+	it("changes every outline action to a dark card surface in dark mode", () => {
+		expect(buttonSource).toContain("dark:bg-card dark:text-foreground");
+		expect(buttonSource).toContain(
+			"dark:hover:bg-muted dark:hover:text-foreground"
 		);
 	});
 
-	it("uses dark outline actions for inquiry history and the manual", () => {
-		expect(
-			supportFaqSource.match(/dark:bg-card dark:text-foreground/g)
-		).toHaveLength(2);
+	it("keeps every logout button on the light outline exception", () => {
+		expect(LIGHT_OUTLINE_BUTTON_CLASS).toContain(
+			"dark:bg-[var(--theme-light-background)]"
+		);
+		expect(myPageSource).toContain("LIGHT_OUTLINE_BUTTON_CLASS");
+		expect(accountSettingsSource).toContain("LIGHT_OUTLINE_BUTTON_CLASS");
+		expect(employerScreenSource).toContain("LIGHT_OUTLINE_BUTTON_CLASS");
 	});
 
 	it("adds the moderator mode badge border only in dark mode", () => {

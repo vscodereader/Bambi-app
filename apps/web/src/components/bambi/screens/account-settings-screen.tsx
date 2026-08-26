@@ -17,6 +17,7 @@ import {
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserRound } from "lucide-react";
 import Image from "next/image";
@@ -27,6 +28,7 @@ import { authClient } from "@/lib/auth-client";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import type { MockPhoneVerifyInput } from "@/lib/bambi/guest";
+import { LIGHT_OUTLINE_BUTTON_CLASS } from "@/lib/bambi/theme";
 import { formatPhone } from "@/lib/bambi-format";
 import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
@@ -369,7 +371,7 @@ export function AccountSettingsScreen() {
 			</Card>
 
 			<Button
-				className="w-full md:hidden"
+				className={cn("w-full md:hidden", LIGHT_OUTLINE_BUTTON_CLASS)}
 				onClick={handleSignOut}
 				type="button"
 				variant="outline"

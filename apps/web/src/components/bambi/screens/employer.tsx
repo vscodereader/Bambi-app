@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { scan, verdict } from "@/lib/bambi/scanner";
+import { LIGHT_OUTLINE_BUTTON_CLASS } from "@/lib/bambi/theme";
 import type { ModerationModel, VisualTone } from "@/lib/bambi/types";
 import {
 	AppBar,
@@ -502,7 +503,11 @@ export function EmployerMe() {
 						</div>
 					))}
 				</div>
-				<Button className="w-full" onClick={handleSignOut} variant="secondary">
+				<Button
+					className={cn("w-full", LIGHT_OUTLINE_BUTTON_CLASS)}
+					onClick={handleSignOut}
+					variant="secondary"
+				>
 					로그아웃
 				</Button>
 			</div>

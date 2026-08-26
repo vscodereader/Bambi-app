@@ -145,7 +145,7 @@ function RoleSwitchLink() {
 	const { role } = useBambiAuth();
 	const linkClassName = cn(
 		buttonVariants({ variant: "outline" }),
-		"h-10 px-4 font-bold text-sm no-underline dark:bg-card dark:text-foreground"
+		"h-10 px-4 font-bold text-sm no-underline"
 	);
 	if (role === "employer") {
 		return (
@@ -176,7 +176,6 @@ function ChatNavButton({ withPin }: { withPin: boolean }) {
 				aria-label={
 					showBadge ? `채팅, 읽지 않은 메시지 ${unreadMessageCount}개` : "채팅"
 				}
-				className="bg-card text-foreground"
 				nativeButton={false}
 				render={<Link href={"/seeker/chats" as Route} />}
 				size="icon-lg"
@@ -203,7 +202,7 @@ function PointShopNavButton() {
 		<Button
 			aria-current={isActive ? "page" : undefined}
 			aria-label="포인트몰"
-			className={cn("bg-card text-foreground", isActive && "text-coral-500")}
+			className={cn(isActive && "text-coral-500")}
 			nativeButton={false}
 			render={<Link href={"/point-shop" as Route} />}
 			size="icon-lg"
@@ -254,8 +253,7 @@ function HeaderRightActions({
 			<Link
 				className={cn(
 					buttonVariants({ variant: isPublic ? "dark" : "outline" }),
-					"h-10 px-4 font-bold text-sm no-underline",
-					!isPublic && "dark:bg-card dark:text-foreground"
+					"h-10 px-4 font-bold text-sm no-underline"
 				)}
 				href={(isPublic ? "/seeker?auth=login" : "/seeker/me") as Route}
 			>

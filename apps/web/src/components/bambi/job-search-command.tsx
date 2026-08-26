@@ -167,7 +167,7 @@ export function JobSearchCommand({
 			    우측 액션 버튼들(h-10 outline)과 같은 룩으로 맞춘다. */}
 			<Button
 				aria-label={SEARCH_PLACEHOLDER}
-				className="size-10 dark:bg-card dark:text-foreground"
+				className="size-10"
 				onClick={() => setOpen(true)}
 				size="icon-lg"
 				variant="outline"
