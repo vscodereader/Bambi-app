@@ -114,6 +114,7 @@ describe("web theme policy", () => {
 		expect(buttonSource).toContain(
 			"dark:hover:bg-muted dark:hover:text-foreground"
 		);
+		expect(buttonSource).toContain("disabled:opacity-70");
 	});
 
 	it("keeps every logout button on the light outline exception", () => {

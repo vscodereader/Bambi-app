@@ -9,7 +9,7 @@ const buttonVariants = cva(
 			variant: {
 				default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
 				outline:
-					"border-border bg-[var(--theme-light-background)] bg-clip-border text-[var(--theme-light-foreground)] hover:bg-[var(--theme-light-muted)] hover:text-[var(--theme-light-foreground)] aria-expanded:bg-[var(--theme-light-muted)] aria-expanded:text-[var(--theme-light-foreground)] dark:bg-card dark:text-foreground dark:aria-expanded:bg-muted dark:aria-expanded:text-foreground dark:hover:bg-muted dark:hover:text-foreground",
+					"border-border bg-[var(--theme-light-background)] bg-clip-border text-[var(--theme-light-foreground)] hover:bg-[var(--theme-light-muted)] hover:text-[var(--theme-light-foreground)] disabled:opacity-70 aria-expanded:bg-[var(--theme-light-muted)] aria-expanded:text-[var(--theme-light-foreground)] dark:bg-card dark:text-foreground dark:aria-expanded:bg-muted dark:aria-expanded:text-foreground dark:hover:bg-muted dark:hover:text-foreground",
 				secondary:
 					"bg-[var(--theme-light-secondary)] text-[var(--theme-light-foreground)] hover:bg-[var(--theme-light-secondary-hover)] aria-expanded:bg-[var(--theme-light-secondary)] aria-expanded:text-[var(--theme-light-foreground)]",
 				ghost:
