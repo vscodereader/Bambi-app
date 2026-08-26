@@ -40,6 +40,10 @@ const buttonSource = readFileSync(
 	srcPath("../../../packages/ui/src/components/button.tsx"),
 	"utf8"
 );
+const inputSource = readFileSync(
+	srcPath("../../../packages/ui/src/components/input.tsx"),
+	"utf8"
+);
 const myPageSource = readFileSync(
 	srcPath("components/bambi/my-page-shell.tsx"),
 	"utf8"
@@ -115,6 +119,13 @@ describe("web theme policy", () => {
 			"dark:hover:bg-muted dark:hover:text-foreground"
 		);
 		expect(buttonSource).toContain("disabled:opacity-70");
+		expect(buttonSource).toContain(
+			"dark:disabled:text-muted-foreground dark:disabled:opacity-100"
+		);
+		expect(inputSource).toContain("dark:disabled:opacity-100");
+		expect(inputSource).toContain(
+			"dark:disabled:placeholder:text-muted-foreground"
+		);
 	});
 
 	it("keeps every logout button on the light outline exception", () => {
