@@ -239,6 +239,20 @@ export function JobGuideHub() {
 					</li>
 				</ul>
 			</section>
+
+			<section className="flex flex-col gap-2">
+				<h2 className="m-0 font-extrabold text-base">커뮤니티</h2>
+				<ul className="flex list-none flex-wrap gap-2 p-0">
+					<li>
+						<Badge
+							render={
+								<Link href={"/board" as Route}>밤알바 커뮤니티 게시판</Link>
+							}
+							variant="outline"
+						/>
+					</li>
+				</ul>
+			</section>
 		</div>
 	);
 }

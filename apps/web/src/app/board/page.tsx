@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 		"여성알바 커뮤니티",
 		"밤알바 후기",
 	]),
-	title: "퀸알바·여우알바·밤알바 정보 커뮤니티 | 밤비알바",
+	title: "밤알바 커뮤니티 | 퀸알바·여우알바·밤알바 정보 | 밤비알바",
 };
 
 interface LatestPost {
@@ -128,7 +128,7 @@ export default async function PublicBoardIndexPage() {
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex flex-col gap-1">
-				<h1 className="m-0 font-extrabold text-xl">커뮤니티 게시판</h1>
+				<h1 className="m-0 font-extrabold text-xl">밤알바 커뮤니티 게시판</h1>
 				<p className="m-0 text-muted-foreground text-sm">
 					밤비알바 회원들의 이야기와 공지를 읽어보세요. 글쓰기·댓글·추천은
 					로그인 후 이용할 수 있어요.
@@ -144,6 +144,16 @@ export default async function PublicBoardIndexPage() {
 					/>
 				))}
 			</div>
+			<p className="m-0 text-muted-foreground text-sm">
+				업종별 근무 방식과 정산 구조가 궁금하다면{" "}
+				<Link
+					className="text-foreground underline"
+					href={"/jobs/guide" as Route}
+				>
+					유흥·접객 알바 가이드
+				</Link>
+				도 함께 확인해 보세요.
+			</p>
 		</div>
 	);
 }
