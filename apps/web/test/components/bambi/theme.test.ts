@@ -132,6 +132,9 @@ describe("web theme policy", () => {
 		expect(chatRoomSource).toContain(
 			'size="icon-lg"\n\t\t\t\t\t\tvariant="outline"'
 		);
+		expect(chatRoomSource).toContain(
+			'<span className="inline-flex size-4">\n\t\t\t\t\t\t\t<MenuIcon />'
+		);
 	});
 
 	it("keeps only the user-facing popup in the named light scope", () => {

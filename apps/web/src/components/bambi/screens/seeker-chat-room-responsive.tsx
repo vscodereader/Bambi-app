@@ -2232,7 +2232,7 @@ export function SeekerChatRoomResponsive({
 						size="icon-lg"
 						variant="outline"
 					>
-						<span className="inline-flex size-5">
+						<span className="inline-flex size-4">
 							<MenuIcon />
 						</span>
 					</UiButton>
