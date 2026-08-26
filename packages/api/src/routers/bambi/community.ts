@@ -2,6 +2,8 @@ import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
+	bambiCommentMilestone,
+	bambiCommentMilestoneAward,
 	bambiSiteSettings,
 	communityBoard,
 	communityBoardHomeLayout,
@@ -80,12 +82,15 @@ import {
 	validateJobPostImageUpload,
 } from "../../services/bambi-job-media-policy";
 import {
+	awardCommentMilestones,
 	type GradeBadge,
 	getBoardContentPoints,
+	getCommentBonusSettings,
 	loadGradeBadges,
 	POINT_REASONS,
 	reconcileContentPoints,
 	resolveCommentAward,
+	rollCommentBonus,
 } from "../../services/bambi-member-points";
 import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
 import {
@@ -917,9 +922,21 @@ const selectVisibleCommentRows = async (target: SQL) => {
 			id: communityComment.id,
 			parentCommentId: communityComment.parentCommentId,
 			status: communityComment.status,
+			// 당첨 배지용(모든 열람자에게 공개). bonusPoints는 랜덤 보너스 확정액(불변),
+			// milestoneCommentCount는 이 댓글이 딴 전역 마일스톤 회차(award 조인, 없으면 null).
+			bonusPoints: communityComment.bonusPoints,
+			milestoneCommentCount: bambiCommentMilestone.commentCount,
 		})
 		.from(communityComment)
 		.leftJoin(user, eq(user.id, communityComment.authorUserId))
+		.leftJoin(
+			bambiCommentMilestoneAward,
+			eq(bambiCommentMilestoneAward.commentId, communityComment.id)
+		)
+		.leftJoin(
+			bambiCommentMilestone,
+			eq(bambiCommentMilestone.id, bambiCommentMilestoneAward.milestoneId)
+		)
 		.where(target)
 		.orderBy(asc(communityComment.createdAt))
 		.limit(COMMENTS_CAP);
@@ -1090,11 +1107,13 @@ const toCommentItems = (
 				authorName: null,
 				authorRole: null,
 				body: "",
+				bonusPoints: 0,
 				canDelete: false,
 				canEdit: false,
 				createdAt: row.createdAt,
 				id: row.id,
 				isDeleted: true,
+				milestoneCommentCount: null,
 				parentCommentId: row.parentCommentId,
 			};
 		}
@@ -1109,11 +1128,14 @@ const toCommentItems = (
 			authorName: row.authorGender ? SECRET_AUTHOR_NAME : policy.authorName,
 			authorRole: row.authorRole,
 			body: row.body,
+			// 당첨 배지(공개): 랜덤 보너스 확정액과 딴 마일스톤 회차. 숨김/삭제 댓글은 위에서 미노출.
+			bonusPoints: row.bonusPoints,
 			canDelete: policy.canDelete,
 			canEdit: policy.canEdit,
 			createdAt: row.createdAt,
 			id: row.id,
 			isDeleted: false,
+			milestoneCommentCount: row.milestoneCommentCount,
 			parentCommentId: row.parentCommentId,
 		};
 	});
@@ -1267,25 +1289,36 @@ const reconcileCommentPointsOnStatusChange = async (
 		board: string | null;
 		commentId: string;
 		currentAwarded: number;
+		// 보너스 축: 저장된 당첨액(불변)과 현재 반영 스냅샷.
+		bonusPoints: number;
+		bonusCurrentAwarded: number;
 		willVisible: boolean;
 	}
 ) => {
 	const { commentPoints } = args.willVisible
 		? await getBoardContentPoints(args.board ?? "")
 		: { commentPoints: 0 };
+	const baseTarget = resolveCommentAward(
+		args.authorUserId,
+		args.postAuthorUserId,
+		commentPoints
+	);
 	const nextAwarded = await reconcileContentPoints(tx, {
 		userId: args.authorUserId,
 		currentAwarded: args.currentAwarded,
-		targetAmount: resolveCommentAward(
-			args.authorUserId,
-			args.postAuthorUserId,
-			commentPoints
-		),
+		targetAmount: baseTarget,
 		reasons: POINT_REASONS.comment,
+	});
+	// 보너스는 base 적립이 살아 있을 때만 유지된다 — 노출 이탈이거나 base가 0이면 회수(target 0).
+	const nextBonusAwarded = await reconcileContentPoints(tx, {
+		userId: args.authorUserId,
+		currentAwarded: args.bonusCurrentAwarded,
+		targetAmount: args.willVisible && baseTarget > 0 ? args.bonusPoints : 0,
+		reasons: POINT_REASONS.commentBonus,
 	});
 	await tx
 		.update(communityComment)
-		.set({ pointsAwarded: nextAwarded })
+		.set({ pointsAwarded: nextAwarded, bonusPointsAwarded: nextBonusAwarded })
 		.where(eq(communityComment.id, args.commentId));
 };
 
@@ -1796,9 +1829,13 @@ export const communityRouter = {
 							: null,
 					authorRole: row.status === "published" ? row.authorRole : null,
 					body: row.status === "published" ? row.body : "",
+					// 당첨 배지(공개) — 숨김/삭제 댓글은 노출하지 않는다(위 렌더 정책과 동일).
+					bonusPoints: row.status === "published" ? row.bonusPoints : 0,
 					createdAt: row.createdAt,
 					id: row.id,
 					isDeleted: row.status !== "published",
+					milestoneCommentCount:
+						row.status === "published" ? row.milestoneCommentCount : null,
 					parentCommentId: row.parentCommentId,
 				})),
 				createdAt: post.createdAt,
@@ -2590,6 +2627,12 @@ export const communityRouter = {
 				post.authorUserId,
 				commentPoints
 			);
+			// 보너스는 base 적립을 받는 회원 댓글만 롤한다 — 게스트·셀프 댓글·0포인트 게시판은
+			// base가 0이라 대상이 아니다(당첨액은 댓글 row에 불변으로 저장한다).
+			const bonusRoll =
+				commentAuthorUserId && commentTarget > 0
+					? rollCommentBonus(await getCommentBonusSettings(), commentTarget)
+					: 0;
 
 			const created = await db.transaction(async (tx) => {
 				await tx.execute(
@@ -2618,6 +2661,8 @@ export const communityRouter = {
 						passwordHash: guestPassword
 							? hashCommunityPassword(guestPassword)
 							: "",
+						// 당첨 확정액(불변). 실제 원장 반영액은 상한에 잘릴 수 있어 별도 스냅샷으로 둔다.
+						bonusPoints: bonusRoll,
 						pointsAwarded: commentTarget,
 						postId: input.postId,
 					})
@@ -2632,7 +2677,35 @@ export const communityRouter = {
 					targetAmount: commentTarget,
 					reasons: POINT_REASONS.comment,
 				});
-				return row;
+				// 보너스 당첨액을 원장에 반영하고 실반영액을 스냅샷·응답에 쓴다(상한 클립 반영).
+				const bonusPointsAwarded = await reconcileContentPoints(tx, {
+					userId: commentAuthorUserId,
+					currentAwarded: 0,
+					targetAmount: bonusRoll,
+					reasons: POINT_REASONS.commentBonus,
+				});
+				if (bonusPointsAwarded > 0 && row) {
+					await tx
+						.update(communityComment)
+						.set({ bonusPointsAwarded })
+						.where(eq(communityComment.id, row.id));
+				}
+				// 전역 선착 마일스톤: 사이트 전체 통산 댓글 수(작성자·status 무관)가 이번 댓글로
+				// 정확히 어느 회차와 일치하면 이 댓글을 단 회원이 가져간다. 게스트 댓글도 카운트에
+				// 들지만, 게스트가 정확히 회차에 안착하면 userId가 없어 수상자 없이 넘어간다(의도된 에지).
+				let milestones: Awaited<ReturnType<typeof awardCommentMilestones>> = [];
+				if (commentAuthorUserId && row) {
+					const [countRow] = await tx
+						.select({ value: count() })
+						.from(communityComment);
+					milestones = await awardCommentMilestones(
+						tx,
+						commentAuthorUserId,
+						countRow?.value ?? 0,
+						row.id
+					);
+				}
+				return { bonusPoints: bonusPointsAwarded, id: row?.id, milestones };
 			});
 
 			// 알림은 커밋 뒤에 보낸다 — 알림 실패로 댓글이 롤백되면 안 된다.
@@ -2643,6 +2716,27 @@ export const communityRouter = {
 				parentCommentId: input.parentCommentId ?? null,
 				post,
 			});
+
+			// 마일스톤 도달 알림(attendance.ts 패턴 — point_transaction, 커밋 뒤·best-effort).
+			if (commentAuthorUserId) {
+				for (const milestone of created.milestones) {
+					// 상한에 완전히 막혀 실반영 0인 마일스톤은 알림하지 않는다(지급 목록엔 남는다).
+					if (milestone.bonusPoints <= 0) {
+						continue;
+					}
+					await notifyBambiNotification({
+						actorUserId: commentAuthorUserId,
+						metadata: {
+							action: "comment_milestone",
+							amount: milestone.bonusPoints,
+							commentCount: milestone.commentCount,
+						},
+						recipientUserId: commentAuthorUserId,
+						targetId: created.id ?? input.postId,
+						targetType: "point_transaction",
+					});
+				}
+			}
 
 			return created;
 		}),
@@ -2772,7 +2866,12 @@ export const communityRouter = {
 			await db.transaction(async (tx) => {
 				await tx
 					.update(communityComment)
-					.set({ status: "deleted", pointsAwarded: 0, updatedAt: new Date() })
+					.set({
+						status: "deleted",
+						pointsAwarded: 0,
+						bonusPointsAwarded: 0,
+						updatedAt: new Date(),
+					})
 					.where(eq(communityComment.id, input.commentId));
 				// 수집 글 댓글(post_id null)은 줄일 캐시가 없다 — 수집 글의 댓글 수는 원본
 				// 값이고 상세가 두 원천을 합산한다.
@@ -2789,6 +2888,13 @@ export const communityRouter = {
 					currentAwarded: comment.pointsAwarded,
 					targetAmount: 0,
 					reasons: POINT_REASONS.comment,
+				});
+				// 보너스도 함께 회수한다(base와 나란히 — target 0).
+				await reconcileContentPoints(tx, {
+					userId: comment.authorUserId,
+					currentAwarded: comment.bonusPointsAwarded,
+					targetAmount: 0,
+					reasons: POINT_REASONS.commentBonus,
 				});
 			});
 
@@ -2953,6 +3059,8 @@ export const communityRouter = {
 						// 회수·재적립 대상과 금액 스냅샷.
 						authorUserId: communityComment.authorUserId,
 						board: communityPost.board,
+						bonusPoints: communityComment.bonusPoints,
+						bonusPointsAwarded: communityComment.bonusPointsAwarded,
 						crawledTopicId: communityComment.crawledTopicId,
 						postAuthorUserId: communityPost.authorUserId,
 						pointsAwarded: communityComment.pointsAwarded,
@@ -3021,6 +3129,8 @@ export const communityRouter = {
 						board: existing.board,
 						commentId: input.commentId,
 						currentAwarded: existing.pointsAwarded,
+						bonusPoints: existing.bonusPoints,
+						bonusCurrentAwarded: existing.bonusPointsAwarded,
 						willVisible,
 					});
 				}

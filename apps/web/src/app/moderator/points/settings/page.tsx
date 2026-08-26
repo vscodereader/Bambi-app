@@ -16,6 +16,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { orpc } from "@/utils/orpc";
+import { CommentBonusCard } from "./comment-bonus-card";
+import { CommentMilestoneSection } from "./comment-milestone-section";
 
 const parsePoints = (value: string): number | null =>
 	value.trim() === "" ? null : Number(value);
@@ -274,6 +276,8 @@ export default function ModeratorPointSettingsPage() {
 			>
 				{globalMutation.isPending ? "저장 중" : "저장"}
 			</Button>
+			<CommentBonusCard />
+			<CommentMilestoneSection />
 		</main>
 	);
 }
