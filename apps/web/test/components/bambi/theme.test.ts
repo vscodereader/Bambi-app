@@ -36,6 +36,10 @@ const chatRoomSource = readFileSync(
 	srcPath("components/bambi/screens/seeker-chat-room-responsive.tsx"),
 	"utf8"
 );
+const jobSearchSource = readFileSync(
+	srcPath("components/bambi/job-search-command.tsx"),
+	"utf8"
+);
 const buttonSource = readFileSync(
 	srcPath("../../../packages/ui/src/components/button.tsx"),
 	"utf8"
@@ -95,6 +99,11 @@ describe("web theme policy", () => {
 		expect(toggleSource).toContain('"다크모드로 전환"');
 		expect(toggleSource).toContain("disabled={!mounted}");
 		expect(toggleSource).toContain('setTheme(isDark ? "light" : "dark")');
+	});
+
+	it("keeps the search action on the shared header icon size", () => {
+		expect(jobSearchSource).toContain('size="icon-lg"');
+		expect(jobSearchSource).not.toContain('className="size-10"');
 	});
 
 	it("changes surfaces and text without changing border tokens", () => {
