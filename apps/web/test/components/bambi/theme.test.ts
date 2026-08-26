@@ -100,13 +100,14 @@ describe("web theme policy", () => {
 		expect(popupPageSource).toContain("<PopupManagement />");
 	});
 
-	it("keeps dark card header icons visible", () => {
-		expect(responsiveShellSource).toContain(
+	it("uses the shared white outline style for chat and notification buttons", () => {
+		expect(responsiveShellSource).not.toContain(
 			'className="bg-card text-foreground"'
 		);
-		expect(notificationBellSource).toContain(
+		expect(notificationBellSource).not.toContain(
 			'className="bg-card text-foreground"'
 		);
+		expect(notificationBellSource).toContain('variant="outline"');
 	});
 
 	it("adds the moderator mode badge border only in dark mode", () => {

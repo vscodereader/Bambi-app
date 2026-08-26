@@ -40,7 +40,6 @@ export function NotificationBell() {
 				aria-label={
 					showBadge ? `알림, 읽지 않은 알림 ${unreadCount}개` : "알림"
 				}
-				className="bg-card text-foreground"
 				nativeButton={false}
 				render={<Link href={NOTIFICATIONS_HREF as Route} />}
 				size="icon-lg"
