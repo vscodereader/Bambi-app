@@ -5,6 +5,12 @@
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@bambi-app/ui/components/accordion";
+import {
 	AlertDialog,
 	AlertDialogAction,
 	AlertDialogCancel,
@@ -319,146 +325,157 @@ export function CommentMilestoneSection() {
 	});
 
 	return (
-		<section className="flex flex-col gap-2 rounded-xl border border-border p-4">
-			<div className="flex flex-col gap-1">
-				<h2 className="m-0 font-bold text-lg">댓글 마일스톤</h2>
-				<p className="m-0 text-muted-foreground text-sm">
-					사이트 전체 회원의 통산 댓글 수가 정해진 회차에 정확히 도달할 때, 그
-					“전체 N번째 댓글”을 단 회원 한 명이 보너스 포인트를 가져가는 선착
-					이벤트예요. 회차별 지급 포인트를 자유롭게 추가·수정·삭제할 수 있고,
-					현재 전체 댓글 수는 {totalCommentCount.toLocaleString()}개예요.
-				</p>
-			</div>
-
-			<div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-				<div className="flex flex-col gap-2">
-					<Label htmlFor="milestone-new-count">댓글 회차</Label>
-					<Input
-						className="sm:w-40"
-						id="milestone-new-count"
-						inputMode="numeric"
-						max={MILESTONE_COUNT_MAX}
-						min={1}
-						onChange={(event) => setCommentCount(event.target.value)}
-						placeholder="예: 100"
-						type="number"
-						value={commentCount}
-					/>
-				</div>
-				<div className="flex flex-col gap-2">
-					<Label htmlFor="milestone-new-bonus">보너스 포인트</Label>
-					<Input
-						className="sm:w-40"
-						id="milestone-new-bonus"
-						inputMode="numeric"
-						max={MILESTONE_BONUS_MAX}
-						min={1}
-						onChange={(event) => setBonusPoints(event.target.value)}
-						placeholder="예: 500"
-						type="number"
-						value={bonusPoints}
-					/>
-				</div>
-				<Button
-					disabled={!canCreate}
-					onClick={() =>
-						createMutation.mutate({
-							bonusPoints: Number(bonusPoints.trim()),
-							commentCount: Number(commentCount.trim()),
-						})
-					}
-					type="button"
-					variant="outline"
-				>
-					{createMutation.isPending ? "추가 중" : "마일스톤 추가"}
-				</Button>
-			</div>
-			<p className="m-0 text-muted-foreground text-xs">
-				같은 댓글 회차의 마일스톤은 만들 수 없습니다.
-			</p>
-
-			{listQuery.isPending ? (
-				<div className="flex flex-col gap-2">
-					<Skeleton className="h-10 w-full" />
-					<Skeleton className="h-10 w-full" />
-				</div>
-			) : null}
-
-			{listQuery.isError ? (
-				<EmptyState
-					description="목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
-					title="불러오기 실패"
-				/>
-			) : null}
-
-			{listQuery.isSuccess ? (
-				<div className="overflow-x-auto rounded-xl border border-border">
-					<DataTable
-						columns={columns}
-						data={milestones}
-						emptyMessage="등록된 마일스톤이 없어요."
-						getRowKey={(row) => row.id}
-					/>
-				</div>
-			) : null}
-
-			<Dialog
-				onOpenChange={(open) => {
-					if (!open) {
-						setEditing(null);
-					}
-				}}
-				open={editing !== null}
+		<Accordion className="flex flex-col gap-3" multiple>
+			<AccordionItem
+				className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+				value="comment-milestone"
 			>
-				<DialogContent>
-					{editing ? (
-						<MilestoneEditForm
-							isPending={updateMutation.isPending}
-							key={editing.id}
-							milestone={editing}
-							onClose={() => setEditing(null)}
-							onSubmit={(values) =>
-								updateMutation.mutate({ ...values, id: editing.id })
+				<AccordionTrigger className="bg-card px-4 py-4 font-bold hover:bg-muted/50">
+					댓글 마일스톤
+				</AccordionTrigger>
+				<AccordionContent className="flex flex-col gap-2 px-4 pt-4 pb-4">
+					<div className="flex flex-col gap-1">
+						<p className="m-0 text-muted-foreground text-sm">
+							사이트 전체 회원의 통산 댓글 수가 정해진 회차에 정확히 도달할 때,
+							그 “전체 N번째 댓글”을 단 회원 한 명이 보너스 포인트를 가져가는
+							선착 이벤트예요. 회차별 지급 포인트를 자유롭게 추가·수정·삭제할 수
+							있고, 현재 전체 댓글 수는 {totalCommentCount.toLocaleString()}
+							개예요.
+						</p>
+					</div>
+
+					<div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="milestone-new-count">댓글 회차</Label>
+							<Input
+								className="sm:w-40"
+								id="milestone-new-count"
+								inputMode="numeric"
+								max={MILESTONE_COUNT_MAX}
+								min={1}
+								onChange={(event) => setCommentCount(event.target.value)}
+								placeholder="예: 100"
+								type="number"
+								value={commentCount}
+							/>
+						</div>
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="milestone-new-bonus">보너스 포인트</Label>
+							<Input
+								className="sm:w-40"
+								id="milestone-new-bonus"
+								inputMode="numeric"
+								max={MILESTONE_BONUS_MAX}
+								min={1}
+								onChange={(event) => setBonusPoints(event.target.value)}
+								placeholder="예: 500"
+								type="number"
+								value={bonusPoints}
+							/>
+						</div>
+						<Button
+							disabled={!canCreate}
+							onClick={() =>
+								createMutation.mutate({
+									bonusPoints: Number(bonusPoints.trim()),
+									commentCount: Number(commentCount.trim()),
+								})
 							}
+							type="button"
+							variant="outline"
+						>
+							{createMutation.isPending ? "추가 중" : "마일스톤 추가"}
+						</Button>
+					</div>
+					<p className="m-0 text-muted-foreground text-xs">
+						같은 댓글 회차의 마일스톤은 만들 수 없습니다.
+					</p>
+
+					{listQuery.isPending ? (
+						<div className="flex flex-col gap-2">
+							<Skeleton className="h-10 w-full" />
+							<Skeleton className="h-10 w-full" />
+						</div>
+					) : null}
+
+					{listQuery.isError ? (
+						<EmptyState
+							description="목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
+							title="불러오기 실패"
 						/>
 					) : null}
-				</DialogContent>
-			</Dialog>
 
-			<AlertDialog
-				onOpenChange={(open) => {
-					if (!open) {
-						setDeleting(null);
-					}
-				}}
-				open={deleting !== null}
-			>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>
-							{deleting?.commentCount.toLocaleString()}회 마일스톤을 삭제할까요?
-						</AlertDialogTitle>
-						<AlertDialogDescription>
-							되돌릴 수 없습니다. 이미 지급된 포인트는 회수되지 않고, 앞으로 이
-							회차에서는 보너스가 지급되지 않아요.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>취소</AlertDialogCancel>
-						<AlertDialogAction
-							disabled={removeMutation.isPending}
-							onClick={() => {
-								if (deleting) {
-									removeMutation.mutate({ id: deleting.id });
-								}
-							}}
-							variant="destructive"
-						>
-							삭제
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
-		</section>
+					{listQuery.isSuccess ? (
+						<div className="overflow-x-auto rounded-xl border border-border">
+							<DataTable
+								columns={columns}
+								data={milestones}
+								emptyMessage="등록된 마일스톤이 없어요."
+								getRowKey={(row) => row.id}
+							/>
+						</div>
+					) : null}
+
+					<Dialog
+						onOpenChange={(open) => {
+							if (!open) {
+								setEditing(null);
+							}
+						}}
+						open={editing !== null}
+					>
+						<DialogContent>
+							{editing ? (
+								<MilestoneEditForm
+									isPending={updateMutation.isPending}
+									key={editing.id}
+									milestone={editing}
+									onClose={() => setEditing(null)}
+									onSubmit={(values) =>
+										updateMutation.mutate({ ...values, id: editing.id })
+									}
+								/>
+							) : null}
+						</DialogContent>
+					</Dialog>
+
+					<AlertDialog
+						onOpenChange={(open) => {
+							if (!open) {
+								setDeleting(null);
+							}
+						}}
+						open={deleting !== null}
+					>
+						<AlertDialogContent>
+							<AlertDialogHeader>
+								<AlertDialogTitle>
+									{deleting?.commentCount.toLocaleString()}회 마일스톤을
+									삭제할까요?
+								</AlertDialogTitle>
+								<AlertDialogDescription>
+									되돌릴 수 없습니다. 이미 지급된 포인트는 회수되지 않고, 앞으로
+									이 회차에서는 보너스가 지급되지 않아요.
+								</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel>취소</AlertDialogCancel>
+								<AlertDialogAction
+									disabled={removeMutation.isPending}
+									onClick={() => {
+										if (deleting) {
+											removeMutation.mutate({ id: deleting.id });
+										}
+									}}
+									variant="destructive"
+								>
+									삭제
+								</AlertDialogAction>
+							</AlertDialogFooter>
+						</AlertDialogContent>
+					</AlertDialog>
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
 	);
 }
