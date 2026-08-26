@@ -1,0 +1,19 @@
+# 밤비알바 (bambialba.com)
+
+밤비알바는 지역·업종별 알바 공고를 모아 보여주는 구인구직 서비스입니다.
+
+## 공개 표면
+
+- [/jobs](https://bambialba.com/jobs): 지역·업종별 공고를 둘러보는 허브
+- /jobs/{region}: 지역별 알바 랜딩(예: /jobs/seoul)
+- /jobs/{region}/{industry}: 지역·업종 조합 랜딩
+- [/jobs/guide](https://bambialba.com/jobs/guide): 업종별 알바의 뜻·근무 방식·자주 묻는 질문 가이드
+- [/board](https://bambialba.com/board): 이용자 커뮤니티 게시판
+
+## 회원 전용
+
+- 공고 상세 열람과 지원(채팅 문의)은 회원 전용입니다.
+
+## 문의
+
+- help@bambialba.com

@@ -3,10 +3,13 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/bambi/ds";
+import { SiteFooter } from "@/components/bambi/site-footer";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 
 // 공개 공고 랜딩 셸. 로그인 여부와 무관하게 열리는 화면이라(resolve-gate의 공개 prefix)
-// 역할별 내비게이션 없이 로고 헤더만 둔다(푸터는 두지 않는다).
+// 역할별 내비게이션 없이 로고 헤더만 둔다. 사업자·직업정보제공사업 신고번호 등
+// 법정 표시를 공개 표면에도 노출하기 위해 (legal) 셸과 같은 공용 푸터를 붙인다.
+// SiteFooter는 폴백 값을 먼저 그린 뒤 클라이언트에서 값을 채워 ISR을 깨지 않는다.
 export default function JobsLandingLayout({
 	children,
 }: {
@@ -39,6 +42,8 @@ export default function JobsLandingLayout({
 					{children}
 				</div>
 			</main>
+			{/* 콘텐츠와 같은 폭 기준으로 정렬(헤더·본문과 동일한 APP_CONTENT_WIDTH). */}
+			<SiteFooter contentWidthClassName={APP_CONTENT_WIDTH} />
 		</div>
 	);
 }
