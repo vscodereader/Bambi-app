@@ -434,6 +434,26 @@ export const crawlerRouter = {
 		return requireRow(saved);
 	}),
 
+	// 수집 공고 완전 삭제. status='removed'인 행만 지운다 — 소프트 삭제(확인 단계)를 거친
+	// 행만 완전 삭제를 허용해, 목록에서 바로 DELETE되는 사고를 막는다.
+	// 행을 지우면 재수집을 막던 톰스톤(removePost 주석 참고)도 사라진다 — 원본 사이트에 글이
+	// 살아 있으면 다음 회차 upsert가 같은 글을 새 행으로 다시 수집할 수 있다(화면 확인 창에도
+	// 같은 고지가 있다). FK는 jobPost.crawledFromId 하나뿐이고 onDelete set null이라
+	// 전환된 공고는 남는다.
+	hardDeletePost: adminProcedure.input(idInput).handler(async ({ input }) => {
+		const [removed] = await db
+			.delete(crawledJobPost)
+			.where(
+				and(
+					eq(crawledJobPost.id, input.id),
+					eq(crawledJobPost.status, "removed")
+				)
+			)
+			.returning({ id: crawledJobPost.id });
+
+		return requireRow(removed);
+	}),
+
 	// 운영자 커뮤니티 글 목록. 삭제·복구 대상을 고르는 화면용이라 제목·반응 지표만 내려보낸다.
 	listTopics: adminProcedure
 		.input(listTopicsInput)

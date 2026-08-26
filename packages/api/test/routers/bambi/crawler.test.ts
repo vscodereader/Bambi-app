@@ -138,6 +138,12 @@ const restorePostAs = (userId: string) =>
 		path: ["bambi", "crawler", "restorePost"],
 	});
 
+const hardDeletePostAs = (userId: string) =>
+	createProcedureClient(crawlerRouter.hardDeletePost, {
+		context: createContextForUser(userId),
+		path: ["bambi", "crawler", "hardDeletePost"],
+	});
+
 const removeTopicAs = (userId: string) =>
 	createProcedureClient(crawlerRouter.removeTopic, {
 		context: createContextForUser(userId),
@@ -289,6 +295,39 @@ describe("crawler 공고 삭제·복구", () => {
 		} finally {
 			await cleanupFixture(withoutIndustry);
 			await cleanupFixture(withIndustry);
+		}
+	});
+
+	// 완전 삭제는 소프트 삭제를 거친 removed 행만 지운다 — 행이 실제로 사라져야 하고,
+	// 톰스톤도 함께 사라진다.
+	it("removed 상태 행을 완전 삭제하면 DB에서 행이 사라진다", async () => {
+		const fixture = await createFixture();
+
+		try {
+			await removePostAs(fixture.adminUserId)({ id: fixture.jobPostId });
+
+			const deleted = await hardDeletePostAs(fixture.adminUserId)({
+				id: fixture.jobPostId,
+			});
+
+			expect(deleted.id).toBe(fixture.jobPostId);
+			expect(await readJobStatus(fixture.jobPostId)).toBeUndefined();
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	// removed가 아닌 행에 완전 삭제를 걸면 지우지 않는다 — 목록에서 바로 DELETE되는 사고를 막는다.
+	it("removed가 아닌 행에 완전 삭제하면 NOT_FOUND", async () => {
+		const fixture = await createFixture();
+
+		try {
+			await expect(
+				hardDeletePostAs(fixture.adminUserId)({ id: fixture.jobPostId })
+			).rejects.toMatchObject({ code: "NOT_FOUND" });
+			expect(await readJobStatus(fixture.jobPostId)).toBe("needs_review");
+		} finally {
+			await cleanupFixture(fixture);
 		}
 	});
 
