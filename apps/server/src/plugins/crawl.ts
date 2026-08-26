@@ -1,4 +1,7 @@
-import { runCrawlTick } from "@bambi-app/api/services/bambi-crawl-ingest";
+import {
+	reapOrphanedRunsOnBoot,
+	runCrawlTick,
+} from "@bambi-app/api/services/bambi-crawl-ingest";
 // fastify-schedule의 현재 이름이 @fastify/schedule이다. 스코프 없는 fastify-schedule은
 // 1.1.0에서 멈춘 구버전이라 Fastify 5용 타입 선언이 없다.
 import { fastifySchedule } from "@fastify/schedule";
@@ -16,6 +19,17 @@ const TICK_INTERVAL_MINUTES = 10;
 
 export const crawlPlugin: FastifyPluginAsync = async (app) => {
 	await app.register(fastifySchedule);
+
+	// 부팅 시 이전 프로세스가 회차 도중 죽으며 남긴 고아 running 행을 즉시 실패로 정리한다.
+	// 이게 실패해도 서버 기동을 막으면 안 되므로(다음 틱의 reapStaleRuns가 벨트) try/catch로 감싼다.
+	try {
+		const reaped = await reapOrphanedRunsOnBoot(new Date());
+		if (reaped > 0) {
+			app.log.warn({ reaped }, "reaped orphaned crawl runs on boot");
+		}
+	} catch (error) {
+		app.log.error(error, "failed to reap orphaned crawl runs on boot");
+	}
 
 	// 재진입 가드. 한 회차는 목록 수십 페이지 + 상세 수백 건이라 틱 간격보다 오래 걸릴 수 있다.
 	let running = false;

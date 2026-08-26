@@ -857,6 +857,26 @@ const reapStaleRuns = (now: Date) =>
 			)
 		);
 
+// 부팅 시점에 남아 있는 running 행을 전부 실패로 정리한다. 이 레포는 단일 인스턴스 전제라
+// 부팅 순간 살아 있는 크롤 프로세스는 없다 — 따라서 status='running'인 행은 나이와 무관하게
+// 모두 이전 프로세스가 회차 도중 죽으며 남긴 고아다. 완료 UPDATE는 크롤을 돌리는 프로세스
+// 안에서만 일어나므로, dev HMR·재배포로 회차 중 서버가 재시작되면 그 행은 영영 「진행 중」으로
+// 남는다. reapStaleRuns는 "다음 틱 + startedAt 30분 경과"에만 돌아, 그 사이 화면은 계속
+// 「진행 중·0」으로 읽힌다. 고아를 만드는 재시작 자체를 정리 시점으로 삼아 즉시 자가 치유한다.
+export const reapOrphanedRunsOnBoot = async (now: Date): Promise<number> => {
+	const reaped = await db
+		.update(crawlRun)
+		.set({
+			error: "서버 재시작으로 중단된 회차입니다(완료 기록이 남지 않았습니다)",
+			finishedAt: now,
+			status: "failed",
+		})
+		.where(eq(crawlRun.status, "running"))
+		.returning({ id: crawlRun.id });
+
+	return reaped.length;
+};
+
 // 회차를 연다. 이미 진행 중이면 부분 유니크 인덱스가 INSERT를 막으므로 null을 돌려준다.
 const startRun = async (
 	site: CrawlSourceSite,
