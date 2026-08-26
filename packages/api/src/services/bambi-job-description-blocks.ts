@@ -57,6 +57,51 @@ export const toPlainJobDescription = (blocks: JobDescriptionBlock[]): string =>
 		.map((block) => block.text)
 		.join("\n\n");
 
+export interface ResolvedJobDescriptionContent {
+	blocks: JobDescriptionBlock[];
+	description: string;
+	showDescription: boolean;
+}
+
+// 구버전 공고는 블록이 있으면 description을 블록 평문으로 덮어썼다. 그 값을 새 형식의
+// 기본 상세설명으로 다시 그리면 같은 내용이 두 번 보이므로 저장된 두 축의 관계로 구분한다.
+// 날짜나 마이그레이션 번호에 의존하지 않아 어느 환경의 과거 행에도 같은 판정이 적용된다.
+export const resolveJobDescriptionContent = ({
+	description,
+	descriptionBlocks,
+}: {
+	description: string;
+	descriptionBlocks: JobDescriptionBlock[];
+}): ResolvedJobDescriptionContent => {
+	const normalizedDescription = description.trim();
+	const blocks = normalizeJobDescriptionBlocks(descriptionBlocks);
+	const blockPlainText = toPlainJobDescription(blocks);
+	const isLegacyBlockDescription =
+		blocks.length > 0 && normalizedDescription === blockPlainText;
+
+	return {
+		blocks,
+		description: normalizedDescription,
+		showDescription:
+			normalizedDescription.length > 0 && !isLegacyBlockDescription,
+	};
+};
+
+// 검색·검수처럼 서식 없는 전체 본문이 필요한 경로에서 쓴다. 새 공고는 기본 설명과 블록을
+// 모두 포함하고, 구버전 공고는 resolveJobDescriptionContent가 중복 평문을 한 번만 남긴다.
+export const toFullJobDescription = (input: {
+	description: string;
+	descriptionBlocks: JobDescriptionBlock[];
+}): string => {
+	const resolved = resolveJobDescriptionContent(input);
+	const parts = [
+		resolved.showDescription ? resolved.description : "",
+		toPlainJobDescription(resolved.blocks),
+	].filter((part) => part.length > 0);
+
+	return parts.join("\n\n");
+};
+
 export const validateJobDescriptionBlocks = (
 	blocks: JobDescriptionBlock[]
 ): JobDescriptionBlockValidationResult => {

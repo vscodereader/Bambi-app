@@ -963,10 +963,9 @@ export const validateJobForm = (
 	const normalizedBlocks = normalizeJobDescriptionBlocks(
 		options.descriptionBlocks
 	);
-	const hasDescriptionBlocks = normalizedBlocks.length > 0;
-	const description = hasDescriptionBlocks
-		? toPlainJobDescription(normalizedBlocks)
-		: trim(form.description);
+	// 기본 상세설명과 구조화 블록은 서로 다른 입력이다. 블록이 있다는 이유로 description을
+	// 블록 평문으로 덮어쓰면 사용자가 필수 필드에 적은 내용이 저장 전에 사라진다.
+	const description = trim(form.description);
 	const interviewNotes = trim(form.interviewNotes);
 	const blockError =
 		options.descriptionBlocks && options.descriptionBlocks.length > 0

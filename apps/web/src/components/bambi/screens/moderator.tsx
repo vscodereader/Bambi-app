@@ -56,6 +56,8 @@ import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChatHistoryContent } from "@/app/moderator/chats/chat-history-dialog";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
+import { JobDescriptionContent } from "@/components/bambi/job-description-content";
+import { JobDetailImage } from "@/components/bambi/job-detail-image";
 import { PageControls } from "@/components/bambi/page-controls";
 import { SecretAuthorMark } from "@/components/bambi/secret-author-mark";
 import { StatusBadge } from "@/components/bambi/status-badge";
@@ -78,6 +80,7 @@ import { scan } from "@/lib/bambi/scanner";
 import { CONTENT_STATUS_LABELS } from "@/lib/bambi/support";
 import type {
 	CommunityTargetStatus,
+	JobDescriptionBlock,
 	ManagedUser,
 	QueueItem,
 	Report,
@@ -582,12 +585,20 @@ export function QueueList({
 
 export interface QueueDetailMediaItem {
 	altText: string;
+	fileName: string;
+	height: null | number;
 	storageKey: string;
+	width: null | number;
 }
 
 export interface QueueDetailMedia {
 	cover: QueueDetailMediaItem | null;
 	detail: QueueDetailMediaItem[];
+}
+
+export interface QueueDetailContent {
+	description: string;
+	descriptionBlocks: JobDescriptionBlock[];
 }
 
 // 검수용 이미지 열람. 본문 없이 이미지로만 등록된 공고가 있어 운영자가 실제 이미지를
@@ -627,15 +638,20 @@ function QueueMediaSection({
 				공고 이미지 {items.length}장
 			</div>
 			<div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
-				{items.map((mediaItem) => (
+				{items.map((mediaItem, index) => (
 					<button
+						aria-label={`공고 이미지 ${index + 1} 크게 보기`}
 						className="relative aspect-video overflow-hidden rounded-xl border border-border bg-secondary p-0"
 						key={mediaItem.storageKey}
 						onClick={() => setZoomed(mediaItem)}
 						type="button"
 					>
 						<Image
-							alt={mediaItem.altText || "공고 이미지"}
+							alt={
+								mediaItem.altText ||
+								mediaItem.fileName ||
+								`공고 이미지 ${index + 1}`
+							}
 							className="object-cover"
 							fill
 							sizes="(max-width: 768px) 50vw, 320px"
@@ -656,20 +672,58 @@ function QueueMediaSection({
 				<DialogContent className="w-[92vw] max-w-3xl">
 					<DialogTitle>공고 이미지</DialogTitle>
 					{zoomed ? (
-						<div className="relative h-[70vh] w-full">
-							<Image
-								alt={zoomed.altText || "공고 이미지"}
-								className="rounded-xl object-contain"
-								fill
-								sizes="768px"
-								src={jobMediaPublicUrl(zoomed.storageKey)}
-								unoptimized
-							/>
-						</div>
+						<JobDetailImage
+							alt={zoomed.altText || zoomed.fileName || "공고 이미지"}
+							height={zoomed.height}
+							src={jobMediaPublicUrl(zoomed.storageKey)}
+							width={zoomed.width}
+						/>
 					) : null}
 				</DialogContent>
 			</Dialog>
 		</div>
+	);
+}
+
+function QueueContentSection({
+	content,
+	isError,
+	isLoading,
+}: {
+	content?: QueueDetailContent;
+	isError: boolean;
+	isLoading: boolean;
+}) {
+	if (isLoading) {
+		return <Skeleton className="h-12 w-full rounded-xl" />;
+	}
+
+	if (isError) {
+		return (
+			<div className="rounded-md border border-border bg-secondary px-4 py-3 text-[13px] text-muted-foreground">
+				공고 내용을 불러오지 못했습니다.
+			</div>
+		);
+	}
+
+	if (!content) {
+		return null;
+	}
+
+	return (
+		<Accordion className="rounded-xl border border-border px-4">
+			<AccordionItem value="job-content">
+				<AccordionTrigger className="font-bold text-[13px]">
+					공고 내용
+				</AccordionTrigger>
+				<AccordionContent className="pb-4">
+					<JobDescriptionContent
+						description={content.description}
+						descriptionBlocks={content.descriptionBlocks}
+					/>
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
 	);
 }
 
@@ -712,14 +766,20 @@ function VerdictActions({
 }
 
 export function QueueDetail({
+	content,
 	item,
+	isContentError = false,
+	isContentLoading = false,
 	isMediaLoading = false,
 	media,
 	tone,
 	onBack,
 	onResolve,
 }: {
+	content?: QueueDetailContent;
 	item: QueueItem;
+	isContentError?: boolean;
+	isContentLoading?: boolean;
 	isMediaLoading?: boolean;
 	media?: QueueDetailMedia;
 	tone: VisualTone;
@@ -783,36 +843,36 @@ export function QueueDetail({
 				</div>
 				<div className="flex flex-col gap-4.5 lg:flex-row lg:items-start lg:gap-7">
 					<div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
-						{item.desc.trim().length > 0 ? (
-							<>
-								<div>
-									<div className="mb-2 font-bold text-[13px] text-foreground">
-										공고 본문 · 감지 표현 강조
-									</div>
-									<div className="rounded-md border border-border bg-secondary p-4">
-										<HiText
-											level={item.riskLevel}
-											terms={item.detected}
-											text={item.desc}
-										/>
-									</div>
+						{item.detected.length > 0 ? (
+							<div>
+								<div className="mb-2 font-bold text-[13px] text-foreground">
+									공고 본문 · 감지 표현 강조
 								</div>
-								<QueueMediaSection isLoading={isMediaLoading} media={media} />
-							</>
-						) : (
-							<>
-								{/* 본문이 없으면 이미지가 유일한 판단 재료다 — 위로 올린다. */}
-								<div className="flex items-center gap-2 rounded-md bg-secondary px-4 py-3">
-									<span className="inline-flex size-4.5 text-muted-foreground">
-										<AlertCircle />
-									</span>
-									<span className="font-bold text-[13px] text-foreground">
-										본문 없음 · 이미지로만 등록된 공고
-									</span>
+								<div className="rounded-md border border-border bg-secondary p-4">
+									<HiText
+										level={item.riskLevel}
+										terms={item.detected}
+										text={item.desc}
+									/>
 								</div>
-								<QueueMediaSection isLoading={isMediaLoading} media={media} />
-							</>
-						)}
+							</div>
+						) : null}
+						{item.detected.length === 0 && item.desc.trim().length === 0 ? (
+							<div className="flex items-center gap-2 rounded-md bg-secondary px-4 py-3">
+								<span className="inline-flex size-4.5 text-muted-foreground">
+									<AlertCircle />
+								</span>
+								<span className="font-bold text-[13px] text-foreground">
+									본문 없음 · 이미지로만 등록된 공고
+								</span>
+							</div>
+						) : null}
+						<QueueContentSection
+							content={content}
+							isError={isContentError}
+							isLoading={isContentLoading}
+						/>
+						<QueueMediaSection isLoading={isMediaLoading} media={media} />
 						<div className="px-0.5 text-[12px] text-muted-foreground leading-[1.55] lg:hidden">
 							{VERDICT_GUIDE}
 						</div>
