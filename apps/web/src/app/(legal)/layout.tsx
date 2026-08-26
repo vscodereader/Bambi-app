@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/bambi/ds";
 import { SiteFooter } from "@/components/bambi/site-footer";
+import { ThemeToggle } from "@/components/bambi/theme-toggle";
 import { APP_CONTENT_MAX_W } from "@/lib/bambi/layout";
 
 // 약관·개인정보 처리방침 등 법적 문서 공용 셸. 앱 내비게이션 없이 로고 헤더와
@@ -18,9 +19,12 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
 						APP_CONTENT_MAX_W
 					)}
 				>
-					<Link aria-label="밤비알바 홈" className="no-underline" href="/">
-						<Logo lang="ko" size="md" />
-					</Link>
+					<div className="flex w-full items-center justify-between gap-3">
+						<Link aria-label="밤비알바 홈" className="no-underline" href="/">
+							<Logo lang="ko" size="md" />
+						</Link>
+						<ThemeToggle />
+					</div>
 				</div>
 			</header>
 			{/* 헤더(h-14/h-16)를 뺀 최소 높이를 본문에 줘, 콘텐츠가 짧아도 형제 푸터가

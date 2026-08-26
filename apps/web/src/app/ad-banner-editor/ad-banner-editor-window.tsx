@@ -15,6 +15,7 @@ import {
 	toTransferableAdBannerMedia,
 } from "@/components/bambi/ad-banner-editor/editor-launcher";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { ThemeToggle } from "@/components/bambi/theme-toggle";
 
 // 이 화면은 opener와의 postMessage로만 데이터를 주고받는다 — 배너 이미지는 아직 업로드 전이라
 // 서버에서 읽어올 수 없다. 앱 셸 대신 편집 창에 맞는 최소 헤더만 둔다(PageShell 금지).
@@ -135,16 +136,19 @@ export function AdBannerEditorWindow() {
 						저장하면 공고 등록 화면으로 돌아갑니다.
 					</p>
 				</div>
-				<Button
-					aria-label="편집 창 닫기"
-					onClick={requestClose}
-					size="icon"
-					title="편집 창 닫기"
-					type="button"
-					variant="ghost"
-				>
-					<X aria-hidden="true" />
-				</Button>
+				<div className="flex items-center gap-1">
+					<ThemeToggle />
+					<Button
+						aria-label="편집 창 닫기"
+						onClick={requestClose}
+						size="icon"
+						title="편집 창 닫기"
+						type="button"
+						variant="ghost"
+					>
+						<X aria-hidden="true" />
+					</Button>
+				</div>
 			</header>
 			<main className="flex flex-1 flex-col px-4 py-4 md:px-6 md:py-6">
 				{renderBody()}

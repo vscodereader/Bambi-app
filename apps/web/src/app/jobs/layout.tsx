@@ -3,6 +3,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/bambi/ds";
+import { ThemeToggle } from "@/components/bambi/theme-toggle";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 
 // 공개 공고 랜딩 셸. 로그인 여부와 무관하게 열리는 화면이라(resolve-gate의 공개 prefix)
@@ -26,12 +27,15 @@ export default function JobsLandingLayout({
 					<Link aria-label="밤비알바 홈" className="no-underline" href="/jobs">
 						<Logo lang="ko" size="md" />
 					</Link>
-					<Button
-						nativeButton={false}
-						render={<Link href="/seeker">공고 검색</Link>}
-						size="sm"
-						variant="outline"
-					/>
+					<div className="flex items-center gap-2">
+						<ThemeToggle />
+						<Button
+							nativeButton={false}
+							render={<Link href="/seeker">공고 검색</Link>}
+							size="sm"
+							variant="outline"
+						/>
+					</div>
 				</div>
 			</header>
 			<main className="flex flex-1 flex-col">

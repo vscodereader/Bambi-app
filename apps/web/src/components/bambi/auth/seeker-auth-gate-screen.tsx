@@ -8,6 +8,7 @@ import { toMarketplaceJob } from "@/lib/bambi/api-job-mapper";
 import { maskJobsForBackdrop } from "@/lib/bambi/auth-backdrop";
 import { client } from "@/utils/orpc";
 import { SiteFooter } from "../site-footer";
+import { ThemeToggle } from "../theme-toggle";
 import { AuthBackdrop } from "./auth-backdrop";
 import { AuthPanel } from "./auth-panel";
 
@@ -39,6 +40,9 @@ export async function SeekerAuthGateScreen() {
 
 	return (
 		<div className="flex min-h-dvh flex-col bg-secondary">
+			<div className="fixed top-3 right-3 z-30 rounded-lg bg-background/90 shadow-sm backdrop-blur md:top-4 md:right-4">
+				<ThemeToggle />
+			</div>
 			{/* 회원용 마켓 화면(seeker-marketplace)에는 sr-only h1이 있으나 anon 게이트
 			    경로에는 없어, 크롤러가 이 화면에서 페이지 제목을 못 읽는다. 문구는 마켓
 			    화면과 동일하게 맞춰 두 경로가 같은 페이지임을 드러낸다. */}

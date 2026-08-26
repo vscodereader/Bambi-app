@@ -49,6 +49,9 @@
 	--red-600: #e23b40;
 	--blue-50: #ecf1ff;
 	--blue-500: #2969ff; /* info / link */
+	/* 성별 표식은 테마 표면이 아니라 고정 의미색이다. 기존 bg-primary/15가 흰 페이지 위에서
+	   보이던 합성색을 불투명 토큰으로 만들어 다크 배경에서도 같은 색을 유지한다. */
+	--gender-female-bg: color-mix(in srgb, var(--coral-500) 15%, var(--white));
 
 	/* Brand aliases */
 	--color-primary: var(--coral-500);

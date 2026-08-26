@@ -22,6 +22,7 @@ import {
 } from "@/lib/bambi/main-popup-pages";
 import { useCommunityBoards } from "@/lib/bambi/use-community-boards";
 import { orpc } from "@/utils/orpc";
+import { ThemeLightScope } from "../theme-light-scope";
 import { PopupTextViewer } from "./popup-text-editor";
 
 interface PublicPopup {
@@ -202,7 +203,7 @@ export function MainPopupLayer() {
 		}
 	};
 	return (
-		<>
+		<ThemeLightScope>
 			<div className="pointer-events-none fixed inset-0 z-40 hidden overflow-auto p-4 md:block">
 				<DesktopPopupStack
 					frontId={frontId}
@@ -223,7 +224,7 @@ export function MainPopupLayer() {
 					onOpenLink={() => openLink(items[0].linkPath)}
 				/>
 			</div>
-		</>
+		</ThemeLightScope>
 	);
 }
 
@@ -292,7 +293,7 @@ function PopupWindow({
 	return (
 		<section
 			aria-label={`${item.slotIndex}번 안내 팝업`}
-			className={`pointer-events-auto relative h-fit max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-auto rounded-lg border bg-background shadow-2xl ${front ? "z-20" : "z-10"}`}
+			className={`pointer-events-auto relative h-fit max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-auto rounded-lg border bg-background text-foreground shadow-2xl ${front ? "z-20" : "z-10"}`}
 			onPointerDown={onFocus}
 		>
 			{item.contentType === "image" && item.editedImage ? (

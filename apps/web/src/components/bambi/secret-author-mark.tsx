@@ -17,9 +17,9 @@ export function SecretAuthorMark({
 		<span className="inline-flex items-center gap-1.5">
 			<span
 				className={cn(
-					"inline-flex shrink-0 items-center justify-center rounded-full text-foreground",
+					"inline-flex shrink-0 items-center justify-center rounded-full text-ink-900",
 					size === "md" ? "size-10" : "size-7",
-					gender === "male" ? "bg-sky-200" : "bg-primary/15"
+					gender === "male" ? "bg-sky-200" : "bg-[var(--gender-female-bg)]"
 				)}
 			>
 				<Icon aria-hidden className={size === "md" ? "size-5" : "size-4"} />

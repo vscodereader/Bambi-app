@@ -20,6 +20,15 @@ const moderatorSource = fs.readFileSync(
 );
 
 describe("수다방 홈 카드 외곽선", () => {
+	it("공지 카드는 다크 표면과 제목·글 구분선을 사용한다", () => {
+		expect(source).toContain('isNotice && "border-coral-500/60 bg-card"');
+		expect(source).toContain(
+			'className="flex flex-row items-center justify-between border-border border-b"'
+		);
+		expect(source).not.toContain("last:border-b-0");
+		expect(source).toContain('"font-bold text-coral-600 dark:text-coral-400"');
+	});
+
 	it("양끝 border를 자르지 않고 공용 최소 여백을 둔다", () => {
 		expect(source).toContain("max-w-full flex-col gap-4 px-px");
 		expect(source).not.toContain("max-w-full flex-col gap-4 overflow-x-clip");

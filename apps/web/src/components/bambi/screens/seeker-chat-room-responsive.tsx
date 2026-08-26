@@ -79,6 +79,7 @@ import {
 	XIcon,
 } from "../icons";
 import { ReportDialog } from "../report-dialog";
+import { ThemeToggle } from "../theme-toggle";
 
 interface SeekerChatRoomResponsiveProps {
 	onBack: () => void;
@@ -438,7 +439,7 @@ function ChatDateChip({ label }: { label: string }) {
 	return (
 		<div className="flex items-center justify-center gap-3 py-2">
 			<span className="hidden h-px flex-1 bg-coral-200 md:block" />
-			<span className="rounded-full bg-coral-50 px-3 py-1 font-semibold text-[11px] text-coral-800">
+			<span className="rounded-full bg-coral-50 px-3 py-1 font-semibold text-[11px] text-coral-700">
 				{label}
 			</span>
 			<span className="hidden h-px flex-1 bg-coral-200 md:block" />
@@ -479,7 +480,7 @@ function ContactRequestMessage({
 
 	return (
 		<div className="mx-auto flex w-full max-w-[80%] flex-col gap-3 rounded-lg border border-coral-100 bg-coral-50 px-4 py-3 text-center">
-			<p className="m-0 font-semibold text-coral-800 text-sm leading-relaxed">
+			<p className="m-0 font-semibold text-coral-700 text-sm leading-relaxed">
 				{notice}
 			</p>
 			{canRespond ? (
@@ -536,7 +537,7 @@ function InterviewProposalMessage({
 	if (!schedule) {
 		return (
 			<div className="mx-auto flex w-full max-w-[80%] flex-col gap-1 rounded-lg border border-coral-100 bg-coral-50 px-4 py-3 text-center">
-				<p className="m-0 font-semibold text-coral-800 text-sm leading-relaxed">
+				<p className="m-0 font-semibold text-coral-700 text-sm leading-relaxed">
 					{message.body}
 				</p>
 				<p className="m-0 text-[11px] text-coral-700/70">
@@ -552,7 +553,7 @@ function InterviewProposalMessage({
 
 	return (
 		<div className="mx-auto flex w-full max-w-[80%] flex-col gap-2 rounded-lg border border-coral-100 bg-coral-50 px-4 py-3 text-center">
-			<p className="m-0 font-semibold text-coral-800 text-sm leading-relaxed">
+			<p className="m-0 font-semibold text-coral-700 text-sm leading-relaxed">
 				{getInterviewProposalNotice(schedule.status, viewerIsProposer)}
 			</p>
 			<p className="m-0 font-semibold text-coral-700 text-sm">
@@ -2223,6 +2224,7 @@ export function SeekerChatRoomResponsive({
 							{jobPost?.title ?? "공고 채팅"}
 						</p>
 					</div>
+					<ThemeToggle />
 					<UiButton
 						aria-label="채팅 정보 열기"
 						className="flex-none"

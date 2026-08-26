@@ -22,6 +22,7 @@ import { Logo } from "./ds";
 import { Message, ShieldIcon, StoreIcon } from "./icons";
 import { NotificationBell } from "./notification-bell";
 import { SiteFooter } from "./site-footer";
+import { ThemeToggle } from "./theme-toggle";
 
 // 채팅 상세는 <md에서 카카오톡식 풀스크린이라 셸의 모바일 헤더를 숨긴다(md+ 데스크톱 헤더는 유지).
 const CHAT_ROOM_PATH_RE = /^\/seeker\/chats\/[^/]+$/;
@@ -175,7 +176,7 @@ function ChatNavButton({ withPin }: { withPin: boolean }) {
 				aria-label={
 					showBadge ? `채팅, 읽지 않은 메시지 ${unreadMessageCount}개` : "채팅"
 				}
-				className="bg-card"
+				className="bg-card text-foreground"
 				nativeButton={false}
 				render={<Link href={"/seeker/chats" as Route} />}
 				size="icon-lg"
@@ -202,7 +203,7 @@ function PointShopNavButton() {
 		<Button
 			aria-current={isActive ? "page" : undefined}
 			aria-label="포인트몰"
-			className={cn("bg-card", isActive && "text-coral-500")}
+			className={cn("bg-card text-foreground", isActive && "text-coral-500")}
 			nativeButton={false}
 			render={<Link href={"/point-shop" as Route} />}
 			size="icon-lg"
@@ -217,7 +218,10 @@ function ModeratorHeaderActions() {
 	return (
 		<>
 			<NotificationBell />
-			<Badge className="h-9 gap-1.5 px-3 font-bold" variant="secondary">
+			<Badge
+				className="h-9 gap-1.5 px-3 font-bold dark:border-border"
+				variant="secondary"
+			>
 				<span className="inline-flex size-3.5">
 					<ShieldIcon />
 				</span>
@@ -365,6 +369,7 @@ export function ResponsiveAppShell({
 						) : null}
 						<div className="ml-auto flex items-center gap-2">
 							{headerSlot}
+							<ThemeToggle />
 							<HeaderRightActions
 								isModerator={isModerator}
 								isPublic={isPublic}
@@ -393,6 +398,7 @@ export function ResponsiveAppShell({
 					<div className="flex items-center gap-2">
 						{mobileHeaderSlot}
 						{showPointShopEntry ? <PointShopNavButton /> : null}
+						<ThemeToggle />
 						{isModerator ? <ModeratorHeaderActions /> : <NotificationBell />}
 					</div>
 				</div>

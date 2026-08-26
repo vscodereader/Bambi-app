@@ -122,17 +122,12 @@ export function BoardPreviewCard({
 	const isNotice = board.key === "notice";
 
 	return (
-		<Card
-			className={cn(
-				isNotice && "border-coral-500/60 bg-coral-50/50",
-				className
-			)}
-		>
-			<CardHeader className="flex flex-row items-center justify-between">
+		<Card className={cn(isNotice && "border-coral-500/60 bg-card", className)}>
+			<CardHeader className="flex flex-row items-center justify-between border-border border-b">
 				<CardTitle
 					className={cn(
 						"flex items-center gap-2 text-base",
-						isNotice && "text-coral-600"
+						isNotice && "font-bold text-coral-600 dark:text-coral-400"
 					)}
 				>
 					<BoardTitleMark boardKey={board.key} icon={board.icon} />
@@ -182,7 +177,7 @@ export function BoardPreviewCard({
 							<Link
 								className={cn(
 									"flex items-center justify-between gap-3 rounded-lg px-2 py-1.5",
-									isNotice && "hover:bg-coral-100/60",
+									isNotice && "hover:bg-muted",
 									isCrossListedNotice && "bg-primary/5 hover:bg-primary/10",
 									!(isNotice || isCrossListedNotice) && "hover:bg-muted"
 								)}
@@ -211,7 +206,14 @@ export function BoardPreviewCard({
 										displayedBoardKey={board.key}
 										postBoardKey={post.board}
 									/>
-									<span className="truncate text-sm">{post.title}</span>
+									<span
+										className={cn(
+											"truncate text-sm",
+											isNotice && "font-semibold text-foreground"
+										)}
+									>
+										{post.title}
+									</span>
 									{post.commentCount > 0 ? (
 										<span className="flex shrink-0 items-center gap-0.5 font-semibold text-coral-500 text-xs">
 											<MessageSquareIcon className="size-3" />

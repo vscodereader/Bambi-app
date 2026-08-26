@@ -10,6 +10,7 @@ import type { ManagedUser, UserStatus } from "@/lib/bambi/types";
 type Tone = React.ComponentProps<typeof StatusBadge>["tone"];
 const CENTER_HEADER = "text-center [&>button]:mx-auto";
 const CENTER_CELL = "h-14 text-center align-middle";
+const SELECT_COLUMN_BORDER = "border-border border-r";
 
 const STATUS_CONF: Record<UserStatus, { label: string; tone: Tone }> = {
 	active: { label: "정상", tone: "good" },
@@ -61,6 +62,8 @@ function getColumns({
 	return [
 		{
 			id: "select",
+			headerClassName: SELECT_COLUMN_BORDER,
+			cellClassName: SELECT_COLUMN_BORDER,
 			header: (
 				<Checkbox
 					aria-label="전체 선택"

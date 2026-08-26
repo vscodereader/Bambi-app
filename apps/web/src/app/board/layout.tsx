@@ -3,6 +3,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/bambi/ds";
+import { ThemeToggle } from "@/components/bambi/theme-toggle";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 
 // 비로그인 공개 읽기(/board) 셸. 로그인 상태를 전제로 하는 앱 셸(탭바·내 메뉴) 대신
@@ -27,12 +28,15 @@ export default function PublicBoardLayout({
 					<Link aria-label="밤비알바 홈" href="/seeker">
 						<Logo lang="ko" size="sm" />
 					</Link>
-					<Link
-						className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
-						href="/seeker"
-					>
-						채용 공고 보기
-					</Link>
+					<div className="flex items-center gap-2">
+						<ThemeToggle />
+						<Link
+							className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+							href="/seeker"
+						>
+							채용 공고 보기
+						</Link>
+					</div>
 				</div>
 			</header>
 			<main
