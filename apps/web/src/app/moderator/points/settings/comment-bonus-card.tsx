@@ -1,5 +1,11 @@
 "use client";
 
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@bambi-app/ui/components/accordion";
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
@@ -78,76 +84,85 @@ export function CommentBonusCard() {
 	};
 
 	return (
-		<section className="flex flex-col gap-5 rounded-xl border p-4">
-			<h2 className="m-0 font-bold text-lg">댓글 랜덤 보너스</h2>
-			<form className="flex flex-col gap-5" onSubmit={onSubmit}>
-				<div className="flex items-start justify-between gap-4">
-					<div className="flex flex-col gap-1">
-						<Label htmlFor="commentBonusEnabled">댓글 보너스 사용</Label>
+		<Accordion className="flex flex-col gap-3" multiple>
+			<AccordionItem
+				className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+				value="comment-bonus"
+			>
+				<AccordionTrigger className="bg-card px-4 py-4 font-bold hover:bg-muted/50">
+					댓글 랜덤 보너스
+				</AccordionTrigger>
+				<AccordionContent className="px-4 pt-4 pb-4">
+					<form className="flex flex-col gap-5" onSubmit={onSubmit}>
+						<div className="flex items-start justify-between gap-4">
+							<div className="flex flex-col gap-1">
+								<Label htmlFor="commentBonusEnabled">댓글 보너스 사용</Label>
+								<p className="m-0 text-muted-foreground text-xs">
+									켜두면 댓글 적립 시 확률에 따라 추가 포인트가 얹힙니다.
+									당첨액은 댓글 작성 시점에 확정돼요.
+								</p>
+							</div>
+							<Switch
+								checked={enabled}
+								disabled={commentBonusQuery.isLoading}
+								id="commentBonusEnabled"
+								onCheckedChange={setEnabled}
+							/>
+						</div>
+						<div className="grid grid-cols-1 gap-5 md:max-w-xl md:grid-cols-3">
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="commentBonusChancePercent">당첨 확률(%)</Label>
+								<Input
+									id="commentBonusChancePercent"
+									inputMode="numeric"
+									max={100}
+									min={0}
+									onChange={(event) => setChancePercent(event.target.value)}
+									placeholder="10"
+									type="number"
+									value={chancePercent}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="commentBonusMinPoints">최소 포인트</Label>
+								<Input
+									id="commentBonusMinPoints"
+									inputMode="numeric"
+									min={0}
+									onChange={(event) => setMinPoints(event.target.value)}
+									placeholder="5"
+									type="number"
+									value={minPoints}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="commentBonusMaxPoints">최대 포인트</Label>
+								<Input
+									id="commentBonusMaxPoints"
+									inputMode="numeric"
+									min={0}
+									onChange={(event) => setMaxPoints(event.target.value)}
+									placeholder="50"
+									type="number"
+									value={maxPoints}
+								/>
+							</div>
+						</div>
 						<p className="m-0 text-muted-foreground text-xs">
-							켜두면 댓글 적립 시 확률에 따라 추가 포인트가 얹힙니다. 당첨액은
-							댓글 작성 시점에 확정돼요.
+							당첨되면 최소~최대 포인트 사이에서 무작위로 지급됩니다. 최소
+							포인트는 최대 포인트보다 클 수 없어요.
 						</p>
-					</div>
-					<Switch
-						checked={enabled}
-						disabled={commentBonusQuery.isLoading}
-						id="commentBonusEnabled"
-						onCheckedChange={setEnabled}
-					/>
-				</div>
-				<div className="grid grid-cols-1 gap-5 md:max-w-xl md:grid-cols-3">
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="commentBonusChancePercent">당첨 확률(%)</Label>
-						<Input
-							id="commentBonusChancePercent"
-							inputMode="numeric"
-							max={100}
-							min={0}
-							onChange={(event) => setChancePercent(event.target.value)}
-							placeholder="10"
-							type="number"
-							value={chancePercent}
-						/>
-					</div>
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="commentBonusMinPoints">최소 포인트</Label>
-						<Input
-							id="commentBonusMinPoints"
-							inputMode="numeric"
-							min={0}
-							onChange={(event) => setMinPoints(event.target.value)}
-							placeholder="5"
-							type="number"
-							value={minPoints}
-						/>
-					</div>
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="commentBonusMaxPoints">최대 포인트</Label>
-						<Input
-							id="commentBonusMaxPoints"
-							inputMode="numeric"
-							min={0}
-							onChange={(event) => setMaxPoints(event.target.value)}
-							placeholder="50"
-							type="number"
-							value={maxPoints}
-						/>
-					</div>
-				</div>
-				<p className="m-0 text-muted-foreground text-xs">
-					당첨되면 최소~최대 포인트 사이에서 무작위로 지급됩니다. 최소 포인트는
-					최대 포인트보다 클 수 없어요.
-				</p>
-				<div className="flex justify-end">
-					<Button
-						disabled={saveMutation.isPending || commentBonusQuery.isLoading}
-						type="submit"
-					>
-						{saveMutation.isPending ? "저장 중…" : "저장"}
-					</Button>
-				</div>
-			</form>
-		</section>
+						<div className="flex justify-end">
+							<Button
+								disabled={saveMutation.isPending || commentBonusQuery.isLoading}
+								type="submit"
+							>
+								{saveMutation.isPending ? "저장 중…" : "저장"}
+							</Button>
+						</div>
+					</form>
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
 	);
 }
