@@ -22,6 +22,7 @@ export function ThemeToggle() {
 	return (
 		<Button
 			aria-label={label}
+			className="dark:bg-card dark:text-foreground"
 			disabled={!mounted}
 			onClick={() => setTheme(isDark ? "light" : "dark")}
 			size="icon-lg"

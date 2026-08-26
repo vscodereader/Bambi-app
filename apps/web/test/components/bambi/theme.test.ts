@@ -39,6 +39,14 @@ const chatRoomSource = readFileSync(
 	srcPath("components/bambi/screens/seeker-chat-room-responsive.tsx"),
 	"utf8"
 );
+const themeToggleSource = readFileSync(
+	srcPath("components/bambi/theme-toggle.tsx"),
+	"utf8"
+);
+const jobSearchSource = readFileSync(
+	srcPath("components/bambi/job-search-command.tsx"),
+	"utf8"
+);
 const buttonSource = readFileSync(
 	srcPath("../../../packages/ui/src/components/button.tsx"),
 	"utf8"
@@ -108,6 +116,18 @@ describe("web theme policy", () => {
 			'className="bg-card text-foreground"'
 		);
 		expect(notificationBellSource).toContain('variant="outline"');
+	});
+
+	it("uses dark card surfaces for every header action in dark mode", () => {
+		expect(themeToggleSource).toContain(
+			'className="dark:bg-card dark:text-foreground"'
+		);
+		expect(jobSearchSource).toContain(
+			'className="size-10 dark:bg-card dark:text-foreground"'
+		);
+		expect(responsiveShellSource).toContain(
+			"dark:bg-card dark:text-foreground"
+		);
 	});
 
 	it("adds the moderator mode badge border only in dark mode", () => {

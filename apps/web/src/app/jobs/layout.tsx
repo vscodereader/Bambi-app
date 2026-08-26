@@ -30,6 +30,7 @@ export default function JobsLandingLayout({
 					<div className="flex items-center gap-2">
 						<ThemeToggle />
 						<Button
+							className="dark:bg-card dark:text-foreground"
 							nativeButton={false}
 							render={<Link href="/seeker">공고 검색</Link>}
 							size="sm"

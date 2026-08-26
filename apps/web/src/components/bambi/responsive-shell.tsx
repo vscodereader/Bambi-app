@@ -145,7 +145,7 @@ function RoleSwitchLink() {
 	const { role } = useBambiAuth();
 	const linkClassName = cn(
 		buttonVariants({ variant: "outline" }),
-		"h-10 px-4 font-bold text-sm no-underline"
+		"h-10 px-4 font-bold text-sm no-underline dark:bg-card dark:text-foreground"
 	);
 	if (role === "employer") {
 		return (
@@ -254,7 +254,8 @@ function HeaderRightActions({
 			<Link
 				className={cn(
 					buttonVariants({ variant: isPublic ? "dark" : "outline" }),
-					"h-10 px-4 font-bold text-sm no-underline"
+					"h-10 px-4 font-bold text-sm no-underline",
+					!isPublic && "dark:bg-card dark:text-foreground"
 				)}
 				href={(isPublic ? "/seeker?auth=login" : "/seeker/me") as Route}
 			>
