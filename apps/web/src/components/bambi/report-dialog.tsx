@@ -92,7 +92,7 @@ export function ReportDialog({
 
 	return (
 		<Dialog onOpenChange={handleOpenChange} open={open}>
-			<DialogContent className="max-md:w-80 max-md:gap-3 max-md:p-4">
+			<DialogContent>
 				{isDone ? (
 					<ReportDone
 						isChat={targetType === "chat_room" || targetType === "chat_message"}
