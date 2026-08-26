@@ -506,6 +506,26 @@ export const crawlerRouter = {
 		return requireRow(saved);
 	}),
 
+	// 수집 커뮤니티 글 완전 삭제. removedAt이 선 행(소프트 삭제 선행)만 지운다 — 목록에서 바로
+	// DELETE되는 사고를 막는 hardDeletePost와 같은 안전장치다.
+	// 행을 지우면 재수집을 막던 톰스톤(removeTopic 주석 참고)도 사라진다 — 원본 사이트에 글이
+	// 살아 있으면 다음 회차 upsert가 같은 글을 새 행으로 다시 수집할 수 있다(화면 확인 창에도
+	// 같은 고지가 있다). 공고와 달리 파생 데이터가 있다 — communityComment.crawledTopicId가
+	// onDelete cascade라, 이 글에 달린 회원·비회원 댓글도 함께 지워진다.
+	hardDeleteTopic: adminProcedure.input(idInput).handler(async ({ input }) => {
+		const [removed] = await db
+			.delete(crawledCommunityTopic)
+			.where(
+				and(
+					eq(crawledCommunityTopic.id, input.id),
+					isNotNull(crawledCommunityTopic.removedAt)
+				)
+			)
+			.returning({ id: crawledCommunityTopic.id });
+
+		return requireRow(removed);
+	}),
+
 	// 수집 설정 조회. defaultIntervalHours는 코드 기본값으로, 운영자 폼 placeholder가
 	// 실제 폴백값을 보게 한다.
 	getSettings: adminProcedure.handler(async () => {

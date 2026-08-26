@@ -734,6 +734,11 @@ export function CrawledCommunityTopicsCard() {
 		id: string;
 		title: string;
 	} | null>(null);
+	// 완전 삭제 확인 창 대상(소프트 삭제와 별도 — 되돌릴 수 없어 창을 따로 세운다).
+	const [pendingHardDelete, setPendingHardDelete] = useState<{
+		id: string;
+		title: string;
+	} | null>(null);
 	const listQuery = useQuery(
 		orpc.bambi.crawler.listTopics.queryOptions({
 			input: {
@@ -763,7 +768,22 @@ export function CrawledCommunityTopicsCard() {
 			},
 		})
 	);
-	const isPending = removeMutation.isPending || restoreMutation.isPending;
+	// 톰스톤까지 지우는 완전 삭제 — 되돌릴 수 없어 removed 행에서만 내준다.
+	const hardDeleteMutation = useMutation(
+		orpc.bambi.crawler.hardDeleteTopic.mutationOptions({
+			onError: (error) =>
+				toast.error(error.message || "완전 삭제하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("커뮤니티 글을 완전히 삭제했어요. 복구할 수 없습니다.");
+				setPendingHardDelete(null);
+				await invalidate();
+			},
+		})
+	);
+	const isPending =
+		removeMutation.isPending ||
+		restoreMutation.isPending ||
+		hardDeleteMutation.isPending;
 	const total = listQuery.data?.total ?? 0;
 	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -896,15 +916,33 @@ export function CrawledCommunityTopicsCard() {
 													/>
 													<DropdownMenuContent align="end" className="w-36">
 														{topic.removedAt ? (
-															<DropdownMenuItem
-																disabled={isPending}
-																onClick={() =>
-																	restoreMutation.mutate({ id: topic.id })
-																}
-															>
-																<RotateCcwIcon />
-																복구
-															</DropdownMenuItem>
+															<>
+																<DropdownMenuItem
+																	disabled={isPending}
+																	onClick={() =>
+																		restoreMutation.mutate({ id: topic.id })
+																	}
+																>
+																	<RotateCcwIcon />
+																	복구
+																</DropdownMenuItem>
+																<DropdownMenuSeparator />
+																<DropdownMenuItem
+																	disabled={isPending}
+																	// 바로 지우지 않고 확인 창을 띄운다. 실제 삭제 버튼은
+																	// 그 창 안에 있다.
+																	onClick={() =>
+																		setPendingHardDelete({
+																			id: topic.id,
+																			title: topic.title,
+																		})
+																	}
+																	variant="destructive"
+																>
+																	<Trash2Icon />
+																	완전 삭제
+																</DropdownMenuItem>
+															</>
 														) : (
 															<>
 																<DropdownMenuItem
@@ -998,6 +1036,44 @@ export function CrawledCommunityTopicsCard() {
 								variant="destructive"
 							>
 								삭제
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+
+				<AlertDialog
+					onOpenChange={(open) => {
+						if (!open) {
+							setPendingHardDelete(null);
+						}
+					}}
+					open={pendingHardDelete !== null}
+				>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>
+								이 커뮤니티 글을 완전히 삭제할까요?
+							</AlertDialogTitle>
+							<AlertDialogDescription>
+								「{pendingHardDelete?.title}」이(가) 데이터베이스에서 완전히
+								지워지며 되돌릴 수 없습니다. 이 글에 달린 댓글도 함께
+								삭제됩니다. 삭제 기록(톰스톤)도 사라지므로, 원본 사이트에 글이
+								아직 살아 있으면 다음 수집 회차에 같은 글이 새로 다시 수집될 수
+								있어요.
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>취소</AlertDialogCancel>
+							<AlertDialogAction
+								disabled={hardDeleteMutation.isPending}
+								onClick={() => {
+									if (pendingHardDelete) {
+										hardDeleteMutation.mutate({ id: pendingHardDelete.id });
+									}
+								}}
+								variant="destructive"
+							>
+								완전 삭제
 							</AlertDialogAction>
 						</AlertDialogFooter>
 					</AlertDialogContent>
