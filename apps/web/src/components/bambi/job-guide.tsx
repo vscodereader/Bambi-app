@@ -25,6 +25,23 @@ import {
 } from "@/lib/bambi/seo";
 import { JsonLd } from "./json-ld";
 
+const WHITESPACE = /\s+/;
+
+// 어절 수(공백 분할) 기반 읽기 시간(분). 분당 250어절, 최소 1분. 섹션 문단만 집계.
+function guideReadingMinutes({ sections }: GuideContent): number {
+	const words = sections.reduce(
+		(total, section) =>
+			total +
+			section.paragraphs.reduce(
+				(sum, paragraph) =>
+					sum + paragraph.trim().split(WHITESPACE).filter(Boolean).length,
+				0
+			),
+		0
+	);
+	return Math.max(1, Math.round(words / 250));
+}
+
 interface LandingLink {
 	href: Route;
 	label: string;
@@ -143,7 +160,7 @@ export function JobGuide({ content }: { content: GuideContent }) {
 		}));
 
 	return (
-		<div className="flex flex-col gap-8 py-8">
+		<div className="mx-auto flex w-full max-w-3xl flex-col gap-10 py-10 md:py-14">
 			<JsonLd
 				data={articleJsonLd({
 					description: content.description,
@@ -151,35 +168,44 @@ export function JobGuide({ content }: { content: GuideContent }) {
 					path,
 				})}
 			/>
-			<header className="flex flex-col gap-3">
+			<header className="flex flex-col gap-4">
 				<GuideBreadcrumb items={breadcrumbItems} />
-				<h1 className="m-0 font-extrabold text-2xl sm:text-3xl">
+				<h1 className="m-0 text-balance font-extrabold text-3xl tracking-tight sm:text-4xl">
 					{content.title}
 				</h1>
-				<p className="m-0 text-muted-foreground text-sm">
+				<p className="m-0 text-pretty text-base text-muted-foreground leading-7 sm:text-lg sm:leading-8">
 					{content.description}
 				</p>
 			</header>
 
 			{content.sections.map((section) => (
-				<section className="flex flex-col gap-3" key={section.heading}>
-					<h2 className="m-0 font-extrabold text-lg">{section.heading}</h2>
+				<section className="flex flex-col gap-4" key={section.heading}>
+					<h2 className="m-0 font-bold text-foreground text-xl tracking-tight sm:text-2xl">
+						{section.heading}
+					</h2>
 					{section.paragraphs.map((paragraph) => (
-						<p className="m-0 text-muted-foreground text-sm" key={paragraph}>
+						<p
+							className="m-0 text-pretty text-base text-foreground leading-7 sm:leading-8"
+							key={paragraph}
+						>
 							{paragraph}
 						</p>
 					))}
 				</section>
 			))}
 
-			<section className="flex flex-col gap-4">
-				<h2 className="m-0 font-extrabold text-lg">자주 묻는 질문</h2>
+			<section className="flex flex-col gap-6">
+				<h2 className="m-0 font-bold text-foreground text-xl tracking-tight sm:text-2xl">
+					자주 묻는 질문
+				</h2>
 				{content.faqs.map((faq) => (
-					<div className="flex flex-col gap-1" key={faq.question}>
-						<h3 className="m-0 font-bold text-base text-foreground">
+					<div className="flex flex-col gap-2" key={faq.question}>
+						<h3 className="m-0 font-bold text-foreground text-lg">
 							{faq.question}
 						</h3>
-						<p className="m-0 text-muted-foreground text-sm">{faq.answer}</p>
+						<p className="m-0 text-pretty text-base text-foreground leading-7 sm:leading-8">
+							{faq.answer}
+						</p>
 					</div>
 				))}
 			</section>
@@ -199,33 +225,39 @@ export function JobGuideHub() {
 	];
 
 	return (
-		<div className="flex flex-col gap-8 py-8">
-			<header className="flex flex-col gap-3">
+		<div className="flex flex-col gap-10 py-10 md:py-12">
+			<header className="flex flex-col gap-4">
 				<GuideBreadcrumb items={breadcrumbItems} />
-				<h1 className="m-0 font-extrabold text-2xl sm:text-3xl">
+				<h1 className="m-0 text-balance font-extrabold text-3xl tracking-tight sm:text-4xl">
 					유흥·접객 알바 가이드
 				</h1>
-				<p className="m-0 text-muted-foreground text-sm">
+				<p className="m-0 max-w-2xl text-pretty text-base text-muted-foreground leading-7 sm:text-lg sm:leading-8">
 					업종별 알바의 뜻과 근무 방식, 정산 구조, 자주 묻는 질문을 정리한
 					가이드입니다. 관심 있는 주제를 골라 확인해 보세요.
 				</p>
 			</header>
 
-			<section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-				{GUIDE_CONTENTS.map((guide) => (
-					<Link
-						className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 no-underline transition-colors hover:border-primary/40"
-						href={guidePath(guide.slug) as Route}
-						key={guide.slug}
-					>
-						<h2 className="m-0 font-extrabold text-base text-foreground">
-							{guide.title}
-						</h2>
-						<p className="m-0 text-muted-foreground text-sm">
-							{guide.description}
-						</p>
-					</Link>
-				))}
+			<section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+				{GUIDE_CONTENTS.map((guide) => {
+					const readingMinutes = guideReadingMinutes(guide);
+					return (
+						<Link
+							className="flex h-full flex-col gap-3 rounded-lg border border-border bg-card p-5 no-underline transition-colors hover:border-primary/40"
+							href={guidePath(guide.slug) as Route}
+							key={guide.slug}
+						>
+							<h2 className="m-0 text-balance font-bold text-foreground text-lg tracking-tight">
+								{guide.title}
+							</h2>
+							<p className="m-0 line-clamp-2 text-muted-foreground text-sm leading-6">
+								{guide.description}
+							</p>
+							<p className="m-0 mt-auto text-muted-foreground text-xs">
+								읽는 시간 약 {readingMinutes}분
+							</p>
+						</Link>
+					);
+				})}
 			</section>
 
 			<section className="flex flex-col gap-2">
