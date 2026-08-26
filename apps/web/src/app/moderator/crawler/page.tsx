@@ -23,12 +23,18 @@ import {
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@bambi-app/ui/components/popover";
+import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
 import {
 	Table,
@@ -43,8 +49,8 @@ import {
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCwIcon, Trash2Icon } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { InfoIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
 	CrawledCommunityTopicsCard,
@@ -128,6 +134,37 @@ const EMPTY_CRAWLED_LIMITS: Record<CrawledLimitKey, string> = {
 
 const REVIEW_PAGE_SIZE = 30;
 
+// 현황 타일 5개 자리에 로딩 스켈레톤을 깔 때 쓰는 안정적 key(배열 인덱스 key 회피).
+const SUMMARY_TILE_SKELETONS = ["s1", "s2", "s3", "s4", "s5"];
+
+// 긴 설명은 핵심 첫 문장만 본문에 두고 나머지 규칙은 이 팝오버로 접는다. 트리거는 base-ui라
+// asChild가 아니라 render prop으로 ghost 아이콘 버튼을 넣는다. 폼 안에서 제출을 막으려 type="button".
+function InfoPopover({
+	label,
+	children,
+}: {
+	label: string;
+	children: ReactNode;
+}) {
+	return (
+		<Popover>
+			<PopoverTrigger
+				render={
+					<Button
+						aria-label={label}
+						size="icon-xs"
+						type="button"
+						variant="ghost"
+					>
+						<InfoIcon />
+					</Button>
+				}
+			/>
+			<PopoverContent>{children}</PopoverContent>
+		</Popover>
+	);
+}
+
 // 상한 폼·검토 대기 목록은 각각 자기 쿼리만 쓰므로 페이지에서 떼어냈다(페이지 본체가
 // 한 함수에 다 담기면 읽기도, 린트 복잡도도 감당이 안 된다).
 function CrawledLimitsCard() {
@@ -206,16 +243,19 @@ function CrawledLimitsCard() {
 			</CardHeader>
 			<CardContent>
 				<form className="flex flex-col gap-5" onSubmit={onSubmit}>
-					<p className="m-0 text-muted-foreground text-xs">
-						공고는 각 자리에 들어갈 수집 공고 개수의 상한입니다. 수집할 때와
-						화면에 내보낼 때 모두 이 값으로 자릅니다. 우리 서비스 공고가 항상
-						먼저 나오고, 남은 자리에 수집 공고가 이 개수만큼 붙어요. 광고 배너는
-						가로·세로가 서로 다른 자리라{" "}
-						<strong className="font-semibold">방향별로 각각</strong> 이 개수만큼
-						모읍니다(8이면 가로 8 + 세로 8). 커뮤니티 글은 자리 개수가 아니라{" "}
-						<strong className="font-semibold">한 회차에 모을 글 수</strong>로,
-						게시판 목록의 최신 글부터 이 개수만큼만 가져옵니다(다 채우면 남은
-						목록 페이지는 받지 않아요).
+					<p className="m-0 flex items-start gap-1 text-muted-foreground text-xs">
+						<span>공고는 각 자리에 들어갈 수집 공고 개수의 상한입니다.</span>
+						<InfoPopover label="수집 상한 계산 방식 자세히">
+							수집할 때와 화면에 내보낼 때 모두 이 값으로 자릅니다. 우리 서비스
+							공고가 항상 먼저 나오고, 남은 자리에 수집 공고가 이 개수만큼
+							붙어요. 광고 배너는 가로·세로가 서로 다른 자리라{" "}
+							<strong className="font-semibold">방향별로 각각</strong> 이
+							개수만큼 모읍니다(8이면 가로 8 + 세로 8). 커뮤니티 글은 자리
+							개수가 아니라{" "}
+							<strong className="font-semibold">한 회차에 모을 글 수</strong>로,
+							게시판 목록의 최신 글부터 이 개수만큼만 가져옵니다(다 채우면 남은
+							목록 페이지는 받지 않아요).
+						</InfoPopover>
 					</p>
 
 					<div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
@@ -240,16 +280,21 @@ function CrawledLimitsCard() {
 						))}
 					</div>
 
-					<p className="m-0 text-muted-foreground text-xs">
-						비워두면 기본값(
-						{CRAWLED_LIMIT_FIELDS.map((field) => field.defaultValue).join(
-							" / "
-						)}
-						)을 사용합니다. 공고 자리는 0으로 두면 그 자리에 수집 공고가 나오지
-						않고, 최대 {CRAWLED_LIMIT_MAX}까지 지정할 수 있어요. 커뮤니티 글은
-						1~{CRAWLED_COMMUNITY_LIMIT_MAX}까지 지정할 수 있습니다(수집을 아예
-						멈추려면 위 「수집 스케줄러」를, 노출만 내리려면 「수집 커뮤니티 글
-						노출」을 끄세요).
+					<p className="m-0 flex items-start gap-1 text-muted-foreground text-xs">
+						<span>
+							비워두면 기본값(
+							{CRAWLED_LIMIT_FIELDS.map((field) => field.defaultValue).join(
+								" / "
+							)}
+							)을 사용합니다.
+						</span>
+						<InfoPopover label="입력 범위 자세히">
+							공고 자리는 0으로 두면 그 자리에 수집 공고가 나오지 않고, 최대{" "}
+							{CRAWLED_LIMIT_MAX}까지 지정할 수 있어요. 커뮤니티 글은 1~
+							{CRAWLED_COMMUNITY_LIMIT_MAX}까지 지정할 수 있습니다(수집을 아예
+							멈추려면 위 「수집 스케줄러」를, 노출만 내리려면 「수집 커뮤니티
+							글 노출」을 끄세요).
+						</InfoPopover>
 					</p>
 
 					<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -280,8 +325,23 @@ function IndustryReviewCard() {
 		orpc.bambi.crawler.setIndustryCategory.mutationOptions({
 			onError: (error) =>
 				toast.error(error.message || "업종을 지정하지 못했어요."),
-			onSuccess: async () => {
-				toast.success("업종을 지정했어요. 검토 대기에서 빠집니다.");
+			onSuccess: async (_data, variables) => {
+				// 되돌리기(industryCategory=null)도 같은 onSuccess를 타므로, 되돌린 경우엔
+				// 문구를 바꾸고 되돌리기 액션을 붙이지 않는다 — 안 그러면 토스트가 무한히 뜬다.
+				if (variables.industryCategory === null) {
+					toast.success("업종 지정을 되돌렸어요. 검토 대기로 돌아갑니다.");
+				} else {
+					toast.success("업종을 지정했어요. 검토 대기에서 빠집니다.", {
+						action: {
+							label: "되돌리기",
+							onClick: () =>
+								setIndustryMutation.mutate({
+									id: variables.id,
+									industryCategory: null,
+								}),
+						},
+					});
+				}
 				await Promise.all([
 					queryClient.invalidateQueries({
 						queryKey: orpc.bambi.crawler.list.key(),
@@ -295,7 +355,7 @@ function IndustryReviewCard() {
 	);
 
 	return (
-		<Card>
+		<Card id="crawler-industry-review">
 			<CardHeader>
 				<CardTitle>업종 검토 대기</CardTitle>
 			</CardHeader>
@@ -336,7 +396,12 @@ function IndustryReviewCard() {
 										</TableCell>
 										<TableCell>
 											<Select
-												disabled={setIndustryMutation.isPending}
+												// 저장 중인 그 행만 잠근다 — 수십 건을 연속으로 지정하는 화면이라
+												// 한 건 저장 중에 나머지까지 얼어붙으면 안 된다.
+												disabled={
+													setIndustryMutation.isPending &&
+													setIndustryMutation.variables?.id === item.id
+												}
 												onValueChange={(value) => {
 													// 서버 입력이 8종 enum이라 가드로 좁힌 뒤 보낸다.
 													if (value && isIndustryOption(value)) {
@@ -387,8 +452,18 @@ export default function ModeratorCrawlerPage() {
 	const queryClient = useQueryClient();
 
 	const settingsQuery = useQuery(orpc.bambi.crawler.getSettings.queryOptions());
-	const summaryQuery = useQuery(orpc.bambi.crawler.getSummary.queryOptions());
-	const runsQuery = useQuery(orpc.bambi.crawler.listRuns.queryOptions());
+	const runsQuery = useQuery({
+		...orpc.bambi.crawler.listRuns.queryOptions(),
+		// 진행 중 회차가 있으면 5초마다 다시 불러 상태·집계를 따라잡고, 끝나면 폴링을 멈춘다.
+		refetchInterval: (query) =>
+			query.state.data?.some((run) => run.status === "running") ? 5000 : false,
+	});
+	// 회차가 돌면 현황 숫자(신규·전환 등)도 같이 움직이므로 현황도 같은 주기로 따라 돈다.
+	const hasRunningRun = runsQuery.data?.some((run) => run.status === "running");
+	const summaryQuery = useQuery({
+		...orpc.bambi.crawler.getSummary.queryOptions(),
+		refetchInterval: hasRunningRun ? 5000 : undefined,
+	});
 
 	const [enabled, setEnabled] = useState(false);
 	const [intervalHours, setIntervalHours] = useState("");
@@ -477,9 +552,35 @@ export default function ModeratorCrawlerPage() {
 	);
 	const saveExposureMutation = useMutation(
 		orpc.bambi.siteSettings.updateCrawledExposure.mutationOptions({
-			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
-			onSuccess: async () => {
+			// 표준 낙관 업데이트: 왕복을 기다리지 않고 캐시를 먼저 바꿔 스위치가 즉시 움직이고,
+			// 연타해도 toggleExposure가 읽는 exposure(=캐시)가 항상 최신이라 낡은 스냅샷 merge 레이스가 없다.
+			onMutate: async (input) => {
+				const queryKey = orpc.bambi.siteSettings.getCrawledExposure.queryKey();
+				// 진행 중인 리페치가 낙관 값을 덮지 않게 먼저 멈춘다.
+				await queryClient.cancelQueries({ queryKey });
+				const previous = queryClient.getQueryData(queryKey);
+				// 입력 스키마 → 캐시 스키마로 옮겨 즉시 반영한다.
+				queryClient.setQueryData(queryKey, {
+					crawledAdBannerEnabled: input.adBannerEnabled,
+					crawledCommunityFeedEnabled: input.communityFeedEnabled,
+					crawledJobFeedEnabled: input.jobFeedEnabled,
+				});
+				return { previous };
+			},
+			onError: (error, _input, context) => {
+				// 실패하면 낙관 반영을 이전 스냅샷으로 되돌린다.
+				if (context?.previous !== undefined) {
+					queryClient.setQueryData(
+						orpc.bambi.siteSettings.getCrawledExposure.queryKey(),
+						context.previous
+					);
+				}
+				toast.error(error.message || "저장하지 못했어요.");
+			},
+			onSuccess: () => {
 				toast.success("수집 콘텐츠 노출 설정을 저장했어요.");
+			},
+			onSettled: async () => {
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.siteSettings.getCrawledExposure.queryKey(),
 				});
@@ -551,8 +652,22 @@ export default function ModeratorCrawlerPage() {
 		);
 	const selectedTargetReady = targetImplemented(contentType);
 
+	// 현황 타일에서 해당 카드로 부드럽게 스크롤한다.
+	const scrollToCard = (id: string) => {
+		document
+			.getElementById(id)
+			?.scrollIntoView({ behavior: "smooth", block: "start" });
+	};
+
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
+			<div className="flex flex-col gap-1">
+				<h1 className="m-0 font-extrabold text-2xl">크롤링</h1>
+				<p className="m-0 text-muted-foreground text-sm">
+					외부 공고·게시글 수집을 운영합니다.
+				</p>
+			</div>
+
 			<Card>
 				<CardHeader>
 					<CardTitle>외부 공고 수집</CardTitle>
@@ -759,27 +874,57 @@ export default function ModeratorCrawlerPage() {
 					<CardTitle>수집 현황</CardTitle>
 				</CardHeader>
 				<CardContent className="flex flex-col gap-3">
-					<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-						{statusKeys.map((status) => (
-							<div
-								className="flex flex-col gap-1 rounded-md border p-3"
-								key={status}
-							>
-								<span className="text-muted-foreground text-xs">
-									{CRAWLED_POST_STATUS_LABELS[status]}
-								</span>
+					{summaryQuery.isLoading ? (
+						// 로딩 중 0으로 그리면 "다 사라졌나"로 오독되므로 같은 자리에 스켈레톤을 깐다.
+						<div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+							{SUMMARY_TILE_SKELETONS.map((key) => (
+								<div
+									className="flex flex-col gap-1 rounded-md border p-3"
+									key={key}
+								>
+									<Skeleton className="h-4 w-16" />
+									<Skeleton className="h-6 w-10" />
+								</div>
+							))}
+						</div>
+					) : (
+						<div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+							{statusKeys.map((status) => {
+								// 업종 검토 대기는 검토 카드로, 나머지 상태(정상·만료·삭제됨)는 공고 목록 카드로 이동.
+								const targetId =
+									status === "needs_review"
+										? "crawler-industry-review"
+										: "crawler-job-posts";
+								const targetLabel =
+									status === "needs_review"
+										? "업종 검토 대기 카드"
+										: "수집 공고 목록";
+								return (
+									<button
+										aria-label={`${CRAWLED_POST_STATUS_LABELS[status]} — ${targetLabel}로 이동`}
+										className="flex flex-col gap-1 rounded-md border p-3 text-left hover:bg-muted"
+										key={status}
+										onClick={() => scrollToCard(targetId)}
+										type="button"
+									>
+										<span className="text-muted-foreground text-xs">
+											{CRAWLED_POST_STATUS_LABELS[status]}
+										</span>
+										<span className="font-semibold text-lg">
+											{byStatus[status] ?? 0}
+										</span>
+									</button>
+								);
+							})}
+							{/* 전환됨은 이 페이지에 이동할 카드가 없어 클릭 없이 그대로 둔다. */}
+							<div className="flex flex-col gap-1 rounded-md border p-3">
+								<span className="text-muted-foreground text-xs">전환됨</span>
 								<span className="font-semibold text-lg">
-									{byStatus[status] ?? 0}
+									{summaryQuery.data?.converted ?? 0}
 								</span>
 							</div>
-						))}
-						<div className="flex flex-col gap-1 rounded-md border p-3">
-							<span className="text-muted-foreground text-xs">전환됨</span>
-							<span className="font-semibold text-lg">
-								{summaryQuery.data?.converted ?? 0}
-							</span>
 						</div>
-					</div>
+					)}
 					<p className="m-0 text-muted-foreground text-xs">
 						업종 검토 대기는 원본 직종이 우리 8종 분류에 자동으로 이어지지 않은
 						공고입니다. 버리지 않고 남겨두니 아래 「업종 검토 대기」 카드에서
@@ -868,19 +1013,19 @@ export default function ModeratorCrawlerPage() {
 													{CRAWL_RUN_STATUS_LABELS[run.status]}
 												</Badge>
 											</TableCell>
-											<TableCell className="text-right">
+											<TableCell className="text-right tabular-nums">
 												{run.itemsSeen}
 											</TableCell>
-											<TableCell className="text-right">
+											<TableCell className="text-right tabular-nums">
 												{run.itemsNew}
 											</TableCell>
-											<TableCell className="text-right">
+											<TableCell className="text-right tabular-nums">
 												{run.itemsUpdated}
 											</TableCell>
-											<TableCell className="text-right">
+											<TableCell className="text-right tabular-nums">
 												{run.itemsFailed}
 											</TableCell>
-											<TableCell className="text-muted-foreground text-xs">
+											<TableCell className="max-w-xs whitespace-normal break-words text-muted-foreground text-xs">
 												{run.error ?? "—"}
 											</TableCell>
 										</TableRow>

@@ -337,7 +337,8 @@ export const crawlerRouter = {
 		.input(
 			z.object({
 				id: z.uuid(),
-				industryCategory: z.enum(jobIndustryCategory.enumValues),
+				// null은 되돌리기 — 지정을 비우고 다시 검토 대기로 돌린다.
+				industryCategory: z.enum(jobIndustryCategory.enumValues).nullable(),
 			})
 		)
 		.handler(async ({ input }) => {
@@ -345,8 +346,13 @@ export const crawlerRouter = {
 				.update(crawledJobPost)
 				.set({
 					industryCategory: input.industryCategory,
-					// 매핑이 끝났으니 검토 대기에서 풀어준다. 이미 만료된 행은 되살리지 않는다.
-					status: sql`case when ${crawledJobPost.status} = 'needs_review' then 'active' else ${crawledJobPost.status} end`,
+					// 정방향(지정)은 needs_review→active로 검토 대기에서 풀고, 되돌리기(null)는
+					// 그 역으로 active→needs_review로 다시 대기에 넣는다. expired/removed는 어느
+					// 쪽도 건드리지 않는다 — 만료·삭제된 행을 업종만 바꿨다고 되살리지 않기 위함이다.
+					status:
+						input.industryCategory === null
+							? sql`case when ${crawledJobPost.status} = 'active' then 'needs_review' else ${crawledJobPost.status} end`
+							: sql`case when ${crawledJobPost.status} = 'needs_review' then 'active' else ${crawledJobPost.status} end`,
 				})
 				.where(eq(crawledJobPost.id, input.id))
 				.returning(LIST_COLUMNS);
