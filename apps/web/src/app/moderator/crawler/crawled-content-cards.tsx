@@ -27,6 +27,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@bambi-app/ui/components/dropdown-menu";
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import {
 	Table,
 	TableBody,
@@ -39,6 +40,7 @@ import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	DownloadIcon,
@@ -62,7 +64,9 @@ import {
 	type CrawledJobStatusFilter,
 	crawledJobImageEditHref,
 	parseCrawledJobListState,
+	parseCrawledTopicListState,
 	withCrawledJobListState,
+	withCrawledTopicListState,
 } from "@/lib/bambi/crawled-job-management";
 import { buildCrawledLeadsCsv } from "@/lib/bambi/crawled-leads-csv";
 import {
@@ -79,14 +83,20 @@ const JOB_LIST_SCROLL_STORAGE_PREFIX = "bambi:crawled-job-list-scroll";
 const jobListScrollStorageKey = (page: number, status: StatusFilter) =>
 	`${JOB_LIST_SCROLL_STORAGE_PREFIX}:${status}:${page}`;
 
-// 제목은 글자 수로 자른다(CSS truncate가 아니다) — 표 폭이 넓어도 업소명·지역 칸이
-// 밀리지 않게 제목 길이를 일정하게 묶어 두려는 것이다. 전체 제목은 title 툴팁에 남긴다.
-const TITLE_MAX_LENGTH = 12;
+// 제목은 CSS truncate로 한 칸에 묶는다(block max-w-48 truncate) — 표 폭이 넓어도 업소명·지역
+// 칸이 밀리지 않게 폭을 고정하되, 잘린 글자는 없이 전체 제목은 title 툴팁에 남긴다.
+const TITLE_CELL_CLASS = "block max-w-48 truncate";
 
-const truncateTitle = (title: string): string =>
-	title.length > TITLE_MAX_LENGTH
-		? `${title.slice(0, TITLE_MAX_LENGTH)}…`
-		: title;
+// 첫 로드 동안 표 자리에 행 높이 스켈레톤을 세워 둔다(EmptyState 대신). 두 카드가 공유한다.
+const SKELETON_ROWS = ["a", "b", "c", "d", "e"];
+
+const ListSkeleton = () => (
+	<div className="flex flex-col gap-2">
+		{SKELETON_ROWS.map((key) => (
+			<Skeleton className="h-10 w-full" key={key} />
+		))}
+	</div>
+);
 
 // 공개 상세(/seeker/jobs/crawled/[id])는 status='active'인 행만 조회한다
 // (crawled-jobs.ts). needs_review·expired·removed를 링크로 걸면 눌러서 NOT_FOUND를
@@ -163,6 +173,11 @@ export function CrawledJobPostsCard() {
 		id: string;
 		title: string;
 	} | null>(null);
+	// 완전 삭제 확인 창 대상(소프트 삭제와 별도 — 되돌릴 수 없어 창을 따로 세운다).
+	const [pendingHardDelete, setPendingHardDelete] = useState<{
+		id: string;
+		title: string;
+	} | null>(null);
 	const listQuery = useQuery(
 		orpc.bambi.crawler.list.queryOptions({
 			input: {
@@ -172,6 +187,23 @@ export function CrawledJobPostsCard() {
 			},
 		})
 	);
+	// 필터 토글에 상태별 건수를 붙인다. 페이지 상단 현황과 같은 쿼리라 캐시를 공유하고,
+	// 삭제·복구 invalidate에도 이미 포함돼 있다(useInvalidateCrawled).
+	const summaryQuery = useQuery(orpc.bambi.crawler.getSummary.queryOptions());
+	const byStatus = summaryQuery.data?.byStatus;
+	const statusFilterLabel = (filter: {
+		label: string;
+		value: StatusFilter;
+	}) => {
+		if (!byStatus) {
+			return filter.label;
+		}
+		const count =
+			filter.value === "all"
+				? Object.values(byStatus).reduce((sum, n) => sum + n, 0)
+				: (byStatus[filter.value] ?? 0);
+		return `${filter.label} (${count})`;
+	};
 
 	// 삭제는 톰스톤이라 되돌릴 수 있지만, 목록에서 아이콘 하나 잘못 눌러 남의 공고가 내려가는
 	// 일은 막아야 해서 확인 창을 한 단계 세운다. 성공했을 때만 창을 닫는다 — 실패하면 열린 채로
@@ -191,6 +223,18 @@ export function CrawledJobPostsCard() {
 			onError: (error) => toast.error(error.message || "복구하지 못했어요."),
 			onSuccess: async () => {
 				toast.success("공고를 복구했어요.");
+				await invalidate();
+			},
+		})
+	);
+	// 톰스톤까지 지우는 완전 삭제 — 되돌릴 수 없어 removed 행에서만 내준다.
+	const hardDeleteMutation = useMutation(
+		orpc.bambi.crawler.hardDeletePost.mutationOptions({
+			onError: (error) =>
+				toast.error(error.message || "완전 삭제하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("공고를 완전히 삭제했어요. 복구할 수 없습니다.");
+				setPendingHardDelete(null);
 				await invalidate();
 			},
 		})
@@ -236,6 +280,7 @@ export function CrawledJobPostsCard() {
 	const isPending =
 		removeMutation.isPending ||
 		restoreMutation.isPending ||
+		hardDeleteMutation.isPending ||
 		bulkRemoveMutation.isPending;
 	const total = listQuery.data?.total ?? 0;
 	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -281,7 +326,7 @@ export function CrawledJobPostsCard() {
 	}, [listQuery.data, page, statusFilter]);
 
 	return (
-		<Card>
+		<Card id="crawler-job-posts">
 			<CardHeader>
 				<CardTitle>수집 공고 관리</CardTitle>
 				<CardAction>
@@ -319,7 +364,7 @@ export function CrawledJobPostsCard() {
 					>
 						{STATUS_FILTERS.map((filter) => (
 							<ToggleGroupItem key={filter.value} value={filter.value}>
-								{filter.label}
+								{statusFilterLabel(filter)}
 							</ToggleGroupItem>
 						))}
 					</ToggleGroup>
@@ -335,6 +380,8 @@ export function CrawledJobPostsCard() {
 						</Button>
 					) : null}
 				</div>
+
+				{listQuery.isLoading ? <ListSkeleton /> : null}
 
 				{listQuery.data?.items.length ? (
 					<>
@@ -392,7 +439,10 @@ export function CrawledJobPostsCard() {
 											<TableCell>
 												{item.status === "active" ? (
 													<Link
-														className="font-medium text-foreground underline-offset-4 hover:underline"
+														className={cn(
+															TITLE_CELL_CLASS,
+															"font-medium text-foreground underline-offset-4 hover:underline"
+														)}
 														href={crawledDetailHref(item.id)}
 														rel="noreferrer"
 														// 목록을 훑다가 한 건만 확인하는 흐름이라, 필터·페이지를
@@ -400,14 +450,17 @@ export function CrawledJobPostsCard() {
 														target="_blank"
 														title={item.title}
 													>
-														{truncateTitle(item.title)}
+														{item.title}
 													</Link>
 												) : (
 													<span
-														className="font-medium text-foreground"
+														className={cn(
+															TITLE_CELL_CLASS,
+															"font-medium text-foreground"
+														)}
 														title={item.title}
 													>
-														{truncateTitle(item.title)}
+														{item.title}
 													</span>
 												)}
 											</TableCell>
@@ -484,15 +537,33 @@ export function CrawledJobPostsCard() {
 															</>
 														) : null}
 														{item.status === "removed" ? (
-															<DropdownMenuItem
-																disabled={isPending}
-																onClick={() =>
-																	restoreMutation.mutate({ id: item.id })
-																}
-															>
-																<RotateCcwIcon />
-																복구
-															</DropdownMenuItem>
+															<>
+																<DropdownMenuItem
+																	disabled={isPending}
+																	onClick={() =>
+																		restoreMutation.mutate({ id: item.id })
+																	}
+																>
+																	<RotateCcwIcon />
+																	복구
+																</DropdownMenuItem>
+																<DropdownMenuSeparator />
+																<DropdownMenuItem
+																	disabled={isPending}
+																	// 바로 지우지 않고 확인 창을 띄운다. 실제 삭제 버튼은
+																	// 그 창 안에 있다.
+																	onClick={() =>
+																		setPendingHardDelete({
+																			id: item.id,
+																			title: item.title,
+																		})
+																	}
+																	variant="destructive"
+																>
+																	<Trash2Icon />
+																	완전 삭제
+																</DropdownMenuItem>
+															</>
 														) : (
 															<DropdownMenuItem
 																disabled={isPending}
@@ -530,16 +601,14 @@ export function CrawledJobPostsCard() {
 							/>
 						</div>
 					</>
-				) : (
+				) : null}
+
+				{listQuery.data && listQuery.data.items.length === 0 ? (
 					<EmptyState
-						description={
-							listQuery.isLoading
-								? "불러오는 중이에요."
-								: "이 상태에 해당하는 수집 공고가 없어요. 필터를 바꾸거나 수집 회차를 돌려 보세요."
-						}
+						description="이 상태에 해당하는 수집 공고가 없어요. 필터를 바꾸거나 수집 회차를 돌려 보세요."
 						title="보여줄 수집 공고가 없어요"
 					/>
-				)}
+				) : null}
 
 				{/* 확인 창은 표 밖에 하나만 두고 대상만 갈아끼운다 — 행마다 두면 한 페이지에
 				    열 개가 함께 마운트된다(moderator/content의 사유 Dialog와 같은 방식). */}
@@ -577,6 +646,41 @@ export function CrawledJobPostsCard() {
 					</AlertDialogContent>
 				</AlertDialog>
 
+				<AlertDialog
+					onOpenChange={(open) => {
+						if (!open) {
+							setPendingHardDelete(null);
+						}
+					}}
+					open={pendingHardDelete !== null}
+				>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>이 공고를 완전히 삭제할까요?</AlertDialogTitle>
+							<AlertDialogDescription>
+								「{pendingHardDelete?.title}」이(가) 데이터베이스에서 완전히
+								지워지며 되돌릴 수 없습니다. 삭제 기록(톰스톤)도 함께
+								사라지므로, 원본 사이트에 글이 아직 살아 있으면 다음 수집 회차에
+								같은 글이 새로 다시 수집될 수 있어요.
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>취소</AlertDialogCancel>
+							<AlertDialogAction
+								disabled={hardDeleteMutation.isPending}
+								onClick={() => {
+									if (pendingHardDelete) {
+										hardDeleteMutation.mutate({ id: pendingHardDelete.id });
+									}
+								}}
+								variant="destructive"
+							>
+								완전 삭제
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+
 				<AlertDialog onOpenChange={setIsBulkRemoveOpen} open={isBulkRemoveOpen}>
 					<AlertDialogContent>
 						<AlertDialogHeader>
@@ -609,8 +713,22 @@ export function CrawledJobPostsCard() {
 
 export function CrawledCommunityTopicsCard() {
 	const invalidate = useInvalidateCrawled();
-	const [topicFilter, setTopicFilter] = useState<TopicFilter>("all");
-	const [page, setPage] = useState(1);
+	const pathname = usePathname();
+	const router = useRouter();
+	const searchParams = useSearchParams();
+	const { page, status: topicFilter } =
+		parseCrawledTopicListState(searchParams);
+	const setListState = useCallback(
+		(next: { page: number; status: TopicFilter }) => {
+			// 같은 URL을 공고 카드와 공유한다 — withCrawledTopicListState가 기존
+			// jobPage/jobStatus를 그대로 복사해 두므로 topic 축만 갱신된다.
+			router.replace(
+				`${pathname}${withCrawledTopicListState(new URLSearchParams(searchParams), next)}` as Route,
+				{ scroll: false }
+			);
+		},
+		[pathname, router, searchParams]
+	);
 	// 확인 창을 띄울 대상(공고 카드와 같은 방식 — 제목까지 들고 있어야 창에서 되짚어 준다).
 	const [pendingRemove, setPendingRemove] = useState<{
 		id: string;
@@ -649,6 +767,12 @@ export function CrawledCommunityTopicsCard() {
 	const total = listQuery.data?.total ?? 0;
 	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+	useEffect(() => {
+		if (listQuery.data && page > totalPages) {
+			setListState({ page: totalPages, status: topicFilter });
+		}
+	}, [listQuery.data, page, setListState, topicFilter, totalPages]);
+
 	return (
 		<Card>
 			<CardHeader>
@@ -669,19 +793,21 @@ export function CrawledCommunityTopicsCard() {
 					onValueChange={(value) => {
 						const next = value.at(-1);
 						if (next) {
-							setTopicFilter(next as TopicFilter);
 							// 조건이 바뀌면 건수가 통째로 달라진다 — 3페이지에 머물면 빈 표를 본다.
-							setPage(1);
+							setListState({ page: 1, status: next as TopicFilter });
 						}
 					}}
 					value={[topicFilter]}
 				>
+					{/* 커뮤니티는 상태별 집계 API가 없어 건수를 붙이지 않는다(공고 카드와 달리). */}
 					{TOPIC_FILTERS.map((filter) => (
 						<ToggleGroupItem key={filter.value} value={filter.value}>
 							{filter.label}
 						</ToggleGroupItem>
 					))}
 				</ToggleGroup>
+
+				{listQuery.isLoading ? <ListSkeleton /> : null}
 
 				{listQuery.data?.items.length ? (
 					<>
@@ -704,14 +830,20 @@ export function CrawledCommunityTopicsCard() {
 											<TableCell>
 												{topic.removedAt ? (
 													<span
-														className="font-medium text-foreground"
+														className={cn(
+															TITLE_CELL_CLASS,
+															"font-medium text-foreground"
+														)}
 														title={topic.title}
 													>
-														{truncateTitle(topic.title)}
+														{topic.title}
 													</span>
 												) : (
 													<Link
-														className="font-medium text-foreground underline-offset-4 hover:underline"
+														className={cn(
+															TITLE_CELL_CLASS,
+															"font-medium text-foreground underline-offset-4 hover:underline"
+														)}
 														href={crawledTopicHref(topic.id)}
 														rel="noreferrer"
 														// 목록을 훑다가 한 건만 확인하는 흐름이라, 필터·페이지를
@@ -719,7 +851,7 @@ export function CrawledCommunityTopicsCard() {
 														target="_blank"
 														title={topic.title}
 													>
-														{truncateTitle(topic.title)}
+														{topic.title}
 													</Link>
 												)}
 											</TableCell>
@@ -732,10 +864,10 @@ export function CrawledCommunityTopicsCard() {
 													? formatCrawlTimestamp(topic.sourcePostedAt)
 													: "—"}
 											</TableCell>
-											<TableCell className="text-right">
+											<TableCell className="text-right tabular-nums">
 												{topic.commentCount ?? "—"}
 											</TableCell>
-											<TableCell className="text-right">
+											<TableCell className="text-right tabular-nums">
 												{topic.viewCount ?? "—"}
 											</TableCell>
 											<TableCell>
@@ -817,22 +949,22 @@ export function CrawledCommunityTopicsCard() {
 						<div className="flex justify-end">
 							<PageControls
 								disabled={listQuery.isFetching}
-								onPageChange={setPage}
+								onPageChange={(nextPage) =>
+									setListState({ page: nextPage, status: topicFilter })
+								}
 								page={page}
 								pageCount={totalPages}
 							/>
 						</div>
 					</>
-				) : (
+				) : null}
+
+				{listQuery.data && listQuery.data.items.length === 0 ? (
 					<EmptyState
-						description={
-							listQuery.isLoading
-								? "불러오는 중이에요."
-								: "이 상태에 해당하는 수집 커뮤니티 글이 없어요. 필터를 바꾸거나, 수집 데이터를 「커뮤니티」로 두고 회차를 돌려 보세요."
-						}
+						description="이 상태에 해당하는 수집 커뮤니티 글이 없어요. 필터를 바꾸거나, 수집 데이터를 「커뮤니티」로 두고 회차를 돌려 보세요."
 						title="보여줄 수집 커뮤니티 글이 없어요"
 					/>
-				)}
+				) : null}
 
 				{/* 확인 창은 표 밖에 하나만 두고 대상만 갈아끼운다(공고 카드와 같은 이유). */}
 				<AlertDialog

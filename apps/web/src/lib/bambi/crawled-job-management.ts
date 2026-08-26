@@ -73,3 +73,40 @@ export const withCrawledJobListState = (
 	params.set("jobStatus", state.status);
 	return `?${params.toString()}`;
 };
+
+// 커뮤니티 글에는 상태 enum이 없고 removedAt 하나뿐이라 필터 축이 셋이다(전체/노출/삭제됨).
+export const CRAWLED_TOPIC_FILTERS = ["all", "active", "removed"] as const;
+
+export type CrawledTopicStatusFilter = (typeof CRAWLED_TOPIC_FILTERS)[number];
+
+export interface CrawledTopicListState {
+	page: number;
+	status: CrawledTopicStatusFilter;
+}
+
+const isTopicFilter = (
+	value: string | null
+): value is CrawledTopicStatusFilter =>
+	CRAWLED_TOPIC_FILTERS.some((status) => status === value);
+
+// job 헬퍼를 미러링하되 쿼리키만 topicPage/topicStatus로 둔다(같은 URL을 두 카드가 공유).
+export const parseCrawledTopicListState = (
+	params: Pick<URLSearchParams, "get">,
+	prefix = "topic"
+): CrawledTopicListState => {
+	const status = params.get(`${prefix}Status`);
+	return {
+		page: parsePage(params.get(`${prefix}Page`)),
+		status: isTopicFilter(status) ? status : "all",
+	};
+};
+
+export const withCrawledTopicListState = (
+	current: URLSearchParams,
+	state: CrawledTopicListState
+): string => {
+	const params = new URLSearchParams(current);
+	params.set("topicPage", String(state.page));
+	params.set("topicStatus", state.status);
+	return `?${params.toString()}`;
+};
