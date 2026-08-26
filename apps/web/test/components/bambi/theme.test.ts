@@ -119,6 +119,21 @@ describe("web theme policy", () => {
 		);
 	});
 
+	it("keeps mobile chat composer and menu controls visibly bordered", () => {
+		expect(chatRoomSource).toContain(
+			"max-md:rounded-full max-md:border-border max-md:bg-secondary"
+		);
+		expect(
+			chatRoomSource.match(
+				/max-md:rounded-full max-md:border-border max-md:bg-secondary/g
+			)
+		).toHaveLength(2);
+		expect(chatRoomSource).toContain('aria-label="채팅 정보 열기"');
+		expect(chatRoomSource).toContain(
+			'size="icon-lg"\n\t\t\t\t\t\tvariant="outline"'
+		);
+	});
+
 	it("keeps only the user-facing popup in the named light scope", () => {
 		expect(globalCssSource).toContain(".theme-light-scope");
 		expect(mainPopupSource).toContain("<ThemeLightScope>");

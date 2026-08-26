@@ -804,7 +804,7 @@ function ChatComposer({
 			>
 				<label
 					aria-label="파일 첨부"
-					className="inline-flex size-11 flex-none cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-muted-foreground focus-within:ring-2 focus-within:ring-coral-100 hover:text-foreground max-md:size-10 max-md:rounded-full max-md:border-transparent max-md:bg-secondary"
+					className="inline-flex size-11 flex-none cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-muted-foreground focus-within:ring-2 focus-within:ring-coral-100 hover:text-foreground max-md:size-10 max-md:rounded-full max-md:border-border max-md:bg-secondary"
 					title="파일 첨부"
 				>
 					<input
@@ -825,7 +825,7 @@ function ChatComposer({
 					메시지
 				</label>
 				<input
-					className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100 max-md:h-10 max-md:rounded-full max-md:border-transparent max-md:bg-secondary"
+					className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100 max-md:h-10 max-md:rounded-full max-md:border-border max-md:bg-secondary"
 					id="chat-message"
 					onChange={(event) => onMessageChange(event.target.value)}
 					placeholder="메시지를 입력하세요"
@@ -2230,7 +2230,7 @@ export function SeekerChatRoomResponsive({
 						className="flex-none"
 						onClick={() => setIsSheetOpen(true)}
 						size="icon-lg"
-						variant="ghost"
+						variant="outline"
 					>
 						<span className="inline-flex size-5">
 							<MenuIcon />
