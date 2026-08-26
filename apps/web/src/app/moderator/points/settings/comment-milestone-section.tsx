@@ -36,6 +36,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { RowActions } from "@/components/bambi/row-actions";
 import { orpc } from "@/utils/orpc";
 
 type MilestoneRow = Awaited<
@@ -146,24 +147,17 @@ function getMilestoneColumns({
 			headerClassName: "text-center",
 			cellClassName: "text-center",
 			cell: (row) => (
-				<div className="flex justify-center gap-2">
-					<Button
-						onClick={() => onEdit(row)}
-						size="sm"
-						type="button"
-						variant="outline"
-					>
-						수정
-					</Button>
-					<Button
-						onClick={() => onDelete(row)}
-						size="sm"
-						type="button"
-						variant="destructive"
-					>
-						삭제
-					</Button>
-				</div>
+				<RowActions
+					actions={[
+						{ key: "edit", label: "수정", onSelect: () => onEdit(row) },
+						{
+							key: "delete",
+							label: "삭제",
+							onSelect: () => onDelete(row),
+							variant: "destructive",
+						},
+					]}
+				/>
 			),
 		},
 	];
