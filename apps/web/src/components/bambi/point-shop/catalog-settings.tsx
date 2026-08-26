@@ -8,15 +8,14 @@ import {
 } from "@bambi-app/ui/components/accordion";
 import { Button } from "@bambi-app/ui/components/button";
 import { Card } from "@bambi-app/ui/components/card";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogTitle,
+} from "@bambi-app/ui/components/dialog";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@bambi-app/ui/components/select";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -54,7 +53,7 @@ export function CatalogSettings(): React.JSX.Element {
 		Array<{ categoryId: null | string; id: string }>
 	>([]);
 	const [newCategoryName, setNewCategoryName] = useState("");
-	const [newCategoryRow, setNewCategoryRow] = useState("last");
+	const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
 	const [newPrizePoints, setNewPrizePoints] = useState("");
 	const [newPrizeWeight, setNewPrizeWeight] = useState("");
 	const [draggedIndex, setDraggedIndex] = useState<null | number>(null);
@@ -91,9 +90,10 @@ export function CatalogSettings(): React.JSX.Element {
 	);
 	const createCategory = useMutation(
 		orpc.bambi.pointShop.adminCreateCategory.mutationOptions({
+			onError: (error) => toast.error(error.message),
 			onSuccess: async () => {
 				setNewCategoryName("");
-				setNewCategoryRow("last");
+				setCategoryDialogOpen(false);
 				toast.success("분류를 만들었어요.");
 				await invalidate();
 			},
@@ -101,11 +101,13 @@ export function CatalogSettings(): React.JSX.Element {
 	);
 	const updateCategory = useMutation(
 		orpc.bambi.pointShop.adminUpdateCategory.mutationOptions({
+			onError: (error) => toast.error(error.message),
 			onSuccess: invalidate,
 		})
 	);
 	const removeCategory = useMutation(
 		orpc.bambi.pointShop.adminRemoveCategory.mutationOptions({
+			onError: (error) => toast.error(error.message),
 			onSuccess: invalidate,
 		})
 	);
@@ -140,16 +142,25 @@ export function CatalogSettings(): React.JSX.Element {
 			category,
 		])
 	);
+	const rowPositionByCategoryId = new Map(
+		rows.flatMap((row, position) =>
+			row.categoryId === null ? [] : [[row.categoryId, position] as const]
+		)
+	);
+	const managedCategories = [...(layoutQuery.data?.categories ?? [])].sort(
+		(left, right) =>
+			(rowPositionByCategoryId.get(left.id) ?? Number.POSITIVE_INFINITY) -
+			(rowPositionByCategoryId.get(right.id) ?? Number.POSITIVE_INFINITY)
+	);
 	const featuredIds =
 		layoutQuery.data?.featuredItems.map((item) => item.itemId) ?? [];
 	const featuredSet = new Set(featuredIds);
-	const activeItems = (itemsQuery.data ?? []).filter((item) => item.isActive);
+	const activeItems = (itemsQuery.data ?? []).filter(
+		(item) => item.isActive && item.pricePoints !== null
+	);
 	const totalWeight = (prizesQuery.data ?? [])
 		.filter((prize) => prize.isActive)
 		.reduce((sum, prize) => sum + prize.weight, 0);
-	const emptyRowPositions = rows.flatMap((row, position) =>
-		row.categoryId === null && position > 0 ? [position] : []
-	);
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -238,12 +249,7 @@ export function CatalogSettings(): React.JSX.Element {
 							</div>
 							<div className="flex flex-wrap gap-2">
 								<Button
-									onClick={() =>
-										setRows([
-											...rows,
-											{ categoryId: null, id: crypto.randomUUID() },
-										])
-									}
+									onClick={() => setCategoryDialogOpen(true)}
 									variant="outline"
 								>
 									행 추가
@@ -259,83 +265,41 @@ export function CatalogSettings(): React.JSX.Element {
 									위치 저장
 								</Button>
 							</div>
-							<div className="flex flex-col gap-2 border-border border-t pt-4 sm:flex-row">
-								<Input
-									onChange={(event) => setNewCategoryName(event.target.value)}
-									placeholder="새 분류 이름"
-									value={newCategoryName}
-								/>
-								<Select
-									items={[
-										{ label: "마지막 행", value: "last" },
-										...emptyRowPositions.map((position) => ({
-											label: `${position + 1}행`,
-											value: String(position),
-										})),
-									]}
-									onValueChange={(value) => value && setNewCategoryRow(value)}
-									value={newCategoryRow}
-								>
-									<SelectTrigger>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="last">마지막 행</SelectItem>
-										{emptyRowPositions.map((position) => (
-											<SelectItem key={position} value={String(position)}>
-												{position + 1}행
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								<Button
-									disabled={!newCategoryName.trim()}
-									onClick={() =>
-										createCategory.mutate({
-											name: newCategoryName.trim(),
-											rowPosition:
-												newCategoryRow === "last"
-													? undefined
-													: Number(newCategoryRow),
-										})
-									}
-								>
-									분류 만들기
-								</Button>
-							</div>
 							<div className="flex flex-col gap-2">
-								{(layoutQuery.data?.categories ?? [])
-									.filter((category) => category.kind === "standard")
-									.map((category) => (
-										<div
-											className="flex items-center gap-2 rounded-lg bg-muted/40 p-3"
-											key={category.id}
-										>
-											<Input
-												defaultValue={category.name}
-												onBlur={(event) => {
-													const name = event.target.value.trim();
-													if (name && name !== category.name) {
-														updateCategory.mutate({
-															id: category.id,
-															isActive: category.isActive,
-															name,
-														});
-													}
-												}}
-											/>
-											<Switch
-												checked={category.isActive}
-												onCheckedChange={(isActive) =>
+								{managedCategories.map((category) => (
+									<div
+										className="flex items-center gap-2 rounded-lg bg-muted/40 p-3"
+										key={category.id}
+									>
+										<Input
+											defaultValue={category.name}
+											onBlur={(event) => {
+												const name = event.target.value.trim();
+												if (name && name !== category.name) {
 													updateCategory.mutate({
 														id: category.id,
-														isActive,
-														name: category.name,
-													})
+														isActive: category.isActive,
+														name,
+													});
 												}
-											/>
+											}}
+										/>
+										<Switch
+											checked={category.isActive}
+											onCheckedChange={(isActive) =>
+												updateCategory.mutate({
+													id: category.id,
+													isActive,
+													name: category.name,
+												})
+											}
+										/>
+										{category.kind === "featured" ? null : (
 											<Button
 												aria-label="분류 삭제"
+												disabled={(itemsQuery.data ?? []).some(
+													(item) => item.categoryId === category.id
+												)}
 												onClick={() =>
 													removeCategory.mutate({ id: category.id })
 												}
@@ -344,8 +308,9 @@ export function CatalogSettings(): React.JSX.Element {
 											>
 												<Trash2Icon />
 											</Button>
-										</div>
-									))}
+										)}
+									</div>
+								))}
 							</div>
 						</AccordionContent>
 					</AccordionItem>
@@ -541,6 +506,41 @@ export function CatalogSettings(): React.JSX.Element {
 					</AccordionItem>
 				</Accordion>
 			</Card>
+
+			<Dialog onOpenChange={setCategoryDialogOpen} open={categoryDialogOpen}>
+				<DialogContent>
+					<DialogTitle>포인트몰 행 추가</DialogTitle>
+					<DialogDescription>
+						새 행의 이름을 입력하면 포인트몰 위치의 가장 아래에 추가됩니다.
+					</DialogDescription>
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="point-shop-new-row-name">행 이름</Label>
+						<Input
+							id="point-shop-new-row-name"
+							maxLength={40}
+							onChange={(event) => setNewCategoryName(event.target.value)}
+							placeholder="예: 이벤트 상품"
+							value={newCategoryName}
+						/>
+					</div>
+					<div className="flex justify-end gap-2">
+						<Button
+							onClick={() => setCategoryDialogOpen(false)}
+							variant="outline"
+						>
+							취소
+						</Button>
+						<Button
+							disabled={!newCategoryName.trim() || createCategory.isPending}
+							onClick={() =>
+								createCategory.mutate({ name: newCategoryName.trim() })
+							}
+						>
+							저장
+						</Button>
+					</div>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

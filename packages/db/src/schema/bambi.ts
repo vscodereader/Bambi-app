@@ -2430,11 +2430,16 @@ export const bambiPointShopCategory = pgTable(
 			.$onUpdate(() => /* @__PURE__ */ new Date())
 			.notNull(),
 	},
-	(table) => [uniqueIndex("bambi_point_shop_category_key_uidx").on(table.key)]
+	(table) => [
+		uniqueIndex("bambi_point_shop_category_key_uidx").on(table.key),
+		uniqueIndex("bambi_point_shop_category_standard_name_uidx")
+			.on(sql`lower(${table.name})`)
+			.where(sql`${table.kind} = 'standard'`),
+	]
 );
 
-// 분류와 별도로 행을 저장해 운영자가 추가한 빈 행도 보존한다. 한 행에는 분류 하나만
-// 들어가며 featured 행(position 0) 고정은 API와 migration seed가 함께 보장한다.
+// 한 행에는 분류 하나만 들어가며 featured 행(position 0) 고정은 API와 migration seed가
+// 함께 보장한다. standard 분류 생성과 행 추가는 한 트랜잭션으로 처리한다.
 export const bambiPointShopLayoutRow = pgTable(
 	"bambi_point_shop_layout_row",
 	{
@@ -2466,7 +2471,9 @@ export const bambiPointShopItem = pgTable("bambi_point_shop_item", {
 	name: text("name").notNull(),
 	description: text("description"),
 	imageUrl: text("image_url"),
-	pricePoints: integer("price_points").notNull(),
+	// 운영자가 가격을 확정하기 전인 비공개 상품 초안은 null이다. 공개·구매 시점에는
+	// API가 가격 입력을 강제한다.
+	pricePoints: integer("price_points"),
 	sortOrder: integer("sort_order").notNull().default(0),
 	isActive: boolean("is_active").notNull().default(true),
 	categoryId: uuid("category_id")

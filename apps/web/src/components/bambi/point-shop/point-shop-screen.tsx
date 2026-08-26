@@ -74,8 +74,8 @@ const skeletonVisibilityClass = (index: number): string => {
 const ITEM_IMAGE_SIZES =
 	"(min-width: 1280px) 259px, (min-width: 1024px) 33vw, 50vw";
 
-const pointText = (points: number): string =>
-	`${points.toLocaleString("ko-KR")}P`;
+const pointText = (points: null | number): string =>
+	points === null ? "가격 미정" : `${points.toLocaleString("ko-KR")}P`;
 
 const HANGUL_CHAR = /[가-힣]/;
 
@@ -261,7 +261,7 @@ function PurchaseDialogBody({
 	const isCoupon = benefitType === "coupon";
 	const ownsAfterPurchase = isOwnedBenefit(benefitType);
 	const showBenefitTag = benefitType !== "none";
-	const shortfall = balance === null ? 0 : item.pricePoints - balance;
+	const shortfall = balance === null ? 0 : (item.pricePoints ?? 0) - balance;
 
 	// 표시 계층의 힌트일 뿐 — 정본은 서버 purchase다. 자격·본인인증은 아이템 열람은
 	// 허용하되 구매 버튼만 대체한다(자격 안내·인증 유도). 우선순위: 품절 > 자격 > 본인인증.

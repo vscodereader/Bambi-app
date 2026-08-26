@@ -21,6 +21,7 @@ import {
 	desc,
 	eq,
 	inArray,
+	isNotNull,
 	max,
 	or,
 	type SQL,
@@ -97,6 +98,7 @@ const requirePurchaseProfile = async (
 
 // 혜택 스펙·사용기한·재고는 유형별로만 채우는 선택 정수(구매 후 검증은 순수 함수).
 const nullableSpecInput = z.number().int().min(1).nullable().optional();
+const nullableStockInput = z.number().int().min(0).nullable().optional();
 
 const itemInput = z.object({
 	audience: z.enum(POINT_SHOP_AUDIENCES),
@@ -110,9 +112,9 @@ const itemInput = z.object({
 	imageUrl: z.string().trim().url().max(600).nullable().optional(),
 	isActive: z.boolean(),
 	name: z.string().trim().min(1).max(60),
-	pricePoints: z.number().int().min(0).max(10_000_000),
+	pricePoints: z.number().int().min(0).max(10_000_000).nullable(),
 	sortOrder: z.number().int().min(0).max(100_000),
-	stockQuantity: nullableSpecInput,
+	stockQuantity: nullableStockInput,
 	usageLimitDays: nullableSpecInput,
 });
 
@@ -155,7 +157,7 @@ const buildValidatedBenefitColumns = (input: z.infer<typeof itemInput>) => {
 		durationDays: columns.durationDays,
 		extendDays: columns.extendDays,
 	});
-	if (!verdict.ok) {
+	if (input.isActive && !verdict.ok) {
 		throw new ORPCError("BAD_REQUEST", {
 			message: ITEM_SPEC_ERROR_MESSAGES[verdict.code],
 		});
@@ -173,6 +175,21 @@ export const pointShopRouter = {
 		)
 		.handler(async ({ input }) =>
 			db.transaction(async (tx) => {
+				const [duplicate] = await tx
+					.select({ id: bambiPointShopCategory.id })
+					.from(bambiPointShopCategory)
+					.where(
+						and(
+							eq(bambiPointShopCategory.kind, "standard"),
+							sql`lower(${bambiPointShopCategory.name}) = lower(${input.name})`
+						)
+					)
+					.limit(1);
+				if (duplicate) {
+					throw new ORPCError("CONFLICT", {
+						message: "같은 이름의 행이 이미 있어요.",
+					});
+				}
 				const [created] = await tx
 					.insert(bambiPointShopCategory)
 					.values({
@@ -271,12 +288,21 @@ export const pointShopRouter = {
 					});
 				}
 				await tx
-					.update(bambiPointShopLayoutRow)
-					.set({ categoryId: null, updatedAt: new Date() })
+					.delete(bambiPointShopLayoutRow)
 					.where(eq(bambiPointShopLayoutRow.categoryId, input.id));
 				await tx
 					.delete(bambiPointShopCategory)
 					.where(eq(bambiPointShopCategory.id, input.id));
+				const remainingRows = await tx
+					.select({ id: bambiPointShopLayoutRow.id })
+					.from(bambiPointShopLayoutRow)
+					.orderBy(asc(bambiPointShopLayoutRow.position));
+				for (const [position, row] of remainingRows.entries()) {
+					await tx
+						.update(bambiPointShopLayoutRow)
+						.set({ position, updatedAt: new Date() })
+						.where(eq(bambiPointShopLayoutRow.id, row.id));
+				}
 				return { id: input.id };
 			})
 		),
@@ -368,6 +394,24 @@ export const pointShopRouter = {
 	adminSetItemActive: adminProcedure
 		.input(z.object({ id: z.string().uuid(), isActive: z.boolean() }))
 		.handler(async ({ input }) => {
+			if (input.isActive) {
+				const [item] = await db
+					.select()
+					.from(bambiPointShopItem)
+					.where(eq(bambiPointShopItem.id, input.id))
+					.limit(1);
+				if (!item) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "상품을 찾을 수 없어요.",
+					});
+				}
+				const benefit = validateItemBenefitSpec(item);
+				if (item.pricePoints === null || !benefit.ok) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "가격과 상품별 설정을 모두 입력한 뒤 공개해 주세요.",
+					});
+				}
+			}
 			const [updated] = await db
 				.update(bambiPointShopItem)
 				.set({ isActive: input.isActive, updatedAt: new Date() })
@@ -391,6 +435,22 @@ export const pointShopRouter = {
 			})
 		)
 		.handler(async ({ input }) => {
+			const [duplicate] = await db
+				.select({ id: bambiPointShopCategory.id })
+				.from(bambiPointShopCategory)
+				.where(
+					and(
+						eq(bambiPointShopCategory.kind, "standard"),
+						sql`${bambiPointShopCategory.id} <> ${input.id}`,
+						sql`lower(${bambiPointShopCategory.name}) = lower(${input.name})`
+					)
+				)
+				.limit(1);
+			if (duplicate) {
+				throw new ORPCError("CONFLICT", {
+					message: "같은 이름의 행이 이미 있어요.",
+				});
+			}
 			const [updated] = await db
 				.update(bambiPointShopCategory)
 				.set({
@@ -425,7 +485,12 @@ export const pointShopRouter = {
 			db
 				.select()
 				.from(bambiPointShopItem)
-				.where(eq(bambiPointShopItem.isActive, true))
+				.where(
+					and(
+						eq(bambiPointShopItem.isActive, true),
+						isNotNull(bambiPointShopItem.pricePoints)
+					)
+				)
 				.orderBy(
 					asc(bambiPointShopItem.pricePoints),
 					asc(bambiPointShopItem.createdAt),
@@ -438,7 +503,12 @@ export const pointShopRouter = {
 					bambiPointShopItem,
 					eq(bambiPointShopFeaturedItem.itemId, bambiPointShopItem.id)
 				)
-				.where(eq(bambiPointShopItem.isActive, true))
+				.where(
+					and(
+						eq(bambiPointShopItem.isActive, true),
+						isNotNull(bambiPointShopItem.pricePoints)
+					)
+				)
 				.orderBy(asc(bambiPointShopFeaturedItem.position)),
 		]);
 		const byId = new Map(items.map((item) => [item.id, item]));
@@ -487,7 +557,12 @@ export const pointShopRouter = {
 				usageLimitDays: bambiPointShopItem.usageLimitDays,
 			})
 			.from(bambiPointShopItem)
-			.where(eq(bambiPointShopItem.isActive, true))
+			.where(
+				and(
+					eq(bambiPointShopItem.isActive, true),
+					isNotNull(bambiPointShopItem.pricePoints)
+				)
+			)
 			.orderBy(
 				asc(bambiPointShopItem.sortOrder),
 				asc(bambiPointShopItem.createdAt)
@@ -527,6 +602,11 @@ export const pointShopRouter = {
 				if (!item) {
 					throw new ORPCError("NOT_FOUND", {
 						message: "아이템을 찾을 수 없습니다.",
+					});
+				}
+				if (item.pricePoints === null) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "가격이 정해지지 않은 상품입니다.",
 					});
 				}
 				const [balanceRow] = await tx
@@ -1041,6 +1121,11 @@ export const pointShopRouter = {
 	),
 
 	createItem: adminProcedure.input(itemInput).handler(async ({ input }) => {
+		if (input.isActive && input.pricePoints === null) {
+			throw new ORPCError("BAD_REQUEST", {
+				message: "가격을 입력한 뒤 공개해 주세요.",
+			});
+		}
 		const benefitColumns = buildValidatedBenefitColumns(input);
 		const [category] = await db
 			.select({ id: bambiPointShopCategory.id })
@@ -1076,6 +1161,11 @@ export const pointShopRouter = {
 	updateItem: adminProcedure
 		.input(itemInput.extend({ id: z.string().uuid() }))
 		.handler(async ({ input }) => {
+			if (input.isActive && input.pricePoints === null) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "가격을 입력한 뒤 공개해 주세요.",
+				});
+			}
 			const benefitColumns = buildValidatedBenefitColumns(input);
 			// 유형 변경 잠금(판매 이력 검사)과 저장을 한 트랜잭션에서 처리하고, 아이템 행을
 			// FOR UPDATE로 잠가 동시 purchase(주문 insert·재고 차감)와 직렬화한다 —

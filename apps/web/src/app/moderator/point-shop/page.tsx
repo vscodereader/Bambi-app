@@ -24,6 +24,7 @@ import {
 } from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -88,17 +89,44 @@ type OrderRow = Awaited<
 type BenefitType = ItemRow["benefitType"];
 type Audience = ItemRow["audience"];
 
-const BENEFIT_TYPE_OPTIONS: BenefitType[] = [
-	"none",
-	"coupon",
-	"boost_manual_period",
-	"boost_manual_count",
-	"boost_auto_period",
-	"ad_extend",
-	"draw_ticket",
-	"attendance_restore_ticket",
-];
 const AUDIENCE_OPTIONS: Audience[] = ["all", "employer", "job_seeker"];
+
+type ProductType = "general" | "gift_card" | "point_ticket" | "boost_ticket";
+
+const PRODUCT_TYPE_OPTIONS: Array<{ label: string; value: ProductType }> = [
+	{ label: "일반 상품", value: "general" },
+	{ label: "포인트권", value: "point_ticket" },
+	{ label: "끌어올리기권", value: "boost_ticket" },
+	{ label: "상품권", value: "gift_card" },
+];
+
+const productTypeForBenefit = (benefitType: BenefitType): ProductType => {
+	if (benefitType.startsWith("boost_")) {
+		return "boost_ticket";
+	}
+	if (
+		benefitType === "draw_ticket" ||
+		benefitType === "attendance_restore_ticket"
+	) {
+		return "point_ticket";
+	}
+	return benefitType === "coupon" ? "gift_card" : "general";
+};
+
+const benefitForProductType = (
+	productType: ProductType,
+	current: BenefitType
+): BenefitType => {
+	if (productType === "boost_ticket") {
+		return "boost_manual_period";
+	}
+	if (productType === "point_ticket") {
+		return current === "attendance_restore_ticket"
+			? "attendance_restore_ticket"
+			: "draw_ticket";
+	}
+	return productType === "gift_card" ? "coupon" : "none";
+};
 
 // 보유·사용형(끌올·연장)만 사용기한을 갖고, 구직 회원 단독 지정도 이 유형에서만 막힌다.
 const USABLE_BENEFIT_TYPES = new Set<BenefitType>([
@@ -142,6 +170,7 @@ interface BenefitDraft {
 	durationDays: string;
 	extendDays: string;
 	stockQuantity: string;
+	unlimitedStock: boolean;
 	usageLimitDays: string;
 }
 
@@ -155,7 +184,8 @@ const initialBenefitDraft = (item: ItemRow | null): BenefitDraft => ({
 	boostsPerDay: numberDraft(item?.boostsPerDay ?? null),
 	durationDays: numberDraft(item?.durationDays ?? null),
 	extendDays: numberDraft(item?.extendDays ?? null),
-	stockQuantity: numberDraft(item?.stockQuantity ?? null),
+	stockQuantity: item?.stockQuantity == null ? "" : String(item.stockQuantity),
+	unlimitedStock: item !== null && item.stockQuantity === null,
 	usageLimitDays: numberDraft(item?.usageLimitDays ?? null),
 });
 
@@ -184,7 +214,12 @@ const isBenefitDraftValid = (draft: BenefitDraft): boolean => {
 	if (draft.benefitType === "ad_extend" && !isPositiveInt(draft.extendDays)) {
 		return false;
 	}
-	if (!isBlankOrPositiveInt(draft.stockQuantity)) {
+	if (
+		!draft.unlimitedStock &&
+		draft.stockQuantity.trim() !== "" &&
+		(!Number.isInteger(Number(draft.stockQuantity)) ||
+			Number(draft.stockQuantity) < 0)
+	) {
 		return false;
 	}
 	return !(isUsable && !isBlankOrPositiveInt(draft.usageLimitDays));
@@ -194,6 +229,11 @@ const isBenefitDraftValid = (draft: BenefitDraft): boolean => {
 const benefitDraftToPayload = (draft: BenefitDraft) => {
 	const isPeriod = isPeriodBenefitType(draft.benefitType);
 	const isUsable = USABLE_BENEFIT_TYPES.has(draft.benefitType);
+	let stockQuantity: null | number = null;
+	if (!draft.unlimitedStock) {
+		stockQuantity =
+			draft.stockQuantity.trim() === "" ? 0 : Number(draft.stockQuantity);
+	}
 	return {
 		audience: draft.audience,
 		benefitType: draft.benefitType,
@@ -207,7 +247,7 @@ const benefitDraftToPayload = (draft: BenefitDraft) => {
 			draft.benefitType === "ad_extend"
 				? parseOptionalCount(draft.extendDays)
 				: null,
-		stockQuantity: parseOptionalCount(draft.stockQuantity),
+		stockQuantity,
 		usageLimitDays: isUsable ? parseOptionalCount(draft.usageLimitDays) : null,
 	};
 };
@@ -261,6 +301,11 @@ const orderFilterLabel = (filter: OrderFilter): string =>
 // 보유(owned) 건 만료 판정 — usableUntil 경과 시 서버가 취소를 거부하므로 취소 버튼도 감춘다.
 const isOrderExpired = (usableUntil: Date | string | null): boolean =>
 	usableUntil !== null && new Date(usableUntil).getTime() <= Date.now();
+
+const formatItemPrice = (pricePoints: null | number): string =>
+	pricePoints === null
+		? "가격 미정"
+		: `${pricePoints.toLocaleString("ko-KR")}P`;
 
 function ItemThumbnail({ item }: { item: ItemRow }) {
 	if (!item.imageUrl) {
@@ -352,11 +397,9 @@ function getItemColumns({
 		{
 			id: "pricePoints",
 			header: "가격",
-			sortValue: (row) => row.pricePoints,
+			sortValue: (row) => row.pricePoints ?? Number.POSITIVE_INFINITY,
 			cell: (row) => (
-				<span className="tabular-nums">
-					{row.pricePoints.toLocaleString("ko-KR")}P
-				</span>
+				<span className="tabular-nums">{formatItemPrice(row.pricePoints)}</span>
 			),
 		},
 		{
@@ -573,7 +616,7 @@ interface ItemFormValues {
 	imageUrl: null | string;
 	isActive: boolean;
 	name: string;
-	pricePoints: number;
+	pricePoints: null | number;
 	sortOrder: number;
 	stockQuantity: null | number;
 	usageLimitDays: null | number;
@@ -581,61 +624,75 @@ interface ItemFormValues {
 
 // 혜택 유형·스펙·대상·사용기한·재고를 한데 모은 조각. 유형에 따라 스펙 필드가 조건 노출된다.
 function ItemBenefitFields({
-	benefitTypeLocked,
 	draft,
 	onChange,
 }: {
-	benefitTypeLocked: boolean;
 	draft: BenefitDraft;
 	onChange: (patch: Partial<BenefitDraft>) => void;
 }) {
 	const isPeriod = isPeriodBenefitType(draft.benefitType);
 	const isUsable = USABLE_BENEFIT_TYPES.has(draft.benefitType);
 	const audienceConflict = isUsable && draft.audience === "job_seeker";
+	const productType = productTypeForBenefit(draft.benefitType);
 	return (
 		<>
 			<div className="flex flex-col gap-2">
-				<Label htmlFor="point-shop-item-benefit-type">혜택 유형</Label>
+				<Label htmlFor="point-shop-item-product-type">상품 유형</Label>
 				<Select
-					disabled={benefitTypeLocked}
-					items={BENEFIT_TYPE_OPTIONS.map((value) => ({
-						label: pointShopBenefitTypeLabel(value),
-						value,
-					}))}
+					items={PRODUCT_TYPE_OPTIONS}
 					onValueChange={(value) => {
 						if (value) {
+							const nextType = value as ProductType;
 							onChange({
 								audience:
-									value === "attendance_restore_ticket"
-										? "job_seeker"
-										: draft.audience,
-								benefitType: value as BenefitType,
+									nextType === "boost_ticket" ? "employer" : draft.audience,
+								benefitType: benefitForProductType(nextType, draft.benefitType),
 							});
 						}
 					}}
-					value={draft.benefitType}
+					value={productType}
 				>
 					<SelectTrigger
 						className={SELECT_TRIGGER_CLASSNAME}
-						id="point-shop-item-benefit-type"
+						id="point-shop-item-product-type"
 					>
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						{BENEFIT_TYPE_OPTIONS.map((value) => (
-							<SelectItem key={value} value={value}>
-								{pointShopBenefitTypeLabel(value)}
+						{PRODUCT_TYPE_OPTIONS.map((option) => (
+							<SelectItem key={option.value} value={option.value}>
+								{option.label}
 							</SelectItem>
 						))}
 					</SelectContent>
 				</Select>
-				{benefitTypeLocked ? (
-					<p className="m-0 text-muted-foreground text-xs">
-						이미 판매된 이력이 있어 혜택 유형은 바꿀 수 없어요. 유형을 바꾸려면
-						새 아이템을 만들어 주세요.
-					</p>
-				) : null}
 			</div>
+			{productType === "boost_ticket" ? (
+				<div className="flex flex-wrap gap-4 rounded-lg border border-border p-3">
+					{(
+						[
+							["boost_manual_period", "수동"],
+							["boost_auto_period", "자동"],
+							["boost_manual_count", "횟수권"],
+						] as const
+					).map(([value, label]) => (
+						<label
+							className="flex items-center gap-2"
+							htmlFor={`point-shop-boost-type-${value}`}
+							key={value}
+						>
+							<Checkbox
+								checked={draft.benefitType === value}
+								id={`point-shop-boost-type-${value}`}
+								onCheckedChange={(checked) =>
+									checked === true && onChange({ benefitType: value })
+								}
+							/>
+							<span>{label}</span>
+						</label>
+					))}
+				</div>
+			) : null}
 			{isPeriod ? (
 				<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
 					<div className="flex flex-col gap-2">
@@ -757,24 +814,69 @@ function ItemBenefitFields({
 				<div className="flex flex-col gap-2">
 					<Label htmlFor="point-shop-item-stock">재고</Label>
 					<Input
+						disabled={draft.unlimitedStock}
 						id="point-shop-item-stock"
 						inputMode="numeric"
-						min={1}
+						min={0}
 						onChange={(event) =>
 							onChange({ stockQuantity: event.target.value })
 						}
-						placeholder="비우면 무제한"
+						placeholder="비우면 0"
 						type="number"
 						value={draft.stockQuantity}
 					/>
-					<p className="m-0 text-muted-foreground text-xs">
-						비우면 무제한으로 판매해요. 모든 유형에 적용됩니다.
-					</p>
+					<label
+						className="flex items-center gap-2 text-sm"
+						htmlFor="point-shop-item-unlimited-stock"
+					>
+						<Checkbox
+							checked={draft.unlimitedStock}
+							id="point-shop-item-unlimited-stock"
+							onCheckedChange={(checked) =>
+								onChange({ unlimitedStock: checked === true })
+							}
+						/>
+						<span>무제한</span>
+					</label>
 				</div>
 			</div>
 		</>
 	);
 }
+
+const isItemFormSubmittable = (args: {
+	benefit: BenefitDraft;
+	categoryId: string;
+	isActive: boolean;
+	isBusy: boolean;
+	isDirty: boolean;
+	name: string;
+	pricePoints: null | number;
+	sortOrder: number;
+}): boolean => {
+	if (args.isBusy || !args.isDirty || !args.name.trim() || !args.categoryId) {
+		return false;
+	}
+	if (
+		args.pricePoints !== null &&
+		(!Number.isInteger(args.pricePoints) ||
+			args.pricePoints < 0 ||
+			args.pricePoints > PRICE_MAX)
+	) {
+		return false;
+	}
+	if (
+		!Number.isInteger(args.sortOrder) ||
+		args.sortOrder < 0 ||
+		args.sortOrder > SORT_ORDER_MAX
+	) {
+		return false;
+	}
+	return (
+		!args.isActive ||
+		(args.pricePoints !== null && isBenefitDraftValid(args.benefit))
+	);
+};
 
 // 추가·수정 공용 폼. 대상마다 새로 마운트돼(key) 초기값이 따라온다.
 function ItemForm({
@@ -801,10 +903,10 @@ function ItemForm({
 	const updateBenefit = (patch: Partial<BenefitDraft>) =>
 		setBenefit((prev) => ({ ...prev, ...patch }));
 	const [pricePoints, setPricePoints] = useState(
-		item ? String(item.pricePoints) : ""
+		item?.pricePoints == null ? "" : String(item.pricePoints)
 	);
 	const [sortOrder, setSortOrder] = useState(String(item?.sortOrder ?? 0));
-	const [isActive, setIsActive] = useState(item?.isActive ?? true);
+	const [isActive, setIsActive] = useState(item?.isActive ?? false);
 	const [imageUrl, setImageUrl] = useState<null | string>(
 		item?.imageUrl ?? null
 	);
@@ -813,7 +915,8 @@ function ItemForm({
 		orpc.bambi.community.createMediaUpload.mutationOptions()
 	);
 
-	const parsedPrice = Number(pricePoints);
+	const parsedPrice =
+		pricePoints.trim() === "" ? null : Number(pricePoints.trim());
 	const parsedSortOrder = Number(sortOrder);
 	const benefitPayload = benefitDraftToPayload(benefit);
 	const isDirty =
@@ -833,18 +936,16 @@ function ItemForm({
 		benefitPayload.extendDays !== item.extendDays ||
 		benefitPayload.stockQuantity !== item.stockQuantity ||
 		benefitPayload.usageLimitDays !== item.usageLimitDays;
-	const canSubmit =
-		isDirty &&
-		name.trim().length > 0 &&
-		categoryId.length > 0 &&
-		Number.isInteger(parsedPrice) &&
-		parsedPrice >= 0 &&
-		parsedPrice <= PRICE_MAX &&
-		Number.isInteger(parsedSortOrder) &&
-		parsedSortOrder >= 0 &&
-		parsedSortOrder <= SORT_ORDER_MAX &&
-		isBenefitDraftValid(benefit) &&
-		!(isPending || isUploading);
+	const canSubmit = isItemFormSubmittable({
+		benefit,
+		categoryId,
+		isActive,
+		isBusy: isPending || isUploading,
+		isDirty,
+		name,
+		pricePoints: parsedPrice,
+		sortOrder: parsedSortOrder,
+	});
 
 	// 수다방 본문 이미지와 같은 절차: 클라 사전검증 → 업로드 인텐트 → 서명 URL PUT →
 	// 공개 URL을 폼 값으로 든다. 저장 전에 취소해도 객체만 남고 참조는 생기지 않는다.
@@ -915,13 +1016,8 @@ function ItemForm({
 					value={description}
 				/>
 			</div>
-			<ItemBenefitFields
-				benefitTypeLocked={item?.hasOrders ?? false}
-				draft={benefit}
-				onChange={updateBenefit}
-			/>
 			<div className="flex flex-col gap-2">
-				<Label htmlFor="point-shop-item-category">상품 분류</Label>
+				<Label htmlFor="point-shop-item-category">노출 카테고리</Label>
 				<Select
 					items={categories.map((category) => ({
 						label: category.name,
@@ -942,6 +1038,7 @@ function ItemForm({
 					</SelectContent>
 				</Select>
 			</div>
+			<ItemBenefitFields draft={benefit} onChange={updateBenefit} />
 			<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
 				<div className="flex flex-col gap-2">
 					<Label htmlFor="point-shop-item-price">가격(포인트)</Label>
@@ -1166,7 +1263,7 @@ function ItemsTab() {
 									<span className="flex flex-col gap-1">
 										<strong>{item.name}</strong>
 										<span className="text-muted-foreground text-xs">
-											{item.pricePoints.toLocaleString("ko-KR")}P ·{" "}
+											{formatItemPrice(item.pricePoints)} ·{" "}
 											{item.isActive ? "공개" : "비공개"}
 										</span>
 									</span>
@@ -1192,11 +1289,7 @@ function ItemsTab() {
 										</p>
 										<p className="m-0">
 											<strong>가격</strong> ·{" "}
-											{item.pricePoints.toLocaleString("ko-KR")}P
-										</p>
-										<p className="m-0">
-											<strong>혜택</strong> ·{" "}
-											{pointShopBenefitTypeLabel(item.benefitType)}
+											{formatItemPrice(item.pricePoints)}
 										</p>
 										<div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
 											<span>
