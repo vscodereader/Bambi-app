@@ -95,6 +95,15 @@ const pointReasonLabel = (reason: string): string => {
 	if (reason === "community_comment_revoke") {
 		return "게시판 댓글 포인트 회수";
 	}
+	if (reason === "community_comment_bonus") {
+		return "댓글 랜덤 보너스";
+	}
+	if (reason === "community_comment_bonus_revoke") {
+		return "댓글 랜덤 보너스 회수";
+	}
+	if (reason === "community_comment_milestone") {
+		return "댓글 마일스톤 보너스";
+	}
 	if (reason === "review_write") {
 		return "후기 작성";
 	}

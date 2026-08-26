@@ -31,6 +31,7 @@ import {
 import { CommunityPostNavigation } from "@/components/bambi/community-post-navigation";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PublicPostInteractions } from "@/components/bambi/public-post-interactions";
+import { toastCommentRewards } from "@/lib/bambi/comment-rewards";
 import {
 	type CommunityBoardMeta,
 	communityBoardPath,
@@ -207,7 +208,8 @@ function PostDetailView({
 					toast(error.message || "댓글을 등록하지 못했어요.");
 				}
 			},
-			onSuccess: () => {
+			onSuccess: (data) => {
+				toastCommentRewards(data);
 				setCommentBody("");
 				setReplyTo(null);
 				bumpCommentCount(1);
