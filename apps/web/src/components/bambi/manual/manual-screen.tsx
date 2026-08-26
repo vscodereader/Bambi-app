@@ -23,9 +23,11 @@ export async function ManualScreen({ manualKey }: { manualKey: ManualKey }) {
 	const keys = manualKeysForRole(role);
 
 	return (
-		<div className="flex flex-col gap-6 py-6">
+		<div className="flex flex-col gap-8 py-8">
 			<header className="flex flex-col gap-3">
-				<h1 className="m-0 font-extrabold text-xl">{doc.title}</h1>
+				<h1 className="m-0 font-extrabold text-2xl tracking-tight md:text-3xl">
+					{doc.title}
+				</h1>
 				<ManualTabs active={manualKey} keys={keys} />
 			</header>
 
@@ -39,12 +41,12 @@ export async function ManualScreen({ manualKey }: { manualKey: ManualKey }) {
 				</AccordionItem>
 			</Accordion>
 
-			<div className="flex items-start gap-8">
-				{/* 데스크톱: sticky 목차 사이드바. 문서가 길어 자체 스크롤을 준다. */}
-				<aside className="sticky top-20 hidden max-h-[calc(100vh-6rem)] w-64 shrink-0 overflow-y-auto lg:block">
+			<div className="lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start lg:gap-x-10">
+				{/* 데스크톱: sticky 목차. 좌측 예약 열이라 본문 폭을 잠식하지 않는다. */}
+				<aside className="sticky top-20 hidden max-h-[calc(100vh-6rem)] overflow-y-auto pb-8 lg:block">
 					<ManualToc headings={doc.headings} />
 				</aside>
-				<div className="min-w-0 max-w-3xl flex-1">
+				<div className="min-w-0 max-w-3xl">
 					<ManualBody markdown={doc.markdown} />
 				</div>
 			</div>

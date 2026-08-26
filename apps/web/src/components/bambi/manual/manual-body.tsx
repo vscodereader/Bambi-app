@@ -22,12 +22,12 @@ const textOf = (node: ReactNode): string => {
 };
 
 // 오버라이드하면 streamdown 기본 컴포넌트가 통째로 대체되므로 필요한 타이포를 전부
-// 다시 얹는다. h2는 챕터 경계라 상단 구분선(border-t)과 넉넉한 여백으로 위계를 준다.
+// 다시 얹는다. h2는 챕터 경계라 넉넉한 상단 여백으로 위계를 준다(구분선 없이 공백만).
 // scroll-mt는 sticky 헤더(top-20) 아래로 앵커가 숨지 않게 하는 오프셋.
 function Heading2({ children }: { children?: ReactNode }) {
 	return (
 		<h2
-			className="mt-12 mb-4 scroll-mt-24 border-t pt-8 font-semibold text-2xl first:mt-0 first:border-t-0 first:pt-0"
+			className="mt-14 mb-5 scroll-mt-24 font-bold text-xl tracking-tight first:mt-0 md:text-2xl"
 			id={githubSlug(textOf(children))}
 		>
 			{children}
@@ -38,7 +38,7 @@ function Heading2({ children }: { children?: ReactNode }) {
 function Heading3({ children }: { children?: ReactNode }) {
 	return (
 		<h3
-			className="mt-8 mb-3 scroll-mt-24 font-semibold text-xl"
+			className="mt-10 mb-3 scroll-mt-24 font-semibold text-xl"
 			id={githubSlug(textOf(children))}
 		>
 			{children}
@@ -76,28 +76,52 @@ function Anchor({ children, href }: { children?: ReactNode; href?: string }) {
 	);
 }
 
-// 본문 단락·리스트는 행간(leading-7)과 상하 여백을 키워 긴 매뉴얼의 가독성을 높인다.
+// 본문 단락·리스트는 행간(leading-8)과 상하 여백을 키워 긴 매뉴얼의 가독성을 높인다.
 function Paragraph({ children }: { children?: ReactNode }) {
-	return <p className="my-4 leading-7">{children}</p>;
+	return <p className="my-5 leading-7 sm:leading-8">{children}</p>;
 }
 
 function UnorderedList({ children }: { children?: ReactNode }) {
-	return <ul className="my-4 list-disc pl-6">{children}</ul>;
+	return <ul className="my-5 list-disc pl-6">{children}</ul>;
 }
 
 function OrderedList({ children }: { children?: ReactNode }) {
-	return <ol className="my-4 list-decimal pl-6">{children}</ol>;
+	return <ol className="my-5 list-decimal pl-6">{children}</ol>;
 }
 
 function ListItem({ children }: { children?: ReactNode }) {
-	return <li className="my-2 leading-7">{children}</li>;
+	return <li className="my-2 leading-7 sm:leading-8">{children}</li>;
 }
 
-// 매뉴얼의 > 블록은 전부 주의·팁 성격이라 콜아웃 박스로 렌더한다.
-// 내부 단락의 상하 여백은 박스 안 gap으로 대체한다.
+// > 블록은 코럴 라벨을 앞세운 라벨형 플레인 텍스트로 렌더한다(박스·배경·좌측보더
+// 없이 여백으로만 분리). 라벨은 렌더러가 첫 텍스트를 보고 고른다:
+// - 본문이 이미 "참고:"/"참고 "로 시작하면 라벨을 얹지 않는다(이중 "참고" 방지).
+// - 문서 메타("최종 갱신 …") 라인도 라벨 없이 문단만 둔다.
+// - 되돌릴 수 없는 경고(⚠)는 성격이 달라 "주의"로 세운다.
+// - 그 밖의 팁·안내 블록은 "참고".
+function quoteLabel(children: ReactNode): string | null {
+	const text = textOf(children).trimStart();
+	if (text.startsWith("참고:") || text.startsWith("참고 ")) {
+		return null;
+	}
+	if (text.startsWith("최종 갱신")) {
+		return null;
+	}
+	if (text.startsWith("⚠")) {
+		return "주의";
+	}
+	return "참고";
+}
+
 function Blockquote({ children }: { children?: ReactNode }) {
+	const label = quoteLabel(children);
 	return (
-		<blockquote className="my-4 flex flex-col gap-2 rounded-md border-primary border-l-4 bg-muted/50 px-4 py-3 [&_p]:my-0">
+		<blockquote className="my-6 flex flex-col gap-2 [&_p]:my-0 [&_p]:leading-7 sm:[&_p]:leading-8">
+			{label ? (
+				<span className="font-bold text-primary text-sm tracking-wide">
+					{label}
+				</span>
+			) : null}
 			{children}
 		</blockquote>
 	);
