@@ -156,6 +156,12 @@ const restoreTopicAs = (userId: string) =>
 		path: ["bambi", "crawler", "restoreTopic"],
 	});
 
+const hardDeleteTopicAs = (userId: string) =>
+	createProcedureClient(crawlerRouter.hardDeleteTopic, {
+		context: createContextForUser(userId),
+		path: ["bambi", "crawler", "hardDeleteTopic"],
+	});
+
 const listTopicsAs = (userId: string) =>
 	createProcedureClient(crawlerRouter.listTopics, {
 		context: createContextForUser(userId),
@@ -413,6 +419,41 @@ describe("crawler 커뮤니티 글 삭제·복구", () => {
 			expect(liveOnly.items.some((row) => row.id === fixture.topicId)).toBe(
 				false
 			);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	// 완전 삭제는 소프트 삭제를 거친(removedAt이 선) 행만 지운다 — 행이 실제로 사라져야 하고,
+	// 톰스톤도 함께 사라진다.
+	it("removedAt이 선 토픽을 완전 삭제하면 DB에서 행이 사라진다", async () => {
+		const fixture = await createFixture();
+
+		try {
+			await removeTopicAs(fixture.adminUserId)({ id: fixture.topicId });
+
+			const deleted = await hardDeleteTopicAs(fixture.adminUserId)({
+				id: fixture.topicId,
+			});
+
+			expect(deleted.id).toBe(fixture.topicId);
+			// 행이 사라졌으면 removedAt 조회도 아무것도 못 읽는다.
+			expect(await readTopicRemovedAt(fixture.topicId)).toBeUndefined();
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	// removedAt이 비어 있는 행에 완전 삭제를 걸면 지우지 않는다 — 목록에서 바로 DELETE되는 사고를 막는다.
+	it("removedAt이 없는 토픽에 완전 삭제하면 NOT_FOUND + 행 잔존", async () => {
+		const fixture = await createFixture();
+
+		try {
+			await expect(
+				hardDeleteTopicAs(fixture.adminUserId)({ id: fixture.topicId })
+			).rejects.toMatchObject({ code: "NOT_FOUND" });
+			// 행이 남아 있어야 한다 — removedAt은 여전히 비어 있다.
+			expect(await readTopicRemovedAt(fixture.topicId)).toBeNull();
 		} finally {
 			await cleanupFixture(fixture);
 		}

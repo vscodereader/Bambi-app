@@ -50,7 +50,13 @@ import {
 } from "@bambi-app/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InfoIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
-import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import {
+	type FormEvent,
+	type ReactNode,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { toast } from "sonner";
 import {
 	CrawledCommunityTopicsCard,
@@ -448,55 +454,54 @@ function IndustryReviewCard() {
 	);
 }
 
-export default function ModeratorCrawlerPage() {
-	const queryClient = useQueryClient();
-
+// 즉시 수집·스케줄러 두 카드가 같은 getSettings 쿼리(캐시 공유)에서 수집 대상 종류·구현
+// 여부를 똑같이 뽑아 쓰므로 훅으로 묶었다. 종류 선택 state는 두 카드가 각각 따로 들고,
+// 이 훅은 목록·판정만 준다.
+function useCrawlTargets() {
 	const settingsQuery = useQuery(orpc.bambi.crawler.getSettings.queryOptions());
-	const runsQuery = useQuery({
-		...orpc.bambi.crawler.listRuns.queryOptions(),
-		// 진행 중 회차가 있으면 5초마다 다시 불러 상태·집계를 따라잡고, 끝나면 폴링을 멈춘다.
-		refetchInterval: (query) =>
-			query.state.data?.some((run) => run.status === "running") ? 5000 : false,
-	});
-	// 회차가 돌면 현황 숫자(신규·전환 등)도 같이 움직이므로 현황도 같은 주기로 따라 돈다.
-	const hasRunningRun = runsQuery.data?.some((run) => run.status === "running");
-	const summaryQuery = useQuery({
-		...orpc.bambi.crawler.getSummary.queryOptions(),
-		refetchInterval: hasRunningRun ? 5000 : undefined,
-	});
+	const data = settingsQuery.data;
+	// 수집 대상이 제공하는 데이터 종류(퀸알바=공고·커뮤니티). 종류 선택기가 이 목록을 그린다.
+	const availableTypes = (
+		data?.availableTargets ?? [
+			{ contentType: "job_post" as const, site: SOURCE_SITE },
+		]
+	)
+		.filter((target) => target.site === SOURCE_SITE)
+		.map((target) => target.contentType);
+	// 파서가 구현된 조합. 선택은 되지만 미구현 조합은 "준비 중"으로 안내한다.
+	const implementedTargets = data?.implementedTargets ?? [
+		{ contentType: "job_post" as const, site: SOURCE_SITE },
+	];
+	const targetImplemented = (type: CrawlContentType) =>
+		implementedTargets.some(
+			(target) => target.site === SOURCE_SITE && target.contentType === type
+		);
+	return { availableTypes, settingsQuery, targetImplemented };
+}
 
-	const [enabled, setEnabled] = useState(false);
-	const [intervalHours, setIntervalHours] = useState("");
+// 즉시 수집: 지금 이 회차만 돌린다. 종류 선택은 이 회차에만 쓰이고 저장하지 않아 저장 버튼이
+// 없다(스케줄러 종류와 완전히 독립된 state).
+function ImmediateCollectionCard() {
+	const queryClient = useQueryClient();
+	const { availableTypes, settingsQuery, targetImplemented } =
+		useCrawlTargets();
 	const [contentType, setContentType] = useState<CrawlContentType>("job_post");
-	const [isClearRunsOpen, setIsClearRunsOpen] = useState(false);
 
-	// 저장된 값이 오면 폼에 채운다(주기가 미설정이면 빈 값 → 기본값 placeholder 노출).
+	// 저장된 종류가 오면 즉시 수집 토글의 초기값으로만 쓴다 — 딱 한 번만. 즉시 수집 성공이
+	// getSettings를 invalidate하는데, 그때마다 다시 채우면 방금 고른 선택이 저장값으로
+	// 되돌아간다(스케줄러 토글과 서로 갱신하지 않음).
+	const initializedRef = useRef(false);
 	useEffect(() => {
 		const data = settingsQuery.data;
-		if (!data) {
+		if (!data || initializedRef.current) {
 			return;
 		}
-		setEnabled(data.enabled);
-		setIntervalHours(
-			data.intervalHours === null ? "" : String(data.intervalHours)
-		);
+		initializedRef.current = true;
 		setContentType(data.contentType);
 	}, [settingsQuery.data]);
 
-	const saveMutation = useMutation(
-		orpc.bambi.crawler.updateSettings.mutationOptions({
-			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
-			onSuccess: async () => {
-				toast.success("수집 설정을 저장했어요.");
-				await queryClient.invalidateQueries({
-					queryKey: orpc.bambi.crawler.getSettings.queryKey(),
-				});
-			},
-		})
-	);
-
 	// 한 회차는 최대 10분쯤 걸려서 서버가 시작만 시키고 바로 응답한다. 그래서 여기서는
-	// 진행 상황을 기다리지 않고 회차 목록·현황을 다시 불러 화면에 반영한다.
+	// 진행 상황을 기다리지 않고 회차 목록·설정을 다시 불러 화면에 반영한다.
 	const runNowMutation = useMutation(
 		orpc.bambi.crawler.runNow.mutationOptions({
 			onError: (error) =>
@@ -528,6 +533,260 @@ export default function ModeratorCrawlerPage() {
 			},
 		})
 	);
+
+	const selectedTargetReady = targetImplemented(contentType);
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>즉시 수집</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<div className="flex flex-col gap-5">
+					<div className="flex flex-col gap-2">
+						<Label>수집 대상</Label>
+						<p className="m-0 font-medium text-sm">
+							{CRAWL_SOURCE_SITE_LABELS[SOURCE_SITE]}
+						</p>
+						<p className="m-0 text-muted-foreground text-xs">
+							현재 수집 대상은 퀸알바 한 곳입니다.
+						</p>
+					</div>
+
+					<div className="flex flex-col gap-2">
+						<Label>수집 데이터</Label>
+						<ToggleGroup
+							aria-label="즉시 수집할 데이터 종류"
+							className="w-full flex-wrap"
+							onValueChange={(value) => {
+								const next = value.at(-1);
+								if (next) {
+									setContentType(next as CrawlContentType);
+								}
+							}}
+							value={[contentType]}
+						>
+							{availableTypes.map((type) => (
+								<ToggleGroupItem key={type} value={type}>
+									{CRAWL_CONTENT_TYPE_LABELS[type]}
+									{targetImplemented(type) ? null : " (준비 중)"}
+								</ToggleGroupItem>
+							))}
+						</ToggleGroup>
+						<p className="m-0 text-muted-foreground text-xs">
+							공고는 채용 공고를, 커뮤니티는 게시판 글을 수집합니다. 한 번에 한
+							종류만 수집해요.
+						</p>
+						{selectedTargetReady ? null : (
+							<Alert>
+								<AlertDescription>
+									{CRAWL_SOURCE_SITE_LABELS[SOURCE_SITE]}{" "}
+									{CRAWL_CONTENT_TYPE_LABELS[contentType]} 수집기는 아직 준비
+									중이라 지금 수집할 수 없어요. 파서가 준비되면 자동으로
+									켜집니다.
+								</AlertDescription>
+							</Alert>
+						)}
+					</div>
+
+					<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+						<Button
+							disabled={
+								runNowMutation.isPending ||
+								settingsQuery.isLoading ||
+								!selectedTargetReady
+							}
+							// 저장을 거치지 않고 지금 화면에서 고른 수집 데이터로 한 회차를 돌린다.
+							onClick={() => runNowMutation.mutate({ contentType })}
+							type="button"
+						>
+							{runNowMutation.isPending ? "시작하는 중…" : "즉시 수집"}
+						</Button>
+					</div>
+					<p className="m-0 text-muted-foreground text-xs">
+						즉시 수집은 주기를 기다리지 않고 한 회차를 지금 시작합니다. 위에서
+						고른 수집 데이터는 이 회차에만 적용되고 저장되지 않아요. 스케줄러가
+						도는 종류는 아래 「수집 스케줄러」에서 따로 설정합니다.
+					</p>
+				</div>
+			</CardContent>
+		</Card>
+	);
+}
+
+// 수집 스케줄러: 저장은 스케줄러 설정(켜짐·주기·수집 데이터)만 바꾼다. 종류 선택은 즉시
+// 수집과 독립된 저장 대상 state.
+function CrawlSchedulerCard() {
+	const queryClient = useQueryClient();
+	const { availableTypes, settingsQuery, targetImplemented } =
+		useCrawlTargets();
+	const [enabled, setEnabled] = useState(false);
+	const [intervalHours, setIntervalHours] = useState("");
+	const [contentType, setContentType] = useState<CrawlContentType>("job_post");
+
+	// 저장된 값이 오면 폼에 채운다(주기가 미설정이면 빈 값 → 기본값 placeholder 노출).
+	useEffect(() => {
+		const data = settingsQuery.data;
+		if (!data) {
+			return;
+		}
+		setEnabled(data.enabled);
+		setIntervalHours(
+			data.intervalHours === null ? "" : String(data.intervalHours)
+		);
+		setContentType(data.contentType);
+	}, [settingsQuery.data]);
+
+	const saveMutation = useMutation(
+		orpc.bambi.crawler.updateSettings.mutationOptions({
+			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("수집 설정을 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.crawler.getSettings.queryKey(),
+				});
+			},
+		})
+	);
+
+	const onSubmit = (event: FormEvent) => {
+		event.preventDefault();
+
+		const trimmed = intervalHours.trim();
+		const parsed = trimmed === "" ? null : Number(trimmed);
+
+		if (parsed !== null && !Number.isInteger(parsed)) {
+			toast.error("수집 주기는 시간 단위 정수로 입력해 주세요.");
+			return;
+		}
+
+		saveMutation.mutate({
+			contentType,
+			enabled,
+			intervalHours: parsed,
+			sourceSite: SOURCE_SITE,
+		});
+	};
+
+	const defaultHours = settingsQuery.data?.defaultIntervalHours ?? 3;
+	const selectedTargetReady = targetImplemented(contentType);
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>수집 스케줄러</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<form className="flex flex-col gap-5" onSubmit={onSubmit}>
+					<div className="flex items-start justify-between gap-4">
+						<div className="flex flex-col gap-1">
+							<Label htmlFor="crawlEnabled">스케줄러</Label>
+							<p className="m-0 text-muted-foreground text-xs">
+								켜두면 아래 수집 주기마다 자동으로 한 회차가 돕니다. 꺼도 「즉시
+								수집」은 언제든 실행할 수 있어요. 기본값은 꺼짐이라 배포만으로는
+								자동 수집이 돌지 않습니다.
+							</p>
+						</div>
+						<Switch
+							checked={enabled}
+							disabled={settingsQuery.isLoading}
+							id="crawlEnabled"
+							onCheckedChange={setEnabled}
+						/>
+					</div>
+
+					<div className="flex flex-col gap-2">
+						<Label>수집 데이터</Label>
+						<ToggleGroup
+							aria-label="스케줄러가 수집할 데이터 종류"
+							className="w-full flex-wrap"
+							onValueChange={(value) => {
+								const next = value.at(-1);
+								if (next) {
+									setContentType(next as CrawlContentType);
+								}
+							}}
+							value={[contentType]}
+						>
+							{availableTypes.map((type) => (
+								<ToggleGroupItem key={type} value={type}>
+									{CRAWL_CONTENT_TYPE_LABELS[type]}
+									{targetImplemented(type) ? null : " (준비 중)"}
+								</ToggleGroupItem>
+							))}
+						</ToggleGroup>
+						<p className="m-0 text-muted-foreground text-xs">
+							공고는 채용 공고를, 커뮤니티는 게시판 글을 수집합니다. 한 번에 한
+							종류만 수집해요.
+						</p>
+						{selectedTargetReady ? null : (
+							<Alert>
+								<AlertDescription>
+									{CRAWL_SOURCE_SITE_LABELS[SOURCE_SITE]}{" "}
+									{CRAWL_CONTENT_TYPE_LABELS[contentType]} 수집기는 아직 준비
+									중이라, 선택해 저장해도 실제 수집은 돌지 않습니다. 파서가
+									준비되면 자동으로 켜집니다.
+								</AlertDescription>
+							</Alert>
+						)}
+					</div>
+
+					<div className="flex flex-col gap-2 md:max-w-xs">
+						<Label htmlFor="crawlIntervalHours">수집 주기(시간)</Label>
+						<Input
+							id="crawlIntervalHours"
+							inputMode="numeric"
+							onChange={(event) => setIntervalHours(event.target.value)}
+							placeholder={String(defaultHours)}
+							value={intervalHours}
+						/>
+						<p className="m-0 text-muted-foreground text-xs">
+							이 시간이 지날 때마다 선택한 사이트의 공개 공고를 한 회차
+							수집합니다. 비워두면 기본값({defaultHours}시간)을 사용해요. 마지막
+							실행 시각을 기준으로 판단하므로 서버를 재시작해도 주기가 밀리지
+							않습니다.
+						</p>
+						<p className="m-0 text-muted-foreground text-xs">
+							마지막 실행:{" "}
+							{formatCrawlTimestamp(settingsQuery.data?.lastRunAt ?? null)}
+						</p>
+					</div>
+
+					<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+						<Button
+							disabled={saveMutation.isPending || settingsQuery.isLoading}
+							type="submit"
+						>
+							{saveMutation.isPending ? "저장 중…" : "저장"}
+						</Button>
+					</div>
+					<p className="m-0 text-muted-foreground text-xs">
+						저장은 스케줄러 설정(켜짐·수집 주기·수집 데이터)만 바꿉니다. 즉시
+						수집에는 영향을 주지 않아요.
+					</p>
+				</form>
+			</CardContent>
+		</Card>
+	);
+}
+
+export default function ModeratorCrawlerPage() {
+	const queryClient = useQueryClient();
+
+	const runsQuery = useQuery({
+		...orpc.bambi.crawler.listRuns.queryOptions(),
+		// 진행 중 회차가 있으면 5초마다 다시 불러 상태·집계를 따라잡고, 끝나면 폴링을 멈춘다.
+		refetchInterval: (query) =>
+			query.state.data?.some((run) => run.status === "running") ? 5000 : false,
+	});
+	// 회차가 돌면 현황 숫자(신규·전환 등)도 같이 움직이므로 현황도 같은 주기로 따라 돈다.
+	const hasRunningRun = runsQuery.data?.some((run) => run.status === "running");
+	const summaryQuery = useQuery({
+		...orpc.bambi.crawler.getSummary.queryOptions(),
+		refetchInterval: hasRunningRun ? 5000 : undefined,
+	});
+
+	const [isClearRunsOpen, setIsClearRunsOpen] = useState(false);
 
 	// 회차 기록 비우기. 성공했을 때만 창을 닫는다 — 실패하면 열린 채로 남아 다시 누를 수 있어야 한다.
 	const clearRunsMutation = useMutation(
@@ -610,47 +869,10 @@ export default function ModeratorCrawlerPage() {
 		});
 	};
 
-	const onSubmit = (event: FormEvent) => {
-		event.preventDefault();
-
-		const trimmed = intervalHours.trim();
-		const parsed = trimmed === "" ? null : Number(trimmed);
-
-		if (parsed !== null && !Number.isInteger(parsed)) {
-			toast.error("수집 주기는 시간 단위 정수로 입력해 주세요.");
-			return;
-		}
-
-		saveMutation.mutate({
-			contentType,
-			enabled,
-			intervalHours: parsed,
-			sourceSite: SOURCE_SITE,
-		});
-	};
-
-	const defaultHours = settingsQuery.data?.defaultIntervalHours ?? 3;
 	const byStatus = summaryQuery.data?.byStatus ?? {};
 	const statusKeys = Object.keys(
 		CRAWLED_POST_STATUS_LABELS
 	) as (keyof typeof CRAWLED_POST_STATUS_LABELS)[];
-	// 수집 대상이 제공하는 데이터 종류(퀸알바=공고·커뮤니티). 종류 선택기가 이 목록을 그린다.
-	const availableTypes = (
-		settingsQuery.data?.availableTargets ?? [
-			{ contentType: "job_post" as const, site: SOURCE_SITE },
-		]
-	)
-		.filter((target) => target.site === SOURCE_SITE)
-		.map((target) => target.contentType);
-	// 파서가 구현된 조합. 선택은 되지만 미구현 조합은 "준비 중"으로 안내하고 즉시 수집을 잠근다.
-	const implementedTargets = settingsQuery.data?.implementedTargets ?? [
-		{ contentType: "job_post" as const, site: SOURCE_SITE },
-	];
-	const targetImplemented = (type: CrawlContentType) =>
-		implementedTargets.some(
-			(target) => target.site === SOURCE_SITE && target.contentType === type
-		);
-	const selectedTargetReady = targetImplemented(contentType);
 
 	// 현황 타일에서 해당 카드로 부드럽게 스크롤한다.
 	const scrollToCard = (id: string) => {
@@ -668,128 +890,9 @@ export default function ModeratorCrawlerPage() {
 				</p>
 			</div>
 
-			<Card>
-				<CardHeader>
-					<CardTitle>외부 공고 수집</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<form className="flex flex-col gap-5" onSubmit={onSubmit}>
-						<div className="flex flex-col gap-2">
-							<Label>수집 대상</Label>
-							<p className="m-0 font-medium text-sm">
-								{CRAWL_SOURCE_SITE_LABELS[SOURCE_SITE]}
-							</p>
-							<p className="m-0 text-muted-foreground text-xs">
-								현재 수집 대상은 퀸알바 한 곳입니다.
-							</p>
-						</div>
+			<ImmediateCollectionCard />
 
-						<div className="flex flex-col gap-2">
-							<Label>수집 데이터</Label>
-							<ToggleGroup
-								aria-label="수집 데이터 종류"
-								className="w-full flex-wrap"
-								onValueChange={(value) => {
-									const next = value.at(-1);
-									if (next) {
-										setContentType(next as CrawlContentType);
-									}
-								}}
-								value={[contentType]}
-							>
-								{availableTypes.map((type) => (
-									<ToggleGroupItem key={type} value={type}>
-										{CRAWL_CONTENT_TYPE_LABELS[type]}
-										{targetImplemented(type) ? null : " (준비 중)"}
-									</ToggleGroupItem>
-								))}
-							</ToggleGroup>
-							<p className="m-0 text-muted-foreground text-xs">
-								공고는 채용 공고를, 커뮤니티는 게시판 글을 수집합니다. 한 번에
-								한 종류만 수집해요.
-							</p>
-							{selectedTargetReady ? null : (
-								<Alert>
-									<AlertDescription>
-										{CRAWL_SOURCE_SITE_LABELS[SOURCE_SITE]}{" "}
-										{CRAWL_CONTENT_TYPE_LABELS[contentType]} 수집기는 아직 준비
-										중이라, 선택해 저장해도 실제 수집은 돌지 않습니다. 파서가
-										준비되면 자동으로 켜집니다.
-									</AlertDescription>
-								</Alert>
-							)}
-						</div>
-
-						<div className="flex items-start justify-between gap-4">
-							<div className="flex flex-col gap-1">
-								<Label htmlFor="crawlEnabled">수집 스케줄러</Label>
-								<p className="m-0 text-muted-foreground text-xs">
-									켜두면 아래 수집 주기마다 자동으로 한 회차가 돕니다. 꺼도
-									「즉시 수집」은 언제든 실행할 수 있어요. 기본값은 꺼짐이라
-									배포만으로는 자동 수집이 돌지 않습니다.
-								</p>
-							</div>
-							<Switch
-								checked={enabled}
-								disabled={settingsQuery.isLoading}
-								id="crawlEnabled"
-								onCheckedChange={setEnabled}
-							/>
-						</div>
-
-						<div className="flex flex-col gap-2 md:max-w-xs">
-							<Label htmlFor="crawlIntervalHours">수집 주기(시간)</Label>
-							<Input
-								id="crawlIntervalHours"
-								inputMode="numeric"
-								onChange={(event) => setIntervalHours(event.target.value)}
-								placeholder={String(defaultHours)}
-								value={intervalHours}
-							/>
-							<p className="m-0 text-muted-foreground text-xs">
-								이 시간이 지날 때마다 선택한 사이트의 공개 공고를 한 회차
-								수집합니다. 비워두면 기본값({defaultHours}시간)을 사용해요.
-								마지막 실행 시각을 기준으로 판단하므로 서버를 재시작해도 주기가
-								밀리지 않습니다.
-							</p>
-							<p className="m-0 text-muted-foreground text-xs">
-								마지막 실행:{" "}
-								{formatCrawlTimestamp(settingsQuery.data?.lastRunAt ?? null)}
-							</p>
-						</div>
-
-						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-							<Button
-								disabled={
-									runNowMutation.isPending ||
-									settingsQuery.isLoading ||
-									!selectedTargetReady
-								}
-								// 저장을 거치지 않고 지금 화면에서 고른 수집 데이터로 한 회차를 돌린다.
-								onClick={() => runNowMutation.mutate({ contentType })}
-								type="button"
-								variant="outline"
-							>
-								{runNowMutation.isPending ? "시작하는 중…" : "즉시 수집"}
-							</Button>
-							<Button
-								disabled={saveMutation.isPending || settingsQuery.isLoading}
-								type="submit"
-							>
-								{saveMutation.isPending ? "저장 중…" : "저장"}
-							</Button>
-						</div>
-						<p className="m-0 text-muted-foreground text-xs">
-							즉시 수집은 주기를 기다리지 않고 한 회차를 지금 시작합니다. 위에서
-							고른 수집 데이터(
-							{CRAWL_CONTENT_TYPE_LABELS[contentType]})로 바로 돌기 때문에
-							저장을 먼저 하지 않아도 돼요. 다만 이 선택은 이 회차에만 적용되고
-							저장되지 않으니, 스케줄러도 같은 종류로 돌리려면 「저장」을 눌러
-							주세요.
-						</p>
-					</form>
-				</CardContent>
-			</Card>
+			<CrawlSchedulerCard />
 
 			<Card>
 				<CardHeader>
