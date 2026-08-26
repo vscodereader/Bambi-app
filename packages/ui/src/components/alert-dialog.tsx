@@ -48,7 +48,7 @@ function AlertDialogContent({
 			<AlertDialogPrimitive.Popup
 				className={cn(
 					// max-h(dvh): 내용이 길면 팝업 내부만 스크롤해 상·하단 버튼이 뷰포트 밖으로 밀려나지 않는다.
-					"fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[420px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto overscroll-contain rounded-xl bg-card p-6 shadow-[var(--shadow-lg)] outline-none transition-[transform,opacity] duration-200 data-[ending-style]:scale-95 data-[starting-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none motion-reduce:data-[ending-style]:scale-100 motion-reduce:data-[starting-style]:scale-100",
+					"fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[420px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto overscroll-contain rounded-xl bg-card p-6 shadow-[var(--shadow-lg)] outline-none transition-[transform,opacity] duration-200 data-[ending-style]:scale-95 data-[starting-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none motion-reduce:data-[ending-style]:scale-100 motion-reduce:data-[starting-style]:scale-100 dark:border dark:border-border",
 					className
 				)}
 				data-slot="alert-dialog-content"

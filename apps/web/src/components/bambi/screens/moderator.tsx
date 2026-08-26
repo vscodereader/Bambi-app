@@ -947,7 +947,7 @@ function VerdictReasonSheet({
 			/>
 			{/* 선택지 5개 + 사유 입력칸이라 작은 화면에서는 시트가 뷰포트를 넘는다.
 			    안에서 스크롤시켜 확정 버튼이 화면 밖으로 밀리지 않게 한다. */}
-			<div className="relative max-h-[90vh] animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] overflow-y-auto rounded-t-2xl bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:animate-none lg:rounded-3xl lg:pt-6 lg:shadow-[var(--shadow-card)]">
+			<div className="relative max-h-[90vh] animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] overflow-y-auto rounded-t-2xl bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:animate-none lg:rounded-3xl lg:pt-6 lg:shadow-[var(--shadow-card)] dark:border dark:border-border">
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
 					{config.title}
 				</h2>
@@ -969,7 +969,12 @@ function VerdictReasonSheet({
 								onClick={() => setReason(r)}
 								type="button"
 							>
-								<span className="flex-1 font-semibold text-foreground text-sm">
+								<span
+									className={cn(
+										"flex-1 font-semibold text-sm",
+										on ? "text-coral-700" : "text-foreground"
+									)}
+								>
 									{r}
 								</span>
 								{on ? (

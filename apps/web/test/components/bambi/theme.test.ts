@@ -56,6 +56,22 @@ const employerScreenSource = readFileSync(
 	srcPath("components/bambi/screens/employer.tsx"),
 	"utf8"
 );
+const moderatorSource = readFileSync(
+	srcPath("components/bambi/screens/moderator.tsx"),
+	"utf8"
+);
+const dialogSource = readFileSync(
+	srcPath("../../../packages/ui/src/components/dialog.tsx"),
+	"utf8"
+);
+const alertDialogSource = readFileSync(
+	srcPath("../../../packages/ui/src/components/alert-dialog.tsx"),
+	"utf8"
+);
+const sheetSource = readFileSync(
+	srcPath("../../../packages/ui/src/components/sheet.tsx"),
+	"utf8"
+);
 
 describe("web theme policy", () => {
 	it("supports only persisted manual light and dark themes", () => {
@@ -141,6 +157,20 @@ describe("web theme policy", () => {
 		expect(responsiveShellSource).toContain(
 			'className="h-9 gap-1.5 px-3 font-bold dark:border-border"'
 		);
+	});
+
+	it("separates dark moderator modals from the page and keeps selected reasons readable", () => {
+		expect(moderatorSource).toContain("dark:border dark:border-border");
+		expect(moderatorSource).toContain(
+			'on ? "text-coral-700" : "text-foreground"'
+		);
+		for (const primitiveSource of [
+			dialogSource,
+			alertDialogSource,
+			sheetSource,
+		]) {
+			expect(primitiveSource).toContain("dark:border dark:border-border");
+		}
 	});
 
 	it("paints outline button backgrounds beneath their rounded borders", () => {

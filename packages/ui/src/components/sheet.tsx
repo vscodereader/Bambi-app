@@ -58,7 +58,7 @@ function SheetContent({
 			<SheetBackdrop />
 			<DialogPrimitive.Popup
 				className={cn(
-					"fixed inset-y-0 right-0 z-50 flex w-[380px] max-w-[88vw] flex-col overflow-y-auto bg-card p-5 shadow-[var(--shadow-lg)] transition-transform duration-200 data-[ending-style]:translate-x-full data-[starting-style]:translate-x-full",
+					"fixed inset-y-0 right-0 z-50 flex w-[380px] max-w-[88vw] flex-col overflow-y-auto bg-card p-5 shadow-[var(--shadow-lg)] transition-transform duration-200 data-[ending-style]:translate-x-full data-[starting-style]:translate-x-full dark:border dark:border-border",
 					className
 				)}
 				data-slot="sheet-content"
