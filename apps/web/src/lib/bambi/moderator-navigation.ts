@@ -28,7 +28,6 @@ export const MODERATOR_NAV_ITEMS: NavEntry[] = [
 		items: [
 			{ href: "/moderator/points/attendance" as Route, label: "출석 관리" },
 			{ href: "/moderator/points/grades" as Route, label: "등급 관리" },
-			{ href: "/moderator/points/members" as Route, label: "포인트 관리" },
 			{
 				href: "/moderator/points/settings" as Route,
 				label: "기타 포인트 설정",

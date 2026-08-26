@@ -24,7 +24,10 @@ import {
 	useLegalAdvisorNavGuard,
 } from "@/components/bambi/community-board-preview";
 import { PhoneVerifyDialog } from "@/components/bambi/phone-verify-dialog";
-import { COMMUNITY_ROOT_PATH } from "@/lib/bambi/community";
+import {
+	COMMUNITY_LAYOUT_SURFACE,
+	COMMUNITY_ROOT_PATH,
+} from "@/lib/bambi/community";
 import { trackNavigationClick } from "@/lib/bambi/ga-interaction";
 import { orpc } from "@/utils/orpc";
 
@@ -33,11 +36,7 @@ const COMMUNITY_BLOCKED_MESSAGE =
 const SUSPENDED_COMMUNITY_BLOCKED_MESSAGE = "차단된 유저는 확인이 불가합니다";
 
 // 섹션 헤더 — visual-job-exposure-sections의 ExposureSection 헤더 문법을 따른다.
-function SectionHeader({
-	onBlockedNavigate,
-}: {
-	onBlockedNavigate?: (href: string) => void;
-}) {
+function SectionHeader() {
 	return (
 		<div className="flex items-center justify-between">
 			<h2 className="m-0 flex items-center gap-2 font-extrabold text-base">
@@ -47,15 +46,11 @@ function SectionHeader({
 			<Link
 				className="flex items-center gap-1 font-semibold text-muted-foreground text-xs hover:text-foreground"
 				href={COMMUNITY_ROOT_PATH}
-				onClick={(event) => {
+				onClick={() => {
 					trackNavigationClick({
 						contentId: "community",
 						linkType: "section_more",
 					});
-					if (onBlockedNavigate) {
-						event.preventDefault();
-						onBlockedNavigate(COMMUNITY_ROOT_PATH);
-					}
 				}}
 			>
 				더보기
@@ -110,7 +105,10 @@ function CommunityContent({
 	onBlockedNavigate?: (href: string) => void;
 }) {
 	const overviewQuery = useQuery(
-		orpc.bambi.community.overview.queryOptions({ enabled: true })
+		orpc.bambi.community.overview.queryOptions({
+			enabled: true,
+			input: { surface: COMMUNITY_LAYOUT_SURFACE.main },
+		})
 	);
 
 	// 에러는 홈을 방해하지 않도록 섹션 전체를 조용히 숨긴다.
@@ -120,7 +118,7 @@ function CommunityContent({
 
 	return (
 		<section className="grid gap-2">
-			<SectionHeader onBlockedNavigate={onBlockedNavigate} />
+			<SectionHeader />
 			<CommunityOverviewGrid
 				analyticsSurface="seeker_home_community"
 				boards={overviewQuery.data?.boards ?? []}

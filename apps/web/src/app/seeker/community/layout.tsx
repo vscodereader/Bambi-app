@@ -16,5 +16,5 @@ export default async function SeekerCommunityLayout({
 	const visitor = await readVisitorState();
 	const body = <CommunityRails>{children}</CommunityRails>;
 
-	return visitor === "guest" ? <SeekerShell>{body}</SeekerShell> : body;
+	return visitor === "member" ? body : <SeekerShell>{body}</SeekerShell>;
 }

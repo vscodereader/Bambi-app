@@ -7,7 +7,9 @@ export interface GateInput {
 	pathname: string;
 }
 
-export type GateDecision = { type: "next" } | { type: "redirect"; to: string };
+export type GateDecision =
+	| { type: "next" }
+	| { type: "redirect"; to: string; permanent?: boolean };
 
 // 약관(/terms)·개인정보 처리방침(/privacy)은 로그인·게스트 여부와 무관하게
 // 누구나 열람할 수 있어야 한다(회원가입 동의 화면에서도 링크로 연다).
@@ -43,7 +45,30 @@ const isStaticFile = (pathname: string): boolean =>
 	STATIC_FILE_PATTERN.test(pathname);
 
 const next: GateDecision = { type: "next" };
-const redirect = (to: string): GateDecision => ({ type: "redirect", to });
+// permanent가 참일 때만 permanent 필드를 실는다 — 임시(307) 리다이렉트의 기존
+// toEqual 기대값에 없던 필드가 끼어들지 않게 한다.
+const redirect = (to: string, permanent?: boolean): GateDecision =>
+	permanent ? { type: "redirect", to, permanent } : { type: "redirect", to };
+
+// 세션이 있어야 열리는 비공개 최상위 라우트들. 여기 밑이 아닌 경로는 게이트가
+// 로그인으로 보내지 않고 next로 흘려, Next의 not-found가 진짜 404를 내게 한다.
+// 예전엔 아무 미존재 경로나 307→로그인 200이라 크롤러에 soft-404로 남았다.
+// 주의: 새 비공개 최상위 라우트를 추가하면 이 목록에도 추가해야 한다.
+// (공개 경로 /api·/bambi·/board·/jobs·/point-shop·/terms·/privacy는 위 isPublic이
+// 먼저 통과시키므로 여기 넣지 않는다.)
+const GATED_ROOTS = [
+	"ad-banner-editor",
+	"employer",
+	"manual",
+	"moderator",
+	"preview",
+	"seeker",
+	"support",
+];
+const isGated = (pathname: string): boolean =>
+	GATED_ROOTS.some(
+		(root) => pathname === `/${root}` || pathname.startsWith(`/${root}/`)
+	);
 
 // 인증 UI는 /seeker가 직접 그리는 전체 화면 게이트다. 목록 루트는 비로그인도
 // 통과시키되, ?auth= 쿼리가 붙으면 목록 대신 블러 배경 위 인증 카드를 렌더한다
@@ -76,16 +101,28 @@ export const resolveGate = ({
 	if (hasSession) {
 		return next;
 	}
+	// 세션 없는 방문자(anon·guest)의 루트는 canonical /seeker로 영구(308) 이동한다.
+	// 옛 anon "/"→"/seeker?auth=login"은 폐기했다 — 307+쿼리 로그인 URL이 canonical
+	// /seeker와 불일치해 감사에서 지적됐다.
+	if (pathname === "/") {
+		return redirect(SEEKER_ROOT, true);
+	}
 	// 세션 없는 방문자(anon·guest)에게 공통으로 열리는 유일한 화면.
 	if (pathname === SEEKER_ROOT) {
+		return next;
+	}
+	// 수다방 홈의 게시판 미리보기는 로그인 여부와 관계없이 공개한다. 게시판 목록·상세·
+	// 쓰기는 아래 기존 게이트와 API 권한 검사를 그대로 통과해야 한다.
+	if (pathname === COMMUNITY_ROOT) {
+		return next;
+	}
+	// 비공개 최상위 라우트 밑이 아니면 게이트 대상이 아니다 — next로 흘려 404를 낸다.
+	if (!isGated(pathname)) {
 		return next;
 	}
 	if (isGuest) {
 		if (isCommunityGuest && isCommunity(pathname)) {
 			return next;
-		}
-		if (pathname === "/") {
-			return redirect(SEEKER_ROOT);
 		}
 		return redirect(GUEST_BLOCKED_REDIRECT);
 	}

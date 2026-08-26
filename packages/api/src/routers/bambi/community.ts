@@ -2,9 +2,12 @@ import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
+	bambiCommentMilestone,
+	bambiCommentMilestoneAward,
 	bambiSiteSettings,
 	communityBoard,
 	communityBoardHomeLayout,
+	communityBoardLayoutSurface,
 	communityComment,
 	communityNoticeBoardPlacement,
 	communityPost,
@@ -19,10 +22,13 @@ import {
 	count,
 	desc,
 	eq,
+	gt,
 	gte,
 	ilike,
 	inArray,
 	isNull,
+	lt,
+	ne,
 	notInArray,
 	or,
 	type SQL,
@@ -59,11 +65,16 @@ import {
 	SECRET_AUTHOR_NAME,
 } from "../../services/bambi-community-authz";
 import {
+	type CommunityNavigationCandidate,
+	pickCommunityNavigationNeighbor,
+} from "../../services/bambi-community-navigation";
+import {
 	hashCommunityPassword,
 	verifyCommunityPassword,
 } from "../../services/bambi-community-password";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
+import { pingCommunityPost } from "../../services/bambi-indexnow";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
 import {
 	JOB_POST_IMAGE_MAX_BYTES,
@@ -71,12 +82,15 @@ import {
 	validateJobPostImageUpload,
 } from "../../services/bambi-job-media-policy";
 import {
+	awardCommentMilestones,
 	type GradeBadge,
 	getBoardContentPoints,
+	getCommentBonusSettings,
 	loadGradeBadges,
 	POINT_REASONS,
 	reconcileContentPoints,
 	resolveCommentAward,
+	rollCommentBonus,
 } from "../../services/bambi-member-points";
 import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
 import {
@@ -105,6 +119,9 @@ const COMMENTS_CAP = 200;
 // 존재·활성·쓰기 가능 여부는 핸들러의 assertBoard가 DB를 보고 판정한다(운영자가
 // 게시판을 추가할 때마다 zod enum을 고치고 배포해야 하던 구조를 걷어냈다).
 const boardKeySchema = z.string().trim().min(1).max(40);
+const overviewInput = z.object({
+	surface: z.enum(communityBoardLayoutSurface.enumValues),
+});
 
 // 저장 게시판이 아닌 가상 큐레이션. 읽기 경로에서만 허용한다(글은 여기에 못 쓴다).
 const BEST_BOARD = "best";
@@ -147,6 +164,13 @@ const listPostsInput = z.object({
 	q: z.string().trim().max(50).optional(),
 	showEmployer: z.boolean().default(false),
 	showPromotion: z.boolean().default(false),
+});
+
+const postNavigationInput = z.object({
+	board: boardKeySchema,
+	currentId: z.uuid(),
+	publicView: z.boolean().default(false),
+	source: z.enum(["native", "crawled"]),
 });
 
 const postIdInput = z.object({
@@ -599,6 +623,38 @@ const buildBoardFilters = (board: string, windowStart: Date): SQL[] => {
 	];
 };
 
+// 상세의 이전글·다음글은 목록의 공지 우선/추천수 우선이 아니라 등록시간 총순서만 쓴다.
+// 다른 게시판에 교차 노출된 공지는 후보에서 제외하고, 공지 게시판에서만 공지끼리 찾는다.
+const buildNavigationBoardFilters = (
+	board: string,
+	windowStart: Date
+): SQL[] => {
+	if (board === BEST_BOARD) {
+		return buildBoardFilters(board, windowStart);
+	}
+	return [
+		eq(communityPost.status, "published"),
+		eq(communityPost.board, board),
+	];
+};
+
+type NavigationDirection = "next" | "previous";
+
+const navigationBoundary = (
+	columnCreatedAt: typeof communityPost.createdAt,
+	columnId: typeof communityPost.id,
+	currentCreatedAt: Date,
+	currentId: string,
+	direction: NavigationDirection
+): SQL => {
+	const compareCreatedAt = direction === "previous" ? lt : gt;
+	const compareId = direction === "previous" ? lt : gt;
+	return or(
+		compareCreatedAt(columnCreatedAt, currentCreatedAt),
+		and(eq(columnCreatedAt, currentCreatedAt), compareId(columnId, currentId))
+	) as SQL;
+};
+
 // 목록·count 쿼리에 동일하게 적용되는 필터 조건. 켜진 토글들의 합집합(OR)으로 좁히고,
 // 아무 토글도 없으면 조건 없음(전체)을 돌려준다.
 const buildListFilters = (
@@ -866,9 +922,21 @@ const selectVisibleCommentRows = async (target: SQL) => {
 			id: communityComment.id,
 			parentCommentId: communityComment.parentCommentId,
 			status: communityComment.status,
+			// 당첨 배지용(모든 열람자에게 공개). bonusPoints는 랜덤 보너스 확정액(불변),
+			// milestoneCommentCount는 이 댓글이 딴 전역 마일스톤 회차(award 조인, 없으면 null).
+			bonusPoints: communityComment.bonusPoints,
+			milestoneCommentCount: bambiCommentMilestone.commentCount,
 		})
 		.from(communityComment)
 		.leftJoin(user, eq(user.id, communityComment.authorUserId))
+		.leftJoin(
+			bambiCommentMilestoneAward,
+			eq(bambiCommentMilestoneAward.commentId, communityComment.id)
+		)
+		.leftJoin(
+			bambiCommentMilestone,
+			eq(bambiCommentMilestone.id, bambiCommentMilestoneAward.milestoneId)
+		)
 		.where(target)
 		.orderBy(asc(communityComment.createdAt))
 		.limit(COMMENTS_CAP);
@@ -1039,11 +1107,13 @@ const toCommentItems = (
 				authorName: null,
 				authorRole: null,
 				body: "",
+				bonusPoints: 0,
 				canDelete: false,
 				canEdit: false,
 				createdAt: row.createdAt,
 				id: row.id,
 				isDeleted: true,
+				milestoneCommentCount: null,
 				parentCommentId: row.parentCommentId,
 			};
 		}
@@ -1058,11 +1128,14 @@ const toCommentItems = (
 			authorName: row.authorGender ? SECRET_AUTHOR_NAME : policy.authorName,
 			authorRole: row.authorRole,
 			body: row.body,
+			// 당첨 배지(공개): 랜덤 보너스 확정액과 딴 마일스톤 회차. 숨김/삭제 댓글은 위에서 미노출.
+			bonusPoints: row.bonusPoints,
 			canDelete: policy.canDelete,
 			canEdit: policy.canEdit,
 			createdAt: row.createdAt,
 			id: row.id,
 			isDeleted: false,
+			milestoneCommentCount: row.milestoneCommentCount,
 			parentCommentId: row.parentCommentId,
 		};
 	});
@@ -1216,25 +1289,36 @@ const reconcileCommentPointsOnStatusChange = async (
 		board: string | null;
 		commentId: string;
 		currentAwarded: number;
+		// 보너스 축: 저장된 당첨액(불변)과 현재 반영 스냅샷.
+		bonusPoints: number;
+		bonusCurrentAwarded: number;
 		willVisible: boolean;
 	}
 ) => {
 	const { commentPoints } = args.willVisible
 		? await getBoardContentPoints(args.board ?? "")
 		: { commentPoints: 0 };
+	const baseTarget = resolveCommentAward(
+		args.authorUserId,
+		args.postAuthorUserId,
+		commentPoints
+	);
 	const nextAwarded = await reconcileContentPoints(tx, {
 		userId: args.authorUserId,
 		currentAwarded: args.currentAwarded,
-		targetAmount: resolveCommentAward(
-			args.authorUserId,
-			args.postAuthorUserId,
-			commentPoints
-		),
+		targetAmount: baseTarget,
 		reasons: POINT_REASONS.comment,
+	});
+	// 보너스는 base 적립이 살아 있을 때만 유지된다 — 노출 이탈이거나 base가 0이면 회수(target 0).
+	const nextBonusAwarded = await reconcileContentPoints(tx, {
+		userId: args.authorUserId,
+		currentAwarded: args.bonusCurrentAwarded,
+		targetAmount: args.willVisible && baseTarget > 0 ? args.bonusPoints : 0,
+		reasons: POINT_REASONS.commentBonus,
 	});
 	await tx
 		.update(communityComment)
-		.set({ pointsAwarded: nextAwarded })
+		.set({ pointsAwarded: nextAwarded, bonusPointsAwarded: nextBonusAwarded })
 		.where(eq(communityComment.id, args.commentId));
 };
 
@@ -1345,116 +1429,317 @@ export const communityRouter = {
 	// 게시판이 고정 6종이 아니게 되면서 응답도 고정 키 객체가 아니라 배열이다 — 운영자가
 	// 게시판을 늘리면 홈 미리보기에 자동으로 따라 붙는다. 순서는 best(가상, 선두) →
 	// 활성 게시판 sort_order asc.
-	overview: publicProcedure.handler(async ({ context }) => {
-		const profile = await findCommunityMember(context.session);
+	overview: publicProcedure
+		.input(overviewInput)
+		.handler(async ({ context, input }) => {
+			const profile = await findCommunityMember(context.session);
 
-		const windowStart = bestWindowStart();
-		// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
-		const [communityFeedOn, bestIcon, boards, homeLayout] = await Promise.all([
-			isCrawledCommunityFeedEnabled(),
-			getBestBoardIcon(),
-			db
-				.select({
-					description: communityBoard.description,
-					icon: communityBoard.icon,
-					key: communityBoard.key,
-					label: communityBoard.label,
-					slug: communityBoard.slug,
-				})
-				.from(communityBoard)
-				.where(eq(communityBoard.isActive, true))
-				.orderBy(asc(communityBoard.sortOrder)),
-			db
-				.select({
-					boardKey: communityBoardHomeLayout.boardKey,
-					position: communityBoardHomeLayout.position,
-					rowIndex: communityBoardHomeLayout.rowIndex,
-				})
-				.from(communityBoardHomeLayout)
-				.orderBy(
-					asc(communityBoardHomeLayout.rowIndex),
-					asc(communityBoardHomeLayout.position)
-				),
-		]);
-		const layoutByKey = new Map(
-			homeLayout.map((item) => [item.boardKey, item] as const)
-		);
-
-		// 법률 자문처럼 전 글이 잠긴 게시판도 같은 마스킹 규칙을 그대로 탄다
-		// (작성자·운영자·법률자문만 실제 제목을 본다).
-		const previews = [
-			{
-				description: BEST_BOARD_DESCRIPTION,
-				// 가상 게시판이라 DB 행이 없다 — 운영자 지정 아이콘은 site_settings에서 읽는다.
-				// 미지정(null)이면 기존 코럴 액센트 바 모양을 유지한다.
-				icon: bestIcon,
-				key: BEST_BOARD,
-				label: BEST_BOARD_LABEL,
-				position: layoutByKey.get(BEST_BOARD)?.position,
-				rowIndex: layoutByKey.get(BEST_BOARD)?.rowIndex,
-				slug: BEST_BOARD,
-			},
-			...boards.map((board) => ({
-				...board,
-				position: layoutByKey.get(board.key)?.position,
-				rowIndex: layoutByKey.get(board.key)?.rowIndex,
-			})),
-		]
-			.filter((board) => {
-				if (board.rowIndex === undefined || board.position === undefined) {
-					return false;
-				}
-				if (profile?.role === "job_seeker" && profile.gender === "male") {
-					return board.key === "notice" || board.key === "secret";
-				}
-				if (profile?.role === "legal_advisor") {
-					return (
-						board.key === "legal" ||
-						board.key === "secret" ||
-						(profile.gender === "male" && board.key === "notice")
-					);
-				}
-				return true;
-			})
-			.sort(
-				(left, right) =>
-					(left.rowIndex ?? 0) - (right.rowIndex ?? 0) ||
-					(left.position ?? 0) - (right.position ?? 0)
+			const windowStart = bestWindowStart();
+			// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
+			const [communityFeedOn, bestIcon, boards, homeLayout] = await Promise.all(
+				[
+					isCrawledCommunityFeedEnabled(),
+					getBestBoardIcon(),
+					db
+						.select({
+							description: communityBoard.description,
+							icon: communityBoard.icon,
+							key: communityBoard.key,
+							label: communityBoard.label,
+							slug: communityBoard.slug,
+						})
+						.from(communityBoard)
+						.where(eq(communityBoard.isActive, true))
+						.orderBy(asc(communityBoard.sortOrder)),
+					db
+						.select({
+							boardKey: communityBoardHomeLayout.boardKey,
+							position: communityBoardHomeLayout.position,
+							rowIndex: communityBoardHomeLayout.rowIndex,
+						})
+						.from(communityBoardHomeLayout)
+						.where(eq(communityBoardHomeLayout.surface, input.surface))
+						.orderBy(
+							asc(communityBoardHomeLayout.rowIndex),
+							asc(communityBoardHomeLayout.position)
+						),
+				]
+			);
+			const layoutByKey = new Map(
+				homeLayout.map((item) => [item.boardKey, item] as const)
 			);
 
-		const postsPerBoard = await Promise.all(
-			previews.map((board) =>
-				board.key === CRAWLED_COMMUNITY_BOARD && communityFeedOn
-					? selectWorkTalkFeedUnion({
-							limit: OVERVIEW_LIMIT,
-							nativeFilters: [eq(communityPost.board, CRAWLED_COMMUNITY_BOARD)],
-							offset: 0,
-							windowStart,
-						})
-					: selectBoardPosts(board.key, {
-							filters:
-								board.key === BEST_BOARD
-									? []
-									: [eq(communityPost.board, board.key)],
-							limit: OVERVIEW_LIMIT,
-							windowStart,
-						})
-			)
-		);
+			// 법률 자문처럼 전 글이 잠긴 게시판도 같은 마스킹 규칙을 그대로 탄다
+			// (작성자·운영자·법률자문만 실제 제목을 본다).
+			const previews = [
+				{
+					description: BEST_BOARD_DESCRIPTION,
+					// 가상 게시판이라 DB 행이 없다 — 운영자 지정 아이콘은 site_settings에서 읽는다.
+					// 미지정(null)이면 기존 코럴 액센트 바 모양을 유지한다.
+					icon: bestIcon,
+					key: BEST_BOARD,
+					label: BEST_BOARD_LABEL,
+					position: layoutByKey.get(BEST_BOARD)?.position,
+					rowIndex: layoutByKey.get(BEST_BOARD)?.rowIndex,
+					slug: BEST_BOARD,
+				},
+				...boards.map((board) => ({
+					...board,
+					position: layoutByKey.get(board.key)?.position,
+					rowIndex: layoutByKey.get(board.key)?.rowIndex,
+				})),
+			]
+				.filter((board) => {
+					if (board.rowIndex === undefined || board.position === undefined) {
+						return false;
+					}
+					if (profile?.role === "job_seeker" && profile.gender === "male") {
+						return board.key === "notice" || board.key === "secret";
+					}
+					if (profile?.role === "legal_advisor") {
+						return (
+							board.key === "legal" ||
+							board.key === "secret" ||
+							(profile.gender === "male" && board.key === "notice")
+						);
+					}
+					return true;
+				})
+				.sort(
+					(left, right) =>
+						(left.rowIndex ?? 0) - (right.rowIndex ?? 0) ||
+						(left.position ?? 0) - (right.position ?? 0)
+				);
 
-		return {
-			boards: previews.map((board, index) => ({
-				...board,
-				position: board.position ?? 0,
-				rowIndex: board.rowIndex ?? 0,
-				// 홈 미리보기(요약)는 등급 뱃지를 싣지 않는다 — 게시판마다 배치 조회를 더하지
-				// 않는다. 등급은 목록·상세에서만 노출한다.
-				posts: maskLockedSummaries(postsPerBoard[index] ?? [], profile).map(
-					(post) => toPublicSummary(post)
-				),
-			})),
-		};
-	}),
+			const postsPerBoard = await Promise.all(
+				previews.map((board) =>
+					board.key === CRAWLED_COMMUNITY_BOARD && communityFeedOn
+						? selectWorkTalkFeedUnion({
+								limit: OVERVIEW_LIMIT,
+								nativeFilters: [
+									eq(communityPost.board, CRAWLED_COMMUNITY_BOARD),
+								],
+								offset: 0,
+								windowStart,
+							})
+						: selectBoardPosts(board.key, {
+								filters:
+									board.key === BEST_BOARD
+										? []
+										: [eq(communityPost.board, board.key)],
+								limit: OVERVIEW_LIMIT,
+								windowStart,
+							})
+				)
+			);
+
+			return {
+				boards: previews.map((board, index) => ({
+					...board,
+					position: board.position ?? 0,
+					rowIndex: board.rowIndex ?? 0,
+					// 홈 미리보기(요약)는 등급 뱃지를 싣지 않는다 — 게시판마다 배치 조회를 더하지
+					// 않는다. 등급은 목록·상세에서만 노출한다.
+					posts: maskLockedSummaries(postsPerBoard[index] ?? [], profile).map(
+						(post) => toPublicSummary(post)
+					),
+				})),
+			};
+		}),
+
+	getPostNavigation: publicProcedure
+		.input(postNavigationInput)
+		.handler(async ({ context, input }) => {
+			await assertBoard(input.board, { allowBest: true });
+			if (
+				input.publicView &&
+				(!isPublicBoard(input.board) || input.source !== "native")
+			) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "게시글을 찾을 수 없습니다.",
+				});
+			}
+			const actor = input.publicView
+				? null
+				: await resolveCommunityReaderForBoard(context, input.board);
+			const profile = actor?.kind === "member" ? actor.profile : null;
+			if (!input.publicView) {
+				assertLegalAdvisorBoardScope(profile, input.board);
+			}
+			const windowStart = bestWindowStart();
+
+			let currentCreatedAt: Date;
+			if (input.source === "native") {
+				const current = await findPublishedPost(input.currentId);
+				if (input.publicView && current.isLocked) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "게시글을 찾을 수 없습니다.",
+					});
+				}
+				currentCreatedAt = current.createdAt;
+			} else {
+				if (
+					input.board !== CRAWLED_COMMUNITY_BOARD ||
+					!(await isCrawledCommunityFeedEnabled())
+				) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "게시글을 찾을 수 없습니다.",
+					});
+				}
+				const [current] = await db
+					.select({ createdAt: crawledCommunityTopic.sourcePostedAt })
+					.from(crawledCommunityTopic)
+					.where(
+						and(
+							eq(crawledCommunityTopic.id, input.currentId),
+							...crawledTopicFeedFilters(windowStart)
+						)
+					)
+					.limit(1);
+				if (!current?.createdAt) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "게시글을 찾을 수 없습니다.",
+					});
+				}
+				currentCreatedAt = current.createdAt;
+			}
+
+			const selectNativeCandidate = async (
+				direction: NavigationDirection
+			): Promise<CommunityNavigationCandidate | null> => {
+				const [candidate] = await db
+					.select(postSummarySelection)
+					.from(communityPost)
+					.where(
+						and(
+							...buildNavigationBoardFilters(input.board, windowStart),
+							ne(communityPost.id, input.currentId),
+							...(input.publicView ? [eq(communityPost.isLocked, false)] : []),
+							navigationBoundary(
+								communityPost.createdAt,
+								communityPost.id,
+								currentCreatedAt,
+								input.currentId,
+								direction
+							)
+						)
+					)
+					.orderBy(
+						direction === "previous"
+							? desc(communityPost.createdAt)
+							: asc(communityPost.createdAt),
+						direction === "previous"
+							? desc(communityPost.id)
+							: asc(communityPost.id)
+					)
+					.limit(1);
+				if (!candidate) {
+					return null;
+				}
+				const [masked] = maskLockedSummaries([candidate], profile);
+				return masked
+					? {
+							boardKey: masked.board,
+							createdAt: masked.createdAt,
+							id: masked.id,
+							source: "native",
+							title: masked.title,
+						}
+					: null;
+			};
+
+			const includeCrawled =
+				!input.publicView &&
+				input.board === CRAWLED_COMMUNITY_BOARD &&
+				(await isCrawledCommunityFeedEnabled());
+			const selectCrawledCandidate = async (
+				direction: NavigationDirection
+			): Promise<CommunityNavigationCandidate | null> => {
+				if (!includeCrawled) {
+					return null;
+				}
+				const compareCreatedAt = direction === "previous" ? lt : gt;
+				const compareId = direction === "previous" ? lt : gt;
+				const boundary = or(
+					compareCreatedAt(
+						crawledCommunityTopic.sourcePostedAt,
+						currentCreatedAt
+					),
+					and(
+						eq(crawledCommunityTopic.sourcePostedAt, currentCreatedAt),
+						compareId(crawledCommunityTopic.id, input.currentId)
+					)
+				) as SQL;
+				const [candidate] = await db
+					.select({
+						createdAt: crawledCommunityTopic.sourcePostedAt,
+						id: crawledCommunityTopic.id,
+						title: crawledCommunityTopic.title,
+					})
+					.from(crawledCommunityTopic)
+					.where(
+						and(
+							...crawledTopicFeedFilters(windowStart),
+							ne(crawledCommunityTopic.id, input.currentId),
+							boundary
+						)
+					)
+					.orderBy(
+						direction === "previous"
+							? desc(crawledCommunityTopic.sourcePostedAt)
+							: asc(crawledCommunityTopic.sourcePostedAt),
+						direction === "previous"
+							? desc(crawledCommunityTopic.id)
+							: asc(crawledCommunityTopic.id)
+					)
+					.limit(1);
+				return candidate?.createdAt
+					? {
+							boardKey: CRAWLED_COMMUNITY_BOARD,
+							createdAt: candidate.createdAt,
+							id: candidate.id,
+							source: "crawled",
+							title: candidate.title,
+						}
+					: null;
+			};
+
+			const [nativePrevious, nativeNext, crawledPrevious, crawledNext] =
+				await Promise.all([
+					selectNativeCandidate("previous"),
+					selectNativeCandidate("next"),
+					selectCrawledCandidate("previous"),
+					selectCrawledCandidate("next"),
+				]);
+			const previous = pickCommunityNavigationNeighbor(
+				[nativePrevious, crawledPrevious],
+				"previous"
+			);
+			const next = pickCommunityNavigationNeighbor(
+				[nativeNext, crawledNext],
+				"next"
+			);
+			const boardKeys = [
+				...new Set([previous?.boardKey, next?.boardKey]),
+			].filter((key): key is string => Boolean(key));
+			const boardRows =
+				boardKeys.length > 0
+					? await db
+							.select({ key: communityBoard.key, slug: communityBoard.slug })
+							.from(communityBoard)
+							.where(inArray(communityBoard.key, boardKeys))
+					: [];
+			const slugs = new Map(boardRows.map((row) => [row.key, row.slug]));
+			const toOutput = (candidate?: CommunityNavigationCandidate) =>
+				candidate
+					? {
+							...candidate,
+							boardSlug: slugs.get(candidate.boardKey) ?? candidate.boardKey,
+						}
+					: null;
+
+			return { next: toOutput(next), previous: toOutput(previous) };
+		}),
 
 	// 비로그인 공개 목록(SEO). 공개 보드(PUBLIC_COMMUNITY_BOARDS)의 published 글만,
 	// 필터·검색·내 글 없이 최신순으로 내려준다. 비밀글은 마스킹이 아니라 아예 뺀다 —
@@ -1544,9 +1829,13 @@ export const communityRouter = {
 							: null,
 					authorRole: row.status === "published" ? row.authorRole : null,
 					body: row.status === "published" ? row.body : "",
+					// 당첨 배지(공개) — 숨김/삭제 댓글은 노출하지 않는다(위 렌더 정책과 동일).
+					bonusPoints: row.status === "published" ? row.bonusPoints : 0,
 					createdAt: row.createdAt,
 					id: row.id,
 					isDeleted: row.status !== "published",
+					milestoneCommentCount:
+						row.status === "published" ? row.milestoneCommentCount : null,
 					parentCommentId: row.parentCommentId,
 				})),
 				createdAt: post.createdAt,
@@ -1864,7 +2153,7 @@ export const communityRouter = {
 			// 회원이고 게시판 적립 금액이 있으면 그만큼, 아니면 0(게스트·0포인트 게시판).
 			const target = authorUserId ? postPoints : 0;
 
-			let created: { board: string; id: string } | undefined;
+			let created: { board: string; id: string; isLocked: boolean } | undefined;
 			try {
 				created = await db.transaction(async (tx) => {
 					const [row] = await tx
@@ -1891,7 +2180,11 @@ export const communityRouter = {
 							pointsAwarded: target,
 							title: input.title,
 						})
-						.returning({ board: communityPost.board, id: communityPost.id });
+						.returning({
+							board: communityPost.board,
+							id: communityPost.id,
+							isLocked: communityPost.isLocked,
+						});
 					if (row && noticeBoardKeys.length > 0) {
 						await tx.insert(communityNoticeBoardPlacement).values(
 							noticeBoardKeys.map((boardKey) => ({
@@ -1931,6 +2224,10 @@ export const communityRouter = {
 					targetType: "community_post",
 				});
 			}
+
+			// 새 글은 즉시 published라 공개 URL이 생긴다 — 공개 게시판이면 글 상세·목록 재색인
+			// 요청(비공개 게시판·행 없음이면 pingCommunityPost가 no-op).
+			pingCommunityPost(created);
 
 			return created;
 		}),
@@ -2042,6 +2339,7 @@ export const communityRouter = {
 					.returning({
 						board: communityPost.board,
 						id: communityPost.id,
+						isLocked: communityPost.isLocked,
 					});
 				if (noticeBoardKeys !== undefined) {
 					await tx
@@ -2058,6 +2356,9 @@ export const communityRouter = {
 				}
 				return row;
 			});
+
+			// 본문 수정은 상세 페이지 콘텐츠를 바꾼다 — 공개 게시판 글이면 재색인 요청.
+			pingCommunityPost(updated);
 
 			return updated;
 		}),
@@ -2094,6 +2395,14 @@ export const communityRouter = {
 					targetAmount: 0,
 					reasons: POINT_REASONS.post,
 				});
+			});
+
+			// 글이 목록·상세에서 사라졌으니(soft delete) 재색인을 요청한다 — 공개 게시판만.
+			// 잠금 글이면 공개 경로에 애초에 없던 글이라 pingCommunityPost가 no-op.
+			pingCommunityPost({
+				board: post.board,
+				id: post.id,
+				isLocked: post.isLocked,
 			});
 
 			return { id: post.id };
@@ -2318,6 +2627,12 @@ export const communityRouter = {
 				post.authorUserId,
 				commentPoints
 			);
+			// 보너스는 base 적립을 받는 회원 댓글만 롤한다 — 게스트·셀프 댓글·0포인트 게시판은
+			// base가 0이라 대상이 아니다(당첨액은 댓글 row에 불변으로 저장한다).
+			const bonusRoll =
+				commentAuthorUserId && commentTarget > 0
+					? rollCommentBonus(await getCommentBonusSettings(), commentTarget)
+					: 0;
 
 			const created = await db.transaction(async (tx) => {
 				await tx.execute(
@@ -2346,6 +2661,8 @@ export const communityRouter = {
 						passwordHash: guestPassword
 							? hashCommunityPassword(guestPassword)
 							: "",
+						// 당첨 확정액(불변). 실제 원장 반영액은 상한에 잘릴 수 있어 별도 스냅샷으로 둔다.
+						bonusPoints: bonusRoll,
 						pointsAwarded: commentTarget,
 						postId: input.postId,
 					})
@@ -2360,7 +2677,35 @@ export const communityRouter = {
 					targetAmount: commentTarget,
 					reasons: POINT_REASONS.comment,
 				});
-				return row;
+				// 보너스 당첨액을 원장에 반영하고 실반영액을 스냅샷·응답에 쓴다(상한 클립 반영).
+				const bonusPointsAwarded = await reconcileContentPoints(tx, {
+					userId: commentAuthorUserId,
+					currentAwarded: 0,
+					targetAmount: bonusRoll,
+					reasons: POINT_REASONS.commentBonus,
+				});
+				if (bonusPointsAwarded > 0 && row) {
+					await tx
+						.update(communityComment)
+						.set({ bonusPointsAwarded })
+						.where(eq(communityComment.id, row.id));
+				}
+				// 전역 선착 마일스톤: 사이트 전체 통산 댓글 수(작성자·status 무관)가 이번 댓글로
+				// 정확히 어느 회차와 일치하면 이 댓글을 단 회원이 가져간다. 게스트 댓글도 카운트에
+				// 들지만, 게스트가 정확히 회차에 안착하면 userId가 없어 수상자 없이 넘어간다(의도된 에지).
+				let milestones: Awaited<ReturnType<typeof awardCommentMilestones>> = [];
+				if (commentAuthorUserId && row) {
+					const [countRow] = await tx
+						.select({ value: count() })
+						.from(communityComment);
+					milestones = await awardCommentMilestones(
+						tx,
+						commentAuthorUserId,
+						countRow?.value ?? 0,
+						row.id
+					);
+				}
+				return { bonusPoints: bonusPointsAwarded, id: row?.id, milestones };
 			});
 
 			// 알림은 커밋 뒤에 보낸다 — 알림 실패로 댓글이 롤백되면 안 된다.
@@ -2371,6 +2716,27 @@ export const communityRouter = {
 				parentCommentId: input.parentCommentId ?? null,
 				post,
 			});
+
+			// 마일스톤 도달 알림(attendance.ts 패턴 — point_transaction, 커밋 뒤·best-effort).
+			if (commentAuthorUserId) {
+				for (const milestone of created.milestones) {
+					// 상한에 완전히 막혀 실반영 0인 마일스톤은 알림하지 않는다(지급 목록엔 남는다).
+					if (milestone.bonusPoints <= 0) {
+						continue;
+					}
+					await notifyBambiNotification({
+						actorUserId: commentAuthorUserId,
+						metadata: {
+							action: "comment_milestone",
+							amount: milestone.bonusPoints,
+							commentCount: milestone.commentCount,
+						},
+						recipientUserId: commentAuthorUserId,
+						targetId: created.id ?? input.postId,
+						targetType: "point_transaction",
+					});
+				}
+			}
 
 			return created;
 		}),
@@ -2500,7 +2866,12 @@ export const communityRouter = {
 			await db.transaction(async (tx) => {
 				await tx
 					.update(communityComment)
-					.set({ status: "deleted", pointsAwarded: 0, updatedAt: new Date() })
+					.set({
+						status: "deleted",
+						pointsAwarded: 0,
+						bonusPointsAwarded: 0,
+						updatedAt: new Date(),
+					})
 					.where(eq(communityComment.id, input.commentId));
 				// 수집 글 댓글(post_id null)은 줄일 캐시가 없다 — 수집 글의 댓글 수는 원본
 				// 값이고 상세가 두 원천을 합산한다.
@@ -2517,6 +2888,13 @@ export const communityRouter = {
 					currentAwarded: comment.pointsAwarded,
 					targetAmount: 0,
 					reasons: POINT_REASONS.comment,
+				});
+				// 보너스도 함께 회수한다(base와 나란히 — target 0).
+				await reconcileContentPoints(tx, {
+					userId: comment.authorUserId,
+					currentAwarded: comment.bonusPointsAwarded,
+					targetAmount: 0,
+					reasons: POINT_REASONS.commentBonus,
 				});
 			});
 
@@ -2572,6 +2950,8 @@ export const communityRouter = {
 						authorUserId: communityPost.authorUserId,
 						// 알림 딥링크(/seeker/community/{slug}/{postId})에 필요하다.
 						board: communityPost.board,
+						// 잠금 글은 공개 URL이 없어 재색인 핑 대상에서 뺀다.
+						isLocked: communityPost.isLocked,
 						pointsAwarded: communityPost.pointsAwarded,
 						status: communityPost.status,
 					})
@@ -2638,6 +3018,7 @@ export const communityRouter = {
 				return {
 					board: existing.board,
 					id: updated.id,
+					isLocked: existing.isLocked,
 					status: updated.status,
 				};
 			});
@@ -2649,6 +3030,14 @@ export const communityRouter = {
 				reason: input.reason,
 				targetId: input.postId,
 				targetType: "community_post",
+			});
+
+			// 운영자 숨김/복구는 공개 목록·상세 노출을 바꾼다 — 공개 게시판이면 재색인 요청.
+			// 잠금 글은 공개 경로에 노출되지 않으므로 pingCommunityPost가 no-op.
+			pingCommunityPost({
+				board: result.board,
+				id: result.id,
+				isLocked: result.isLocked,
 			});
 
 			return { id: result.id, status: result.status };
@@ -2670,6 +3059,8 @@ export const communityRouter = {
 						// 회수·재적립 대상과 금액 스냅샷.
 						authorUserId: communityComment.authorUserId,
 						board: communityPost.board,
+						bonusPoints: communityComment.bonusPoints,
+						bonusPointsAwarded: communityComment.bonusPointsAwarded,
 						crawledTopicId: communityComment.crawledTopicId,
 						postAuthorUserId: communityPost.authorUserId,
 						pointsAwarded: communityComment.pointsAwarded,
@@ -2738,6 +3129,8 @@ export const communityRouter = {
 						board: existing.board,
 						commentId: input.commentId,
 						currentAwarded: existing.pointsAwarded,
+						bonusPoints: existing.bonusPoints,
+						bonusCurrentAwarded: existing.bonusPointsAwarded,
 						willVisible,
 					});
 				}

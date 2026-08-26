@@ -1,5 +1,5 @@
 {
-  "id": "b652951d-91a2-4d06-b366-d46f96f3007c",
+  "id": "5a95aafb-6592-47dd-b9d2-853a9ffd0bf5",
   "prevId": "732934db-04f9-459b-ab05-7826ebd0b9c2",
   "version": "7",
   "dialect": "postgresql",
@@ -1532,27 +1532,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "source": {
-          "name": "source",
-          "type": "bambi_attendance_source",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'check_in'"
-        },
-        "streak_reward_eligible": {
-          "name": "streak_reward_eligible",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "restored_by_item_transaction_id": {
-          "name": "restored_by_item_transaction_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -1587,15 +1566,6 @@
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "bambi_attendance_restored_by_item_transaction_id_bambi_member_item_transaction_id_fk": {
-          "name": "bambi_attendance_restored_by_item_transaction_id_bambi_member_item_transaction_id_fk",
-          "tableFrom": "bambi_attendance",
-          "tableTo": "bambi_member_item_transaction",
-          "columnsFrom": ["restored_by_item_transaction_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -1604,125 +1574,6 @@
           "columns": ["user_id", "attended_on"]
         }
       },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.bambi_attendance_streak_claim": {
-      "name": "bambi_attendance_streak_claim",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "run_start_on": {
-          "name": "run_start_on",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "run_end_on": {
-          "name": "run_end_on",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "trigger_attended_on": {
-          "name": "trigger_attended_on",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "item_transaction_id": {
-          "name": "item_transaction_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "bambi_attendance_streak_claim_user_run_idx": {
-          "name": "bambi_attendance_streak_claim_user_run_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "run_start_on",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "run_end_on",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "bambi_attendance_streak_claim_item_transaction_uidx": {
-          "name": "bambi_attendance_streak_claim_item_transaction_uidx",
-          "columns": [
-            {
-              "expression": "item_transaction_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "bambi_attendance_streak_claim_user_id_user_id_fk": {
-          "name": "bambi_attendance_streak_claim_user_id_user_id_fk",
-          "tableFrom": "bambi_attendance_streak_claim",
-          "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "bambi_attendance_streak_claim_item_transaction_id_bambi_member_item_transaction_id_fk": {
-          "name": "bambi_attendance_streak_claim_item_transaction_id_bambi_member_item_transaction_id_fk",
-          "tableFrom": "bambi_attendance_streak_claim",
-          "tableTo": "bambi_member_item_transaction",
-          "columnsFrom": ["item_transaction_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -2070,181 +1921,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.bambi_member_item_transaction": {
-      "name": "bambi_member_item_transaction",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "item_type": {
-          "name": "item_type",
-          "type": "bambi_member_item_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "quantity": {
-          "name": "quantity",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reason": {
-          "name": "reason",
-          "type": "bambi_member_item_reason",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_key": {
-          "name": "external_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "point_shop_order_id": {
-          "name": "point_shop_order_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reference_type": {
-          "name": "reference_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reference_id": {
-          "name": "reference_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "balance_after": {
-          "name": "balance_after",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "bambi_member_item_transaction_user_type_created_idx": {
-          "name": "bambi_member_item_transaction_user_type_created_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "item_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "bambi_member_item_transaction_external_key_uidx": {
-          "name": "bambi_member_item_transaction_external_key_uidx",
-          "columns": [
-            {
-              "expression": "external_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "bambi_member_item_transaction_order_id_idx": {
-          "name": "bambi_member_item_transaction_order_id_idx",
-          "columns": [
-            {
-              "expression": "point_shop_order_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "bambi_member_item_transaction_user_id_user_id_fk": {
-          "name": "bambi_member_item_transaction_user_id_user_id_fk",
-          "tableFrom": "bambi_member_item_transaction",
-          "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "bambi_member_item_transaction_point_shop_order_id_bambi_point_shop_order_id_fk": {
-          "name": "bambi_member_item_transaction_point_shop_order_id_bambi_point_shop_order_id_fk",
-          "tableFrom": "bambi_member_item_transaction",
-          "tableTo": "bambi_point_shop_order",
-          "columnsFrom": ["point_shop_order_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "bambi_member_item_transaction_quantity_nonzero_ck": {
-          "name": "bambi_member_item_transaction_quantity_nonzero_ck",
-          "value": "\"bambi_member_item_transaction\".\"quantity\" <> 0"
-        },
-        "bambi_member_item_transaction_balance_nonnegative_ck": {
-          "name": "bambi_member_item_transaction_balance_nonnegative_ck",
-          "value": "\"bambi_member_item_transaction\".\"balance_after\" >= 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.bambi_notification": {
       "name": "bambi_notification",
       "schema": "",
@@ -2434,239 +2110,6 @@
         "bambi_notification_recipient_one_of_ck": {
           "name": "bambi_notification_recipient_one_of_ck",
           "value": "num_nonnulls(\"bambi_notification\".\"recipient_user_id\", \"bambi_notification\".\"recipient_role\") = 1"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.bambi_point_draw": {
-      "name": "bambi_point_draw",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "request_id": {
-          "name": "request_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "prize_id": {
-          "name": "prize_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "prize_points_snapshot": {
-          "name": "prize_points_snapshot",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "prize_weight_snapshot": {
-          "name": "prize_weight_snapshot",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "awarded_points": {
-          "name": "awarded_points",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ticket_transaction_id": {
-          "name": "ticket_transaction_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "point_transaction_id": {
-          "name": "point_transaction_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "bambi_point_draw_user_request_uidx": {
-          "name": "bambi_point_draw_user_request_uidx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "request_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "bambi_point_draw_ticket_transaction_uidx": {
-          "name": "bambi_point_draw_ticket_transaction_uidx",
-          "columns": [
-            {
-              "expression": "ticket_transaction_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "bambi_point_draw_point_transaction_uidx": {
-          "name": "bambi_point_draw_point_transaction_uidx",
-          "columns": [
-            {
-              "expression": "point_transaction_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "bambi_point_draw_user_id_user_id_fk": {
-          "name": "bambi_point_draw_user_id_user_id_fk",
-          "tableFrom": "bambi_point_draw",
-          "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "bambi_point_draw_prize_id_bambi_point_draw_prize_id_fk": {
-          "name": "bambi_point_draw_prize_id_bambi_point_draw_prize_id_fk",
-          "tableFrom": "bambi_point_draw",
-          "tableTo": "bambi_point_draw_prize",
-          "columnsFrom": ["prize_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "bambi_point_draw_ticket_transaction_id_bambi_member_item_transaction_id_fk": {
-          "name": "bambi_point_draw_ticket_transaction_id_bambi_member_item_transaction_id_fk",
-          "tableFrom": "bambi_point_draw",
-          "tableTo": "bambi_member_item_transaction",
-          "columnsFrom": ["ticket_transaction_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "bambi_point_draw_point_transaction_id_bambi_point_transaction_id_fk": {
-          "name": "bambi_point_draw_point_transaction_id_bambi_point_transaction_id_fk",
-          "tableFrom": "bambi_point_draw",
-          "tableTo": "bambi_point_transaction",
-          "columnsFrom": ["point_transaction_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.bambi_point_draw_prize": {
-      "name": "bambi_point_draw_prize",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "points": {
-          "name": "points",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "weight": {
-          "name": "weight",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "bambi_point_draw_prize_points_positive_ck": {
-          "name": "bambi_point_draw_prize_points_positive_ck",
-          "value": "\"bambi_point_draw_prize\".\"points\" > 0"
-        },
-        "bambi_point_draw_prize_weight_positive_ck": {
-          "name": "bambi_point_draw_prize_weight_positive_ck",
-          "value": "\"bambi_point_draw_prize\".\"weight\" > 0"
         }
       },
       "isRLSEnabled": false
@@ -2908,141 +2351,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.bambi_point_shop_category": {
-      "name": "bambi_point_shop_category",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "point_shop_category_kind",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'standard'"
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "bambi_point_shop_category_key_uidx": {
-          "name": "bambi_point_shop_category_key_uidx",
-          "columns": [
-            {
-              "expression": "key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.bambi_point_shop_featured_item": {
-      "name": "bambi_point_shop_featured_item",
-      "schema": "",
-      "columns": {
-        "item_id": {
-          "name": "item_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "position": {
-          "name": "position",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "bambi_point_shop_featured_item_position_uidx": {
-          "name": "bambi_point_shop_featured_item_position_uidx",
-          "columns": [
-            {
-              "expression": "position",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "bambi_point_shop_featured_item_item_id_bambi_point_shop_item_id_fk": {
-          "name": "bambi_point_shop_featured_item_item_id_bambi_point_shop_item_id_fk",
-          "tableFrom": "bambi_point_shop_featured_item",
-          "tableTo": "bambi_point_shop_item",
-          "columnsFrom": ["item_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.bambi_point_shop_item": {
       "name": "bambi_point_shop_item",
       "schema": "",
@@ -3091,12 +2399,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
-        },
-        "category_id": {
-          "name": "category_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
         },
         "benefit_type": {
           "name": "benefit_type",
@@ -3166,104 +2468,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "bambi_point_shop_item_category_id_bambi_point_shop_category_id_fk": {
-          "name": "bambi_point_shop_item_category_id_bambi_point_shop_category_id_fk",
-          "tableFrom": "bambi_point_shop_item",
-          "tableTo": "bambi_point_shop_category",
-          "columnsFrom": ["category_id"],
-          "columnsTo": ["id"],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.bambi_point_shop_layout_row": {
-      "name": "bambi_point_shop_layout_row",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "position": {
-          "name": "position",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "category_id": {
-          "name": "category_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "bambi_point_shop_layout_row_position_uidx": {
-          "name": "bambi_point_shop_layout_row_position_uidx",
-          "columns": [
-            {
-              "expression": "position",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "bambi_point_shop_layout_row_category_id_uidx": {
-          "name": "bambi_point_shop_layout_row_category_id_uidx",
-          "columns": [
-            {
-              "expression": "category_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "bambi_point_shop_layout_row_category_id_bambi_point_shop_category_id_fk": {
-          "name": "bambi_point_shop_layout_row_category_id_bambi_point_shop_category_id_fk",
-          "tableFrom": "bambi_point_shop_layout_row",
-          "tableTo": "bambi_point_shop_category",
-          "columnsFrom": ["category_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -3757,135 +2962,6 @@
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.bambi_review_draw_reward": {
-      "name": "bambi_review_draw_reward",
-      "schema": "",
-      "columns": {
-        "review_id": {
-          "name": "review_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "recipient_user_id": {
-          "name": "recipient_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "eligible_at": {
-          "name": "eligible_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "bambi_review_draw_reward_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "disqualified_reason": {
-          "name": "disqualified_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "item_transaction_id": {
-          "name": "item_transaction_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "processed_at": {
-          "name": "processed_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "bambi_review_draw_reward_status_eligible_idx": {
-          "name": "bambi_review_draw_reward_status_eligible_idx",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "eligible_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "bambi_review_draw_reward_item_transaction_uidx": {
-          "name": "bambi_review_draw_reward_item_transaction_uidx",
-          "columns": [
-            {
-              "expression": "item_transaction_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "bambi_review_draw_reward_review_id_review_id_fk": {
-          "name": "bambi_review_draw_reward_review_id_review_id_fk",
-          "tableFrom": "bambi_review_draw_reward",
-          "tableTo": "review",
-          "columnsFrom": ["review_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "bambi_review_draw_reward_recipient_user_id_user_id_fk": {
-          "name": "bambi_review_draw_reward_recipient_user_id_user_id_fk",
-          "tableFrom": "bambi_review_draw_reward",
-          "tableTo": "user",
-          "columnsFrom": ["recipient_user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "bambi_review_draw_reward_item_transaction_id_bambi_member_item_transaction_id_fk": {
-          "name": "bambi_review_draw_reward_item_transaction_id_bambi_member_item_transaction_id_fk",
-          "tableFrom": "bambi_review_draw_reward",
-          "tableTo": "bambi_member_item_transaction",
-          "columnsFrom": ["item_transaction_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -5205,12 +4281,19 @@
         "board_key": {
           "name": "board_key",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "row_index": {
           "name": "row_index",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "surface": {
+          "name": "surface",
+          "type": "community_board_layout_surface",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
@@ -5233,6 +4316,12 @@
           "name": "community_board_home_layout_row_position_uidx",
           "columns": [
             {
+              "expression": "surface",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
               "expression": "row_index",
               "isExpression": false,
               "asc": true,
@@ -5252,7 +4341,12 @@
         }
       },
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "community_board_home_layout_surface_board_key_pk": {
+          "name": "community_board_home_layout_surface_board_key_pk",
+          "columns": ["surface", "board_key"]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -10466,11 +9560,6 @@
       "schema": "public",
       "values": ["medal", "crown"]
     },
-    "public.bambi_attendance_source": {
-      "name": "bambi_attendance_source",
-      "schema": "public",
-      "values": ["check_in", "restore_ticket"]
-    },
     "public.bambi_gender": {
       "name": "bambi_gender",
       "schema": "public",
@@ -10480,28 +9569,6 @@
       "name": "bambi_legal_consent_document",
       "schema": "public",
       "values": ["terms_of_service", "privacy_policy"]
-    },
-    "public.bambi_member_item_reason": {
-      "name": "bambi_member_item_reason",
-      "schema": "public",
-      "values": [
-        "attendance_streak",
-        "employer_review_retained",
-        "point_shop_purchase",
-        "draw_use",
-        "attendance_restore_use",
-        "admin_adjustment"
-      ]
-    },
-    "public.bambi_member_item_type": {
-      "name": "bambi_member_item_type",
-      "schema": "public",
-      "values": ["draw_ticket", "attendance_restore_ticket"]
-    },
-    "public.bambi_review_draw_reward_status": {
-      "name": "bambi_review_draw_reward_status",
-      "schema": "public",
-      "values": ["pending", "awarded", "disqualified"]
     },
     "public.bambi_user_role": {
       "name": "bambi_user_role",
@@ -10517,6 +9584,11 @@
       "name": "chat_attachment_category",
       "schema": "public",
       "values": ["image", "pdf"]
+    },
+    "public.community_board_layout_surface": {
+      "name": "community_board_layout_surface",
+      "schema": "public",
+      "values": ["main", "community"]
     },
     "public.community_content_status": {
       "name": "community_content_status",
@@ -10711,15 +9783,8 @@
         "boost_manual_period",
         "boost_manual_count",
         "boost_auto_period",
-        "ad_extend",
-        "draw_ticket",
-        "attendance_restore_ticket"
+        "ad_extend"
       ]
-    },
-    "public.point_shop_category_kind": {
-      "name": "point_shop_category_kind",
-      "schema": "public",
-      "values": ["featured", "standard"]
     },
     "public.promotion_status": {
       "name": "promotion_status",

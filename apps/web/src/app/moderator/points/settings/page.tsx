@@ -16,21 +16,15 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { orpc } from "@/utils/orpc";
-
-interface BoardDraft {
-	commentPoints: string;
-	key: string;
-	label: string;
-	postPoints: string;
-}
+import { CommentBonusCard } from "./comment-bonus-card";
+import { CommentMilestoneSection } from "./comment-milestone-section";
 
 const parsePoints = (value: string): number | null =>
 	value.trim() === "" ? null : Number(value);
-const valid = (value: string, nullable = false): boolean =>
-	(nullable && value.trim() === "") ||
-	(Number.isInteger(Number(value)) && Number(value) >= 0);
-const validRotationHours = (value: string): boolean =>
-	Number.isInteger(Number(value)) && Number(value) > 0;
+const fieldValid = (value: string, min = 0, nullable = false): boolean =>
+	value.trim() === ""
+		? nullable
+		: Number.isInteger(Number(value)) && Number(value) >= min;
 const settingDraft = (value: null | number): string =>
 	value === null ? "" : String(value);
 
@@ -49,7 +43,6 @@ export default function ModeratorPointSettingsPage() {
 	const [specialRotationHours, setSpecialRotationHours] = useState("");
 	const [recommendedPointReward, setRecommendedPointReward] = useState("");
 	const [recommendedRotationHours, setRecommendedRotationHours] = useState("");
-	const [boards, setBoards] = useState<BoardDraft[]>([]);
 	useEffect(() => {
 		if (!query.data) {
 			return;
@@ -82,13 +75,6 @@ export default function ModeratorPointSettingsPage() {
 		setRecommendedRotationHours(
 			settingDraft(query.data.recommendedPointJobRotationHours)
 		);
-		setBoards(
-			query.data.boards.map((board) => ({
-				...board,
-				commentPoints: String(board.commentPoints),
-				postPoints: String(board.postPoints),
-			}))
-		);
 	}, [query.data]);
 	const globalMutation = useMutation(
 		orpc.bambi.pointSettings.saveAdmin.mutationOptions({
@@ -105,35 +91,19 @@ export default function ModeratorPointSettingsPage() {
 			},
 		})
 	);
-	const boardMutation = useMutation(
-		orpc.bambi.pointSettings.saveBoard.mutationOptions({
-			onError: (error) =>
-				toast.error(error.message || "게시판 포인트를 저장하지 못했어요."),
-			onSuccess: (saved) => {
-				toast.success("게시판 포인트를 저장했어요.");
-				setBoards((current) =>
-					current.map((board) =>
-						board.key === saved.key
-							? { ...board, postPoints: String(saved.postPoints) }
-							: board
-					)
-				);
-			},
-		})
-	);
 	const canSaveGlobal =
-		valid(signup) &&
-		valid(attendance) &&
-		valid(minimum, true) &&
-		valid(maximum, true) &&
-		valid(reviewWrite) &&
-		valid(reviewView) &&
-		valid(premiumPointReward, true) &&
-		validRotationHours(premiumRotationHours) &&
-		valid(specialPointReward, true) &&
-		validRotationHours(specialRotationHours) &&
-		valid(recommendedPointReward, true) &&
-		validRotationHours(recommendedRotationHours) &&
+		fieldValid(signup) &&
+		fieldValid(attendance) &&
+		fieldValid(minimum, 0, true) &&
+		fieldValid(maximum, 0, true) &&
+		fieldValid(reviewWrite) &&
+		fieldValid(reviewView) &&
+		fieldValid(premiumPointReward, 0, true) &&
+		fieldValid(premiumRotationHours, 1) &&
+		fieldValid(specialPointReward, 0, true) &&
+		fieldValid(specialRotationHours, 1) &&
+		fieldValid(recommendedPointReward, 0, true) &&
+		fieldValid(recommendedRotationHours, 1) &&
 		!globalMutation.isPending;
 	if (query.isError) {
 		return (
@@ -205,6 +175,7 @@ export default function ModeratorPointSettingsPage() {
 								hint="0이거나 비어 있으면 프리미엄 포인트 광고를 비활성화합니다."
 								id="premium-point-job-reward"
 								label="프리미엄 포인트"
+								nullable
 								onChange={setPremiumPointReward}
 								value={premiumPointReward}
 							/>
@@ -223,6 +194,7 @@ export default function ModeratorPointSettingsPage() {
 								hint="0이거나 비어 있으면 스페셜 포인트 광고를 비활성화합니다."
 								id="special-point-job-reward"
 								label="스페셜 포인트"
+								nullable
 								onChange={setSpecialPointReward}
 								value={specialPointReward}
 							/>
@@ -241,6 +213,7 @@ export default function ModeratorPointSettingsPage() {
 								hint="0이거나 비어 있으면 추천 포인트 광고를 비활성화합니다."
 								id="recommended-point-job-reward"
 								label="추천 포인트"
+								nullable
 								onChange={setRecommendedPointReward}
 								value={recommendedPointReward}
 							/>
@@ -255,85 +228,6 @@ export default function ModeratorPointSettingsPage() {
 						</div>
 					</AccordionContent>
 				</AccordionItem>
-				<AccordionItem
-					className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
-					value="board-points"
-				>
-					<AccordionTrigger className="bg-card px-4 py-4 font-bold hover:bg-muted/50">
-						게시판별 작성 포인트
-					</AccordionTrigger>
-					<AccordionContent className="px-0 pt-4 pb-0">
-						<Accordion className="divide-y" multiple>
-							{boards.map((board, index) => (
-								<AccordionItem key={board.key} value={board.key}>
-									<AccordionTrigger className="px-4 py-4 font-bold">
-										<span className="flex flex-col items-start gap-1">
-											<span>{board.label}</span>
-											<span className="font-normal text-muted-foreground text-xs">
-												{board.key}
-											</span>
-										</span>
-									</AccordionTrigger>
-									<AccordionContent className="grid gap-4 px-4 pb-4 md:grid-cols-2">
-										{board.key === "notice" ? null : (
-											<PointField
-												id={`${board.key}-post`}
-												label="글 작성"
-												onChange={(value) =>
-													setBoards((current) =>
-														current.map((item, itemIndex) =>
-															itemIndex === index
-																? { ...item, postPoints: value }
-																: item
-														)
-													)
-												}
-												value={board.postPoints}
-											/>
-										)}
-										<PointField
-											id={`${board.key}-comment`}
-											label="댓글 작성"
-											onChange={(value) =>
-												setBoards((current) =>
-													current.map((item, itemIndex) =>
-														itemIndex === index
-															? { ...item, commentPoints: value }
-															: item
-													)
-												)
-											}
-											value={board.commentPoints}
-										/>
-										<Button
-											className="md:col-span-2 md:ml-auto"
-											disabled={
-												!valid(board.commentPoints) ||
-												(board.key !== "notice" && !valid(board.postPoints)) ||
-												boardMutation.isPending
-											}
-											onClick={() =>
-												boardMutation.mutate({
-													commentPoints: Number(board.commentPoints),
-													key: board.key,
-													postPoints:
-														board.key === "notice"
-															? undefined
-															: Number(board.postPoints),
-												})
-											}
-										>
-											{boardMutation.isPending &&
-											boardMutation.variables?.key === board.key
-												? "저장 중"
-												: "저장"}
-										</Button>
-									</AccordionContent>
-								</AccordionItem>
-							))}
-						</Accordion>
-					</AccordionContent>
-				</AccordionItem>
 			</Accordion>
 			<section className="rounded-xl border p-4">
 				<h2 className="mb-4 font-bold text-lg">공고 결제 포인트 사용</h2>
@@ -342,6 +236,7 @@ export default function ModeratorPointSettingsPage() {
 						hint="비우거나 0으로 저장하면 공고 결제 포인트 사용을 중단합니다."
 						id="job-min-points"
 						label="공고 시 최소 사용 포인트"
+						nullable
 						onChange={setMinimum}
 						placeholder="사용 안 함"
 						value={minimum}
@@ -350,6 +245,7 @@ export default function ModeratorPointSettingsPage() {
 						hint="비우면 결제 예정 금액까지 사용할 수 있습니다."
 						id="job-max-points"
 						label="공고 시 최대 사용 포인트"
+						nullable
 						onChange={setMaximum}
 						placeholder="결제 예정 금액까지"
 						value={maximum}
@@ -380,6 +276,8 @@ export default function ModeratorPointSettingsPage() {
 			>
 				{globalMutation.isPending ? "저장 중" : "저장"}
 			</Button>
+			<CommentBonusCard />
+			<CommentMilestoneSection />
 		</main>
 	);
 }
@@ -390,6 +288,7 @@ function PointField({
 	id,
 	label,
 	min = 0,
+	nullable = false,
 	onChange,
 	placeholder,
 	suffix = "P",
@@ -400,16 +299,23 @@ function PointField({
 	id: string;
 	label: string;
 	min?: number;
+	nullable?: boolean;
 	onChange: (value: string) => void;
 	placeholder?: string;
 	suffix?: string;
 	value: string;
 }) {
+	const invalid = !fieldValid(value, min, nullable);
+	const errorMessage =
+		value.trim() === ""
+			? "값을 입력해주세요"
+			: `${min} 이상의 정수를 입력해주세요`;
 	return (
 		<div className={cn("flex flex-col gap-2", className)}>
 			<Label htmlFor={id}>{label}</Label>
 			<div className="flex items-center gap-2">
 				<Input
+					aria-invalid={invalid}
 					id={id}
 					inputMode="numeric"
 					min={min}
@@ -420,9 +326,12 @@ function PointField({
 				/>
 				<span className="shrink-0 whitespace-nowrap text-xs">{suffix}</span>
 			</div>
-			{hint ? (
-				<p className="m-0 text-muted-foreground text-xs">{hint}</p>
+			{invalid ? (
+				<p className="m-0 text-destructive text-xs">{errorMessage}</p>
 			) : null}
+			{invalid || !hint ? null : (
+				<p className="m-0 text-muted-foreground text-xs">{hint}</p>
+			)}
 		</div>
 	);
 }

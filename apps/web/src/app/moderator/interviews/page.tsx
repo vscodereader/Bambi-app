@@ -54,7 +54,7 @@ function InterviewStatusBadge({ status }: { status: string }) {
 
 function RoomStatusBadges({ row }: { row: InterviewRow }) {
 	if (!(row.roomIsDeleted || row.roomIsBlocked)) {
-		return <span className="text-muted-foreground">정상</span>;
+		return <Badge variant="outline">정상</Badge>;
 	}
 
 	return (

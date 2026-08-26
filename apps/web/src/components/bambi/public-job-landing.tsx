@@ -15,20 +15,40 @@ import {
 } from "@bambi-app/ui/components/empty";
 import type { Route } from "next";
 import Link from "next/link";
-import { toMarketplaceJob } from "@/lib/bambi/api-job-mapper";
+import { cache, Fragment } from "react";
 import {
+	HOURS_PLACEHOLDER,
+	toMarketplaceJob,
+} from "@/lib/bambi/api-job-mapper";
+import {
+	findJobLandingIndustry,
+	findJobLandingRegion,
 	JOB_LANDING_INDUSTRIES,
 	JOB_LANDING_REGIONS,
 	type JobLandingIndustry,
 	type JobLandingRegion,
 	type JobLandingTarget,
+	jobLandingDescription,
 	jobLandingHeading,
 	jobLandingIntro,
 	jobLandingPath,
 } from "@/lib/bambi/job-landing";
-import { breadcrumbJsonLd } from "@/lib/bambi/seo";
+import {
+	type DefinitionBlock,
+	type FaqItem,
+	jobLandingIndustryDefinition,
+	jobLandingIndustryFaqs,
+	jobLandingPlatformFaqs,
+	jobLandingRegionNote,
+	jobLandingServiceDefinition,
+} from "@/lib/bambi/job-landing-content";
+import {
+	type BreadcrumbItem,
+	breadcrumbJsonLd,
+	collectionPageJsonLd,
+} from "@/lib/bambi/seo";
 import type { Job } from "@/lib/bambi/types";
-import { client } from "@/utils/orpc";
+import { publicClient } from "@/utils/orpc-public";
 import { JobCoverImage } from "./job-cover-image";
 import { JsonLd } from "./json-ld";
 
@@ -36,41 +56,65 @@ import { JsonLd } from "./json-ld";
 // 전체 목록 열람이 아니고, 더 보려면 /seeker 목록으로 넘어가는 게 정상 동선이다.
 const LANDING_JOB_LIMIT = 24;
 
+// 근무시간 줄은 실제 값이 있을 때만 그리고, 매퍼가 채운 자리표시(HOURS_PLACEHOLDER)는
+// 줄째 생략한다 — 값이 없는데도 "채팅으로 확인"을 근무시간처럼 노출하지 않는다(색인
+// 텍스트가 사실만 담게). 상수는 매퍼에서 가져와 매퍼가 넣는 값과 어긋나지 않게 한다.
+
 // 가입 유도 목적지. anon이 눌러도 게이트 리다이렉트 없이 바로 가입 카드가 뜬다.
 const SIGNUP_HREF = "/seeker?auth=signup" as Route;
 
-const loadLandingJobs = async ({
+// cache()는 인자의 참조 동일성으로 키를 잡는다 — 매 요청 새로 만들어지는 target 객체를
+// 키로 쓰면 generateMetadata와 페이지 렌더가 서로 다른 키가 돼 조회가 두 번 나간다.
+// 원시값 슬러그로 키를 잡아, 같은 요청 안의 두 호출이 조회 하나를 공유하게 한다.
+const loadLandingJobsBySlug = cache(
+	async (regionSlug?: string, industrySlug?: string): Promise<Job[] | null> => {
+		const region = regionSlug ? findJobLandingRegion(regionSlug) : undefined;
+		const industry = industrySlug
+			? findJobLandingIndustry(industrySlug)
+			: undefined;
+
+		try {
+			const { sections } = await publicClient.bambi.jobs.list({
+				limit: LANDING_JOB_LIMIT,
+				...(industry ? { industryCategory: industry.label } : {}),
+				...(region ? { regionCode: region.code } : {}),
+			});
+			// 유료 섹션 행은 organic에도 같이 담겨 오므로 id로 중복을 걷어낸다.
+			const unique = new Map<string, (typeof sections.organic)[number]>();
+
+			for (const item of [
+				...sections.special,
+				...sections.urgent,
+				...sections.recommended,
+				...sections.organic,
+			]) {
+				if (!unique.has(item.id)) {
+					unique.set(item.id, item);
+				}
+			}
+
+			return [...unique.values()]
+				.slice(0, LANDING_JOB_LIMIT)
+				.map(toMarketplaceJob);
+		} catch {
+			// 조회 실패(null)와 진짜 0건([])을 구분한다 — 실패 시 generateMetadata가 noindex를
+			// 붙이지 않아 정상 랜딩이 API 일시 장애로 색인에서 빠지지 않는다. 렌더는 null을 []로 본다.
+			return null;
+		}
+	}
+);
+
+// 캐시 함수는 원시값 키를 받으므로, 슬러그를 풀어 넘기는 얇은 래퍼만 노출한다.
+export const loadLandingJobs = ({
 	industry,
 	region,
-}: JobLandingTarget): Promise<Job[]> => {
-	try {
-		const { sections } = await client.bambi.jobs.list({
-			limit: LANDING_JOB_LIMIT,
-			...(industry ? { industryCategory: industry.label } : {}),
-			...(region ? { regionCode: region.code } : {}),
-		});
-		// 유료 섹션 행은 organic에도 같이 담겨 오므로 id로 중복을 걷어낸다.
-		const unique = new Map<string, (typeof sections.organic)[number]>();
+}: JobLandingTarget): Promise<Job[] | null> =>
+	loadLandingJobsBySlug(region?.slug, industry?.slug);
 
-		for (const item of [
-			...sections.special,
-			...sections.urgent,
-			...sections.recommended,
-			...sections.organic,
-		]) {
-			if (!unique.has(item.id)) {
-				unique.set(item.id, item);
-			}
-		}
-
-		return [...unique.values()]
-			.slice(0, LANDING_JOB_LIMIT)
-			.map(toMarketplaceJob);
-	} catch {
-		// 조회가 실패해도 소개 문단·지역 링크는 색인 가치가 있으므로 페이지 자체는 뜬다.
-		return [];
-	}
-};
+// 수집 공고 id는 job_post에 없어 상세 경로가 다르다. 카드 href와 CollectionPage ItemList가
+// 같은 경로를 쓰도록 한 곳에서 만든다.
+const jobDetailPath = (job: Job): string =>
+	job.crawled ? `/seeker/jobs/crawled/${job.id}` : `/seeker/jobs/${job.id}`;
 
 interface LandingLink {
 	href: Route;
@@ -139,15 +183,15 @@ const buildLinkSections = ({
 };
 
 function LandingBreadcrumb({ industry, region }: JobLandingTarget) {
-	if (!region) {
-		return null;
-	}
-
-	// 구조화 데이터는 아래 화면 브레드크럼과 같은 계층·순서를 그대로 낸다.
-	const breadcrumbItems = [
+	// 화면 nav와 JSON-LD가 같은 계층·순서를 공유한다 — 구조화 데이터가 화면에 없는 경로를
+	// 주장하면 리치 결과에서 빠진다. 모든 계층이 홈 › 채용 정보로 시작하고, 인덱스도 그린다.
+	const breadcrumbItems: BreadcrumbItem[] = [
+		{ name: "홈", path: "/seeker" },
 		{ name: "채용 정보", path: "/jobs" },
-		{ name: region.label, path: jobLandingPath({ region }) },
-		...(industry
+		...(region
+			? [{ name: region.label, path: jobLandingPath({ region }) }]
+			: []),
+		...(region && industry
 			? [{ name: industry.label, path: jobLandingPath({ industry, region }) }]
 			: []),
 	];
@@ -159,57 +203,68 @@ function LandingBreadcrumb({ industry, region }: JobLandingTarget) {
 				aria-label="현재 위치"
 				className="flex flex-wrap items-center gap-1 text-muted-foreground text-sm"
 			>
-				<Link className="hover:underline" href="/jobs">
-					채용 정보
-				</Link>
-				<span aria-hidden="true">›</span>
-				{industry ? (
-					<>
-						<Link
-							className="hover:underline"
-							href={jobLandingPath({ region }) as Route}
-						>
-							{region.label}
-						</Link>
-						<span aria-hidden="true">›</span>
-						<span className="font-bold text-foreground">{industry.label}</span>
-					</>
-				) : (
-					<span className="font-bold text-foreground">{region.label}</span>
-				)}
+				{breadcrumbItems.map((item, index) => {
+					const isCurrent = index === breadcrumbItems.length - 1;
+
+					return (
+						<Fragment key={item.path}>
+							{index > 0 ? <span aria-hidden="true">›</span> : null}
+							{isCurrent ? (
+								<span className="font-bold text-foreground">{item.name}</span>
+							) : (
+								<Link className="hover:underline" href={item.path as Route}>
+									{item.name}
+								</Link>
+							)}
+						</Fragment>
+					);
+				})}
 			</nav>
 		</>
 	);
 }
 
 function LandingJobCard({ job }: { job: Job }) {
-	// 수집 공고의 id는 job_post에 없어 상세 경로가 다르다(카드 매퍼와 같은 규칙).
-	const href = (
-		job.crawled ? `/seeker/jobs/crawled/${job.id}` : `/seeker/jobs/${job.id}`
-	) as Route;
+	const href = jobDetailPath(job) as Route;
+	// ponytail: 수집 공고 커버는 DB에 base64 data URI로 들어와, 24장이면 HTML이 수 MB가 된다
+	// (모바일 LCP 30s 실측). 랜딩 카드 썸네일은 어차피 블러라 시각 가치가 없으니 data URI는
+	// 싣지 않는다(텍스트 카드). 업그레이드 경로: 수집 미디어 GCS 이관 또는 이미지 프록시 라우트.
+	const cover =
+		job.coverImage && !job.coverImage.url.startsWith("data:")
+			? job.coverImage
+			: null;
 
 	return (
 		<Link
 			className="flex gap-3 rounded-lg border border-border bg-card p-3 no-underline transition-colors hover:border-primary/40"
 			href={href}
 		>
-			{job.coverImage ? (
+			{cover ? (
 				// 목록 썸네일은 블러로 가린다 — 수다방 목록과 같은 기준이다. 원본은 상세에서 본다.
 				<JobCoverImage
 					className="size-10 shrink-0 rounded-lg border border-border object-cover blur-sm"
 					height={40}
-					media={job.coverImage}
+					media={cover}
 					width={40}
 				/>
 			) : null}
 			<div className="flex min-w-0 flex-1 flex-col gap-1">
-				<h3 className="m-0 truncate font-extrabold text-base text-foreground">
+				{/* 모바일(1열)은 제목을 2줄까지 보여준다 — 한 줄 truncate면 좁은 폭에서 핵심
+				    키워드가 잘린다. 다열 그리드(sm+)는 행 높이 정렬을 위해 한 줄 유지. */}
+				<h3 className="m-0 line-clamp-2 font-extrabold text-base text-foreground sm:line-clamp-1">
 					{job.title}
 				</h3>
+				{/* 시/도·시군구(세부지역). 상세 주소(동·번지)는 싣지 않는다. */}
 				<p className="m-0 truncate text-muted-foreground text-sm">
 					{job.company} · {job.location}
 				</p>
+				{/* 급여는 DB 저장 표기 그대로(협의면 "급여 협의"), 근무시간은 실제 값이 있을 때만. */}
 				<p className="m-0 font-bold text-foreground text-sm">{job.pay}</p>
+				{job.hours && job.hours !== HOURS_PLACEHOLDER ? (
+					<p className="m-0 truncate text-muted-foreground text-sm">
+						근무시간 {job.hours}
+					</p>
+				) : null}
 				<div className="flex flex-wrap items-center gap-1">
 					<Badge variant="secondary">{job.type}</Badge>
 					{job.verified ? <Badge variant="success">인증 완료</Badge> : null}
@@ -219,6 +274,90 @@ function LandingJobCard({ job }: { job: Job }) {
 				</div>
 			</div>
 		</Link>
+	);
+}
+
+// 정의 섹션(h2 질문형 + 문단). 헤딩 직하 첫 문단은 반드시 완결된 직답(body[0])이어야
+// AI가 문단째 발췌한다 — 그래서 지역 고유 lead는 body[0] '뒤'에 끼운다. 같은 업종 정의가
+// 16개 지역에 반복돼도 지역 문장이 페이지마다 텍스트를 달라지게 하되, 직답은 항상 맨 앞이다.
+function DefinitionSection({
+	block,
+	lead,
+}: {
+	block: DefinitionBlock;
+	lead?: string;
+}) {
+	return (
+		<section className="flex flex-col gap-3">
+			<h2 className="m-0 font-extrabold text-lg">{block.title}</h2>
+			{block.body.map((paragraph, index) => (
+				<Fragment key={paragraph}>
+					<p className="m-0 text-muted-foreground text-sm">{paragraph}</p>
+					{index === 0 && lead ? (
+						<p className="m-0 text-muted-foreground text-sm">{lead}</p>
+					) : null}
+				</Fragment>
+			))}
+		</section>
+	);
+}
+
+// FAQ는 접힘(details/accordion) 없이 항상 펼쳐진 정적 텍스트로 그린다 — 크롤러·AI가 접힌
+// 답변을 못 읽는 리스크를 없앤다. 질문은 h3(정의 h2 하위), 답변은 첫 문장이 직답.
+function FaqSection({ items }: { items: readonly FaqItem[] }) {
+	return (
+		<section className="flex flex-col gap-4">
+			<h2 className="m-0 font-extrabold text-lg">자주 묻는 질문</h2>
+			{items.map((item) => (
+				<div className="flex flex-col gap-1" key={item.question}>
+					<h3 className="m-0 font-bold text-base text-foreground">
+						{item.question}
+					</h3>
+					<p className="m-0 text-muted-foreground text-sm">{item.answer}</p>
+				</div>
+			))}
+		</section>
+	);
+}
+
+// 축 조합별 정의·FAQ 노출: 인덱스=서비스 정의+플랫폼 FAQ, 지역=지역 서술+플랫폼 FAQ,
+// 지역×업종=업종 정의(지역 서술로 감쌈)+업종 FAQ.
+function LandingContentSections({ industry, region }: JobLandingTarget) {
+	if (region && industry) {
+		return (
+			<>
+				<DefinitionSection
+					block={jobLandingIndustryDefinition(industry)}
+					lead={jobLandingRegionNote(region) || undefined}
+				/>
+				<FaqSection items={jobLandingIndustryFaqs(industry)} />
+			</>
+		);
+	}
+
+	if (region) {
+		const note = jobLandingRegionNote(region);
+
+		return (
+			<>
+				{note ? (
+					<section className="flex flex-col gap-3">
+						<h2 className="m-0 font-extrabold text-lg">
+							{region.label} 유흥·접객 알바 안내
+						</h2>
+						<p className="m-0 text-muted-foreground text-sm">{note}</p>
+					</section>
+				) : null}
+				<FaqSection items={jobLandingPlatformFaqs()} />
+			</>
+		);
+	}
+
+	return (
+		<>
+			<DefinitionSection block={jobLandingServiceDefinition()} />
+			<FaqSection items={jobLandingPlatformFaqs()} />
+		</>
 	);
 }
 
@@ -242,11 +381,22 @@ function LandingLinkChips({ items, title }: LandingLinkSection) {
 
 export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 	const target: JobLandingTarget = { industry, region };
-	const jobs = await loadLandingJobs(target);
+	// 조회 실패(null)든 진짜 0건이든 화면은 소개·링크를 그대로 띄운다 — null을 []로 취급.
+	const jobs = (await loadLandingJobs(target)) ?? [];
 	const heading = jobLandingHeading(target);
 
 	return (
 		<div className="flex flex-col gap-8 py-8">
+			{jobs.length > 0 ? (
+				<JsonLd
+					data={collectionPageJsonLd({
+						path: jobLandingPath(target),
+						name: heading,
+						description: jobLandingDescription(target),
+						items: jobs.map(jobDetailPath),
+					})}
+				/>
+			) : null}
 			<header className="flex flex-col gap-3">
 				<LandingBreadcrumb industry={industry} region={region} />
 				<h1 className="m-0 font-extrabold text-2xl sm:text-3xl">{heading}</h1>
@@ -268,8 +418,10 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 				<h2 className="m-0 font-extrabold text-lg">
 					모집 중인 공고 {jobs.length}개
 				</h2>
+				{/* 그리드 기본 구간에도 grid-cols-1(minmax(0,1fr))을 명시한다 — 안 주면 auto 트랙이
+				    카드 안 truncate(nowrap) 텍스트 폭만큼 벌어져 모바일에서 가로 스크롤이 생긴다. */}
 				{jobs.length > 0 ? (
-					<div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+					<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
 						{jobs.map((job) => (
 							<LandingJobCard job={job} key={job.id} />
 						))}
@@ -286,6 +438,8 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 					</Empty>
 				)}
 			</section>
+
+			<LandingContentSections industry={industry} region={region} />
 
 			{buildLinkSections(target).map((section) => (
 				<LandingLinkChips

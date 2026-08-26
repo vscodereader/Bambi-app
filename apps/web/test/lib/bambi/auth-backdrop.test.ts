@@ -26,70 +26,44 @@ const job: Job = {
 	verified: true,
 };
 
-// 결과 객체 안의 모든 문자열을 끌어모은다 — 새 필드가 추가돼도 자동으로 검사에 걸린다.
-const collectStrings = (value: unknown): string[] => {
-	if (typeof value === "string") {
-		return [value];
-	}
-	if (Array.isArray(value)) {
-		return value.flatMap(collectStrings);
-	}
-	if (value && typeof value === "object") {
-		return Object.values(value).flatMap(collectStrings);
-	}
-	return [];
-};
-
 // 글자·숫자를 지우고 공백·문장부호만 남긴 골격. 마스킹 전후가 같아야 단어 덩어리와
-// 리듬이 그대로 남은 것이다(블러 아래서 진짜 문장으로 읽히는 근거).
+// 리듬이 그대로 남은 것이다(블러 아래서 진짜 업소명으로 읽히는 근거).
 const LETTER_OR_DIGIT_RE = /[\p{L}\p{Nd}]/gu;
 const skeleton = (value: string) => value.replace(LETTER_OR_DIGIT_RE, "*");
 
-const SOURCE_TEXTS = [
-	job.company,
-	job.title,
-	job.location,
-	job.pay,
-	...job.tags,
-];
-
 describe("maskJobsForBackdrop", () => {
-	it("원본 문자열이 결과 어디에도 남지 않는다", () => {
-		for (const text of collectStrings(maskJobsForBackdrop([job]))) {
-			for (const source of SOURCE_TEXTS) {
-				expect(text).not.toContain(source);
-			}
-		}
+	it("업소명은 원문과 다르게 치환한다(비가역)", () => {
+		const [masked] = maskJobsForBackdrop([job]);
+		expect(masked.company).not.toBe(job.company);
+		// 원문이 결과 어디에도 부분 문자열로 남지 않는다.
+		expect(masked.company).not.toContain(job.company);
 	});
 
-	it("글자 수를 보존해 카드 레이아웃이 실제와 같아 보인다", () => {
+	it("업소명은 글자 수·공백 위치를 보존한다(카드 레이아웃 유지)", () => {
 		const [masked] = maskJobsForBackdrop([job]);
 		expect(masked.company).toHaveLength(job.company.length);
-		expect(masked.title).toHaveLength(job.title.length);
-		expect(masked.pay).toHaveLength(job.pay.length);
-		expect(masked.tags).toHaveLength(job.tags.length);
-		expect(masked.tags[0]).toHaveLength(job.tags[0].length);
-	});
-
-	it("공백·문장부호 위치를 보존한다", () => {
-		const [masked] = maskJobsForBackdrop([job]);
 		expect(skeleton(masked.company)).toBe(skeleton(job.company));
-		expect(skeleton(masked.location)).toBe(skeleton(job.location));
-		// "시급 17,000원"의 쉼표·자릿수가 남아야 급여로 읽힌다.
-		expect(skeleton(masked.pay)).toBe(skeleton(job.pay));
 	});
 
-	it("같은 입력에는 항상 같은 결과를 낸다(난수 사용 안 함)", () => {
+	it("지역·급여는 실값을 그대로 싣는다(/jobs 공개와 일치)", () => {
+		const [masked] = maskJobsForBackdrop([job]);
+		expect(masked.location).toBe(job.location);
+		expect(masked.pay).toBe(job.pay);
+	});
+
+	it("같은 입력에는 항상 같은 결과를 낸다(서버·클라 렌더 동일, 난수 사용 안 함)", () => {
 		expect(maskJobsForBackdrop([job, job])).toEqual(
 			maskJobsForBackdrop([job, job])
 		);
 	});
 
-	it("식별자·미디어·설명을 아예 싣지 않는다", () => {
+	it("식별자·미디어·설명과 배경이 안 그리는 필드(제목·태그)를 아예 싣지 않는다", () => {
 		const [masked] = maskJobsForBackdrop([job]);
 		expect(masked).not.toHaveProperty("id");
 		expect(masked).not.toHaveProperty("desc");
 		expect(masked).not.toHaveProperty("coverImage");
 		expect(masked).not.toHaveProperty("rating");
+		expect(masked).not.toHaveProperty("title");
+		expect(masked).not.toHaveProperty("tags");
 	});
 });

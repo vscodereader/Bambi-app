@@ -171,6 +171,13 @@ export const getBoardByKey = (key: CommunityBoardKey): BuiltinBoardMeta => {
 
 export const COMMUNITY_ROOT_PATH = "/seeker/community";
 
+// DB enum(main|community)에 대응하는 Web 배치 surface 단일 소스. 운영자 저장·메인·수다방
+// 조회가 문자열을 각자 반복하지 않도록 이 상수만 사용한다.
+export const COMMUNITY_LAYOUT_SURFACE = {
+	community: "community",
+	main: "main",
+} as const;
+
 export const communityBoardPath = (slug: string): string =>
 	`${COMMUNITY_ROOT_PATH}/${slug}`;
 

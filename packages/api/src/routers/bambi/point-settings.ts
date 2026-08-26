@@ -6,7 +6,6 @@ import {
 	bambiPointTransaction,
 	bambiProfile,
 	bambiSiteSettings,
-	communityBoard,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
@@ -57,11 +56,6 @@ const saveInput = z.object({
 	specialPointJobRotationHours: rotationHours,
 	signupPoints: nonnegativePoints,
 });
-const saveBoardInput = z.object({
-	commentPoints: nonnegativePoints,
-	key: z.string().min(1),
-	postPoints: nonnegativePoints.optional(),
-});
 const historyCursorInput = z.object({
 	createdAt: z.string().datetime(),
 	id: z.string().uuid(),
@@ -100,6 +94,15 @@ const pointReasonLabel = (reason: string): string => {
 	}
 	if (reason === "community_comment_revoke") {
 		return "게시판 댓글 포인트 회수";
+	}
+	if (reason === "community_comment_bonus") {
+		return "댓글 랜덤 보너스";
+	}
+	if (reason === "community_comment_bonus_revoke") {
+		return "댓글 랜덤 보너스 회수";
+	}
+	if (reason === "community_comment_milestone") {
+		return "댓글 마일스톤 보너스";
 	}
 	if (reason === "review_write") {
 		return "후기 작성";
@@ -402,29 +405,6 @@ export const pointSettingsRouter = {
 						: null,
 			};
 		}),
-	saveBoard: adminProcedure.input(saveBoardInput).handler(async ({ input }) => {
-		const [existing] = await db
-			.select({ key: communityBoard.key })
-			.from(communityBoard)
-			.where(eq(communityBoard.key, input.key))
-			.limit(1);
-		if (!existing) {
-			throw new ORPCError("NOT_FOUND", {
-				message: "게시판을 찾을 수 없습니다.",
-			});
-		}
-		const postPoints = input.key === "notice" ? 0 : input.postPoints;
-		if (postPoints === undefined) {
-			throw new ORPCError("BAD_REQUEST", {
-				message: "글 작성 포인트를 입력해 주세요.",
-			});
-		}
-		await db
-			.update(communityBoard)
-			.set({ commentPoints: input.commentPoints, postPoints })
-			.where(eq(communityBoard.key, input.key));
-		return { ...input, postPoints };
-	}),
 	saveAdmin: adminProcedure.input(saveInput).handler(async ({ input }) => {
 		const normalizedMin = input.jobPaymentMinPoints || null;
 		if (
@@ -472,7 +452,7 @@ export const pointSettingsRouter = {
 					.update(bambiPointJobReward)
 					.set({
 						cooldownUntil: sql`case
-							when ${bambiPointJobReward.cooldownUntil} <= ${now} + make_interval(hours => ${change.next}) then ${now}
+							when ${bambiPointJobReward.cooldownUntil} <= ${now.toISOString()}::timestamp + make_interval(hours => ${change.next}) then ${now.toISOString()}::timestamp
 							else ${bambiPointJobReward.cooldownUntil} - make_interval(hours => ${change.next})
 						end`,
 					})

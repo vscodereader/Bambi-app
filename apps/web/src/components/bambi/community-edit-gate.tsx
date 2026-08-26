@@ -110,6 +110,7 @@ export function CommunityEditGate({
 					initialPost={{
 						authorName: data.authorName,
 						authorRole: data.authorRole,
+						board: data.board,
 						body: data.body,
 						contactPhone: data.contactPhone,
 						commentsDisabled: data.commentsDisabled,

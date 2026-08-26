@@ -195,3 +195,5 @@ CREATE INDEX "bambi_review_draw_reward_status_eligible_idx" ON "bambi_review_dra
 CREATE UNIQUE INDEX "bambi_review_draw_reward_item_transaction_uidx" ON "bambi_review_draw_reward" USING btree ("item_transaction_id");--> statement-breakpoint
 ALTER TABLE "bambi_attendance" ADD CONSTRAINT "bambi_attendance_restored_by_item_transaction_id_bambi_member_item_transaction_id_fk" FOREIGN KEY ("restored_by_item_transaction_id") REFERENCES "public"."bambi_member_item_transaction"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bambi_point_shop_item" ADD CONSTRAINT "bambi_point_shop_item_category_id_bambi_point_shop_category_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."bambi_point_shop_category"("id") ON DELETE restrict ON UPDATE no action;
+--> statement-breakpoint
+ALTER TYPE "public"."notification_target_type" ADD VALUE 'member_item_transaction';
