@@ -4,6 +4,7 @@ import { Button } from "@bambi-app/ui/components/button";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { Loader2Icon } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
 import { orpc } from "@/utils/orpc";
@@ -23,6 +24,11 @@ const SLOT_PLACEHOLDER_KEYS = Array.from(
 	{ length: 60 },
 	(_, index) => `slot-${index}`
 );
+
+// 모바일(1열)에서 빈 "광고 모집중" 슬롯을 이 개수까지만 그대로 보여주고, 나머지는 접어
+// "+N칸 광고 모집중" 한 줄 요약으로 대체한다. 데스크톱 그리드(lg 3·xl 4열)는 인벤토리를
+// 그대로 노출한다 — 자리표시가 세로로 최대 60칸 늘어지는 건 모바일에서만 문제다.
+const MOBILE_PLACEHOLDER_LIMIT = 2;
 
 // 스페셜/추천 슬롯 수 코드 기본값 — 설정 조회가 도착하기 전(로딩) 폴백. 서버
 // getExposureSectionConfig 폴백값(DEFAULT_SPECIAL/RECOMMENDED_CAPACITY)과 같은 12/20이다.
@@ -150,11 +156,28 @@ function ExposureSection({
 						/>
 					</li>
 				))}
-				{placeholderKeys.map((key) => (
-					<li className="grid" key={`${tone}-${key}`}>
+				{placeholderKeys.map((key, index) => (
+					<li
+						className={cn(
+							"grid",
+							// 한도 넘는 자리표시는 모바일에서 숨기고(요약으로 대체) lg부터 되살린다.
+							index >= MOBILE_PLACEHOLDER_LIMIT && "hidden lg:grid"
+						)}
+						key={`${tone}-${key}`}
+					>
 						<AdSlotPlaceholder className="flex min-h-30 w-full" />
 					</li>
 				))}
+				{placeholderKeys.length > MOBILE_PLACEHOLDER_LIMIT ? (
+					<li className="grid lg:hidden">
+						<div
+							aria-hidden="true"
+							className="flex min-h-14 items-center justify-center rounded-lg border border-border border-dashed bg-secondary px-3 py-2 font-bold text-muted-foreground text-sm"
+						>
+							+{placeholderKeys.length - MOBILE_PLACEHOLDER_LIMIT}칸 광고 모집중
+						</div>
+					</li>
+				) : null}
 			</ul>
 		</section>
 	);
@@ -172,6 +195,9 @@ interface VisualJobExposureSectionsProps {
 	jobs: Job[];
 	onLoadMore?: () => void;
 	onOpen: (job: Job) => void;
+	// 넘기면 빈 상태 카드에 "필터 초기화" 액션을 붙인다. 필터가 걸려 결과가 0건일 때만
+	// 의미가 있으므로, 필터 상태를 소유한 호출부에서 활성 필터가 있을 때에만 넘긴다.
+	onResetFilters?: () => void;
 	sections: MarketplaceJobSections;
 	selectedJobId?: string;
 	trackAnalytics?: boolean;
@@ -185,6 +211,7 @@ export function VisualJobExposureSections({
 	jobs,
 	onLoadMore,
 	onOpen,
+	onResetFilters,
 	sections,
 	selectedJobId,
 	trackAnalytics = false,
@@ -248,6 +275,16 @@ export function VisualJobExposureSections({
 				<p className="mt-2 mb-0 text-muted-foreground text-sm">
 					지역이나 최소 급여 조건을 조금 낮춰보세요.
 				</p>
+				{onResetFilters ? (
+					<Button
+						className="mt-4"
+						onClick={onResetFilters}
+						type="button"
+						variant="outline"
+					>
+						필터 초기화
+					</Button>
+				) : null}
 			</Card>
 		);
 		// 공고가 없어도 커뮤니티 슬롯은 유지한다. slot이 없으면 기존과 동일한 단일 Card,
@@ -309,12 +346,23 @@ export function VisualJobExposureSections({
 			{hasMore && onLoadMore ? (
 				<div className="flex justify-center">
 					<Button
+						aria-busy={isLoadingMore}
 						className="w-full sm:w-auto"
 						disabled={isLoadingMore}
 						onClick={onLoadMore}
 						variant="outline"
 					>
-						{isLoadingMore ? "불러오는 중" : "공고 더보기"}
+						{isLoadingMore ? (
+							<>
+								<Loader2Icon
+									className="size-4 animate-spin"
+									data-icon="inline-start"
+								/>
+								불러오는 중
+							</>
+						) : (
+							"공고 더보기"
+						)}
 					</Button>
 				</div>
 			) : null}

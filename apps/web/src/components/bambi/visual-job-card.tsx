@@ -40,21 +40,9 @@ interface VisualJobCardProps {
 	trackAnalytics?: boolean;
 }
 
-const JOB_CARD_TEXT_LIMIT = 7;
-
-// 7자 초과 제목은 카드에서 잘린다. 전체 텍스트 복원 경로: title 속성(마우스 호버) +
-// 버튼 aria-label(스크린리더) + 카드를 열면 상세 페이지. 시각 사용자(터치·키보드)는
-// 상세로 복원한다 — 카드 폭 결합상 잘림 로직 자체는 유지한다.
-export function truncateJobCardText(value: string): string {
-	const characters = Array.from(value);
-	return characters.length > JOB_CARD_TEXT_LIMIT
-		? `${characters.slice(0, JOB_CARD_TEXT_LIMIT).join("")}...`
-		: value;
-}
-
-const fullTextTitle = (value: string): string | undefined =>
-	Array.from(value).length > JOB_CARD_TEXT_LIMIT ? value : undefined;
-
+// 카드 제목·업소명은 CSS truncate(폭 기준)로 자른다 — 글자 수 하드 컷은 폭이 아니라
+// 글자 수만 봐 좁은 화면에서 과하게, 넓은 화면에서 덜 잘렸다. 전체 텍스트 복원 경로:
+// title 속성(마우스 호버) + 버튼 aria-label(스크린리더) + 카드를 열면 상세 페이지.
 const getPromotion = (
 	tone: VisualJobCardProps["tone"]
 ): PromotionDefinition | null => {
@@ -259,7 +247,7 @@ export function VisualJobCard({
 				// pointer-events-none으로 아래 카드 클릭을 가리지 않는다.
 				<span
 					className={cn(
-						"pointer-events-none absolute top-4 -right-6 z-10 w-24 rotate-45 py-0.5 text-center font-extrabold text-[10px] leading-none tracking-wider",
+						"pointer-events-none absolute top-4 -right-6 z-10 w-24 rotate-45 py-0.5 text-center font-extrabold text-xs leading-none tracking-wider",
 						hitRibbonClassName
 					)}
 				>
@@ -278,13 +266,13 @@ export function VisualJobCard({
 						<JobCoverImage
 							// 업소명이 바로 옆에 텍스트로 있으므로 커버는 장식 이미지로 처리한다(alt="").
 							alt=""
-							className="h-14 w-30 shrink-0 rounded-md border border-white object-fill"
+							className="h-14 w-30 shrink-0 rounded-md border border-border object-cover"
 							height={56}
 							media={job.coverImage}
-							width={56}
+							width={120}
 						/>
 					) : (
-						<div className="flex size-14 shrink-0 items-center justify-center rounded-md border border-white bg-secondary font-extrabold text-coral-700 text-sm">
+						<div className="flex size-14 shrink-0 items-center justify-center rounded-md border border-border bg-secondary font-extrabold text-coral-700 text-sm">
 							{job.company.slice(0, 2)}
 						</div>
 					)}
@@ -295,16 +283,16 @@ export function VisualJobCard({
 						)}
 					>
 						<h3
-							className="m-0 truncate font-extrabold text-[15px] leading-snug"
-							title={fullTextTitle(job.title)}
+							className="m-0 truncate font-extrabold text-base leading-snug"
+							title={job.title}
 						>
-							{truncateJobCardText(job.title)}
+							{job.title}
 						</h3>
 						<span
 							className="truncate font-semibold text-muted-foreground text-xs"
-							title={fullTextTitle(job.company)}
+							title={job.company}
 						>
-							{truncateJobCardText(job.company)}
+							{job.company}
 						</span>
 						<span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
 							<span className="inline-flex size-3 shrink-0">

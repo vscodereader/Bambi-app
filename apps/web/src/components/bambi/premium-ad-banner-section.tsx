@@ -35,7 +35,7 @@ export function PremiumAdBannerSection({
 	return (
 		<section className={cn("flex flex-col gap-3", className)}>
 			<div className="flex items-center gap-2">
-				<Badge tone="pending">프리미엄</Badge>
+				<Badge tone="primary">프리미엄</Badge>
 				<h2 className="m-0 font-extrabold text-base">프리미엄 광고</h2>
 			</div>
 			<div className="grid grid-cols-1 gap-3 md:grid-cols-3">

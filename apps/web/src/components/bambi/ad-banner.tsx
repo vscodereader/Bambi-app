@@ -319,7 +319,7 @@ export function HorizontalAdBanner({
 			{isAdBannerImageRequired(item.layout, "ad_horizontal") ? (
 				<Image
 					alt={`${item.company} ${item.title} 광고 배너`}
-					className={cn(surfaceClassName, "object-fill")}
+					className={cn(surfaceClassName, "object-cover")}
 					height={600}
 					sizes="272px"
 					src={item.imageUrl}
@@ -352,8 +352,8 @@ interface HorizontalAdBannerRailProps {
 // 제목 20.25(text-[15px] leading-snug) + gap-1 4 + 업소 16(text-xs) + gap-1 4 + 지역 16 = 60.25.
 // 컴포넌트 기본값 16:9는 상단 프리미엄 3칸이 계속 쓰므로 여기서만 className으로 덮는다.
 // 카드 구조(패딩·텍스트 열 줄 수/글꼴·급여 행 높이)나 aside 폭이 바뀌면 이 비율도 같이 갱신해야 한다.
-// 이미지가 object-fill이라 16:9보다 세로로 조금 더 눌리지만, 슬롯 크기를 고정하고 이미지를
-// 맞추는 기존 결정을 유지한다(슬롯이 이미지대로 늘면 옆 카드와 높이가 어긋난다).
+// 이미지는 object-cover라 259:122 슬롯을 꽉 채우며 넘치는 부분만 잘린다 — 슬롯 크기를 고정하고
+// 이미지를 맞추는 기존 결정을 유지한다(슬롯이 이미지대로 늘면 옆 카드와 높이가 어긋난다).
 const RAIL_SLOT_ASPECT_CLASS = "aspect-[259/122]";
 
 // 가로형 배너 세로 스택(좌측 사이드). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로,

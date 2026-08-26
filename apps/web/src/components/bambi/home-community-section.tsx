@@ -141,7 +141,8 @@ function CommunitySkeleton() {
 
 export function HomeCommunitySection() {
 	// 세션·자격 판정은 클라이언트 전용이라 SSR과 첫 클라이언트 렌더가 어긋나 hydration
-	// 불일치가 난다. 마운트 후에만 렌더해 서버·첫 클라이언트 렌더를 null로 일치시킨다.
+	// 불일치가 난다. 마운트 전에는 자격과 무관한 스켈레톤(실제 레이아웃과 같은 높이)을
+	// 렌더해 서버·첫 클라이언트 렌더를 일치시킨다 — null 반환 후 삽입 시 생기던 CLS를 막는다.
 	const [mounted, setMounted] = useState(false);
 	const [verifyTarget, setVerifyTarget] = useState<string | null>(null);
 	useEffect(() => {
@@ -160,7 +161,7 @@ export function HomeCommunitySection() {
 	const legalAdvisorGuard = useLegalAdvisorNavGuard();
 
 	if (!mounted) {
-		return null;
+		return <CommunitySkeleton />;
 	}
 
 	// 세션 판정 대기 중(아직 자격 미확정)에는 스켈레톤으로 깜빡임을 막는다.

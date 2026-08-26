@@ -9,7 +9,7 @@ import {
 	SelectValue,
 } from "@bambi-app/ui/components/select";
 import { cn } from "@bambi-app/ui/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
 	ALL_OPTION,
 	DEFAULT_MARKETPLACE_FILTERS,
@@ -40,7 +40,8 @@ const formatReviewValue = ({
 
 // 기본값과 다른 필터 항목 수 — "필터 초기화" 버튼 활성 여부를 이 값으로 판단한다.
 // 키를 순회하므로 MarketplaceFilters에 필드가 늘어도 따로 손댈 필요가 없다.
-const countActiveFilters = (filters: MarketplaceFilters): number =>
+// 모바일 필터 시트 트리거의 활성 배지·빈 상태 초기화 노출 여부에도 재사용한다.
+export const countActiveFilters = (filters: MarketplaceFilters): number =>
 	(
 		Object.keys(DEFAULT_MARKETPLACE_FILTERS) as (keyof MarketplaceFilters)[]
 	).filter((key) => filters[key] !== DEFAULT_MARKETPLACE_FILTERS[key]).length;
@@ -60,6 +61,17 @@ export function MarketplaceFilterControls({
 }: MarketplaceFilterControlsProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
+	// 라벨(span)과 컨트롤을 aria-labelledby로 잇는다. 데스크톱 사이드바와 모바일 시트가
+	// 이 컴포넌트를 동시에 마운트하므로, id를 고정하면 중복돼 접근성 트리가 깨진다 →
+	// 인스턴스마다 고유한 useId 접두사로 네임스페이스한다(체크박스 htmlFor도 함께).
+	const fieldId = useId();
+	const regionLabelId = `${fieldId}-region`;
+	const districtLabelId = `${fieldId}-district`;
+	const categoryLabelId = `${fieldId}-category`;
+	const payLabelId = `${fieldId}-pay`;
+	const verifiedId = `${fieldId}-verified`;
+	const todayId = `${fieldId}-today`;
+	const beginnerId = `${fieldId}-beginner`;
 	const { isLoading, regions } = useRegions();
 	const districts = findRegion(regions, filters.regionCode)?.districts ?? [];
 	// 최소시급은 타이핑 즉시 표시하되 300ms 멈춘 뒤에만 필터에 반영해 재조회 난사를 막는다.
@@ -86,7 +98,12 @@ export function MarketplaceFilterControls({
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex flex-col gap-2">
-				<span className="font-bold text-muted-foreground text-xs">지역</span>
+				<span
+					className="font-bold text-muted-foreground text-xs"
+					id={regionLabelId}
+				>
+					지역
+				</span>
 				<Select
 					disabled={isLoading}
 					items={[
@@ -104,7 +121,10 @@ export function MarketplaceFilterControls({
 					}}
 					value={filters.regionCode}
 				>
-					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
+					<SelectTrigger
+						aria-labelledby={regionLabelId}
+						className="h-11 w-full rounded-lg px-3 font-semibold text-sm"
+					>
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
@@ -118,7 +138,10 @@ export function MarketplaceFilterControls({
 				</Select>
 			</div>
 			<div className="flex flex-col gap-2">
-				<span className="font-bold text-muted-foreground text-xs">
+				<span
+					className="font-bold text-muted-foreground text-xs"
+					id={districtLabelId}
+				>
 					세부지역
 				</span>
 				<Select
@@ -137,7 +160,10 @@ export function MarketplaceFilterControls({
 					}}
 					value={filters.districtCode}
 				>
-					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
+					<SelectTrigger
+						aria-labelledby={districtLabelId}
+						className="h-11 w-full rounded-lg px-3 font-semibold text-sm"
+					>
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
@@ -151,7 +177,12 @@ export function MarketplaceFilterControls({
 				</Select>
 			</div>
 			<div className="flex flex-col gap-2">
-				<span className="font-bold text-muted-foreground text-xs">업종</span>
+				<span
+					className="font-bold text-muted-foreground text-xs"
+					id={categoryLabelId}
+				>
+					업종
+				</span>
 				<Select
 					onValueChange={(value) => {
 						if (value) {
@@ -160,7 +191,10 @@ export function MarketplaceFilterControls({
 					}}
 					value={filters.category}
 				>
-					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
+					<SelectTrigger
+						aria-labelledby={categoryLabelId}
+						className="h-11 w-full rounded-lg px-3 font-semibold text-sm"
+					>
 						<SelectValue>{(value) => value}</SelectValue>
 					</SelectTrigger>
 					<SelectContent>
@@ -173,45 +207,55 @@ export function MarketplaceFilterControls({
 				</Select>
 			</div>
 			<div className="flex flex-col gap-2">
-				<span className="font-bold text-muted-foreground text-xs">
+				<span
+					className="font-bold text-muted-foreground text-xs"
+					id={payLabelId}
+				>
 					최소 시급
 				</span>
+				{/* type="number"는 모바일에서 스핀 버튼·마이너스·지수 입력을 허용해 급여 필드에
+				    부적절하다. text+inputMode=numeric로 숫자 키패드만 띄우고, 비숫자는
+				    onChange에서 걷어내 표시값·필터값을 항상 숫자로 유지한다. */}
 				<Input
-					onChange={(event) => setPayInput(event.target.value)}
+					aria-labelledby={payLabelId}
+					inputMode="numeric"
+					onChange={(event) =>
+						setPayInput(event.target.value.replace(/[^0-9]/g, ""))
+					}
 					placeholder="예: 17000"
-					type="number"
+					type="text"
 					value={payInput}
 				/>
 			</div>
 			<label
 				className="flex items-center gap-2 font-bold text-sm"
-				htmlFor="filter-only-verified"
+				htmlFor={verifiedId}
 			>
 				<Checkbox
 					checked={filters.onlyVerified}
-					id="filter-only-verified"
+					id={verifiedId}
 					onCheckedChange={(checked) => update({ onlyVerified: checked })}
 				/>
 				검증 완료만 보기
 			</label>
 			<label
 				className="flex items-center gap-2 font-bold text-sm"
-				htmlFor="filter-only-today"
+				htmlFor={todayId}
 			>
 				<Checkbox
 					checked={filters.onlyToday}
-					id="filter-only-today"
+					id={todayId}
 					onCheckedChange={(checked) => update({ onlyToday: checked })}
 				/>
 				당일면접 가능만 보기
 			</label>
 			<label
 				className="flex items-center gap-2 font-bold text-sm"
-				htmlFor="filter-only-beginner"
+				htmlFor={beginnerId}
 			>
 				<Checkbox
 					checked={filters.onlyBeginnerFriendly}
-					id="filter-only-beginner"
+					id={beginnerId}
 					onCheckedChange={(checked) =>
 						update({ onlyBeginnerFriendly: checked })
 					}
