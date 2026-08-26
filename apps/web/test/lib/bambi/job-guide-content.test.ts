@@ -28,8 +28,8 @@ const FORBIDDEN = ["퀸알바", "여우알바", "하루알바", "로그인"];
 const MONEY = /\d+\s*만\s*원|\d+원/;
 
 describe("job guide content", () => {
-	it("registers exactly five guides with unique slugs", () => {
-		expect(GUIDE_CONTENTS).toHaveLength(5);
+	it("registers exactly fifteen guides with unique slugs", () => {
+		expect(GUIDE_CONTENTS).toHaveLength(15);
 		const slugs = GUIDE_CONTENTS.map((guide) => guide.slug);
 		expect(new Set(slugs).size).toBe(slugs.length);
 	});
