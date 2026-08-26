@@ -172,7 +172,7 @@ function ExposureSection({
 					<li className="grid lg:hidden">
 						<div
 							aria-hidden="true"
-							className="flex min-h-14 items-center justify-center rounded-lg border border-border border-dashed bg-secondary px-3 py-2 font-bold text-muted-foreground text-sm"
+							className="flex min-h-14 items-center justify-center rounded-lg border border-coral-300 border-dashed px-3 py-2 font-bold text-destructive text-sm"
 						>
 							+{placeholderKeys.length - MOBILE_PLACEHOLDER_LIMIT}칸 광고 모집중
 						</div>

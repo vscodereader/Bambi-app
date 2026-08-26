@@ -286,14 +286,16 @@ describe("visual job marketplace components", () => {
 		expect(source).not.toContain("max-w-[80%]");
 		expect(source).not.toContain("조건에 맞는 안전한 자리를 찾아요");
 		// 탐색 바(세그먼트 탭·퀵칩·본문 검색)는 걷어냈다 — 검색은 헤더(SeekerAppShell)로.
-		// 필터는 1720px+ 사이드바 + 그 미만에서는 목록 상단 트리거의 시트로 제공한다
-		// (트리거는 min-[1720px]:hidden으로 사이드바와 상보 — 필터 소실 구간이 없다).
+		// 필터는 1720px+ 사이드바 + md~1720px에서는 목록 상단 트리거의 시트로 제공한다.
+		// 모바일(<md)은 필터를 의도적으로 제공하지 않는다(제품 결정) —
+		// 트리거는 hidden md:inline-flex min-[1720px]:hidden으로 md~1720px에서만 노출.
 		expect(source).toContain("useSeekerFilters");
 		expect(source).toContain("MarketplaceFilterControls");
 		expect(source).not.toContain("MarketplaceDiscoveryBar");
 		expect(source).not.toContain("MarketplaceDiscoveryAxisChips");
 		expect(source).toContain("MarketplaceFilterSheet");
 		expect(source).toContain("min-[1720px]:hidden");
+		expect(source).toContain("md:inline-flex");
 		expect(source).not.toContain("MarketplaceSearch");
 	});
 

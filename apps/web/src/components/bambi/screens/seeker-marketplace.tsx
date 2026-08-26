@@ -35,6 +35,7 @@ import { VisualJobExposureSections } from "../visual-job-exposure-sections";
 // 1720px 미만에서는 사이드바 필터(aside)가 사라지므로 목록 상단에 필터 트리거를 둔다.
 // 데스크톱 사이드바와 같은 MarketplaceFilterControls를 시트로 그대로 재사용한다(필터는 라이브
 // 반영 — 별도 "적용" 없이 SheetClose로 닫기만 한다). 활성 필터 수는 트리거에 배지로 표기한다.
+// 모바일(<md)에서는 필터를 의도적으로 제공하지 않는다(제품 결정) — 트리거는 md~1720px에서만 노출.
 function MarketplaceFilterSheet({
 	filters,
 	onChange,
@@ -45,7 +46,7 @@ function MarketplaceFilterSheet({
 	const activeCount = countActiveFilters(filters);
 	return (
 		<Sheet>
-			<SheetTrigger className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 font-bold text-muted-foreground text-sm min-[1720px]:hidden">
+			<SheetTrigger className="hidden h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 font-bold text-muted-foreground text-sm md:inline-flex min-[1720px]:hidden">
 				<span className="inline-flex size-4 text-coral-600">
 					<Filter />
 				</span>
