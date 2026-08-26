@@ -176,6 +176,7 @@ function ChatNavButton({ withPin }: { withPin: boolean }) {
 				aria-label={
 					showBadge ? `채팅, 읽지 않은 메시지 ${unreadMessageCount}개` : "채팅"
 				}
+				className="bg-card text-foreground"
 				nativeButton={false}
 				render={<Link href={"/seeker/chats" as Route} />}
 				size="icon-lg"

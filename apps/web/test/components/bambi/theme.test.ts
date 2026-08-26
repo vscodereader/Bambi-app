@@ -100,11 +100,11 @@ describe("web theme policy", () => {
 		expect(popupPageSource).toContain("<PopupManagement />");
 	});
 
-	it("uses the shared white outline style for chat and notification buttons", () => {
-		expect(responsiveShellSource).not.toContain(
+	it("keeps dark card backgrounds and bright icons for chat and notification", () => {
+		expect(responsiveShellSource).toContain(
 			'className="bg-card text-foreground"'
 		);
-		expect(notificationBellSource).not.toContain(
+		expect(notificationBellSource).toContain(
 			'className="bg-card text-foreground"'
 		);
 		expect(notificationBellSource).toContain('variant="outline"');
