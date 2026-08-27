@@ -34,6 +34,10 @@ import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Textarea } from "@bambi-app/ui/components/textarea";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@bambi-app/ui/components/toggle-group";
 import type { InferRouterOutputs } from "@orpc/server";
 import {
 	useInfiniteQuery,
@@ -51,12 +55,13 @@ import { orpc } from "@/utils/orpc";
 
 const TITLE_MAX = 100;
 const BODY_MAX = 2000;
-const CANDIDATE_LIMIT = 8;
 const SENT_PAGE_SIZE = 20;
 const USERS_QUERY_INPUT = { limit: 1000 } as const;
 // 발송 대상이 될 수 없는 역할(운영자·비회원)은 검색 후보·수신자 지정에서 제외한다 —
 // 서버도 개별 지정 경로에서 같은 역할을 거른다.
 const NON_MESSAGEABLE_ROLES = new Set(["admin", "guest"]);
+
+type SentOrder = "newest" | "oldest";
 
 interface SentCursor {
 	createdAt: string;
@@ -153,6 +158,7 @@ export function ModeratorMessagesPanel() {
 	const [body, setBody] = useState("");
 	const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 	const [detailMessageId, setDetailMessageId] = useState<null | string>(null);
+	const [sentOrder, setSentOrder] = useState<SentOrder>("newest");
 
 	const usersQuery = useQuery(
 		orpc.bambi.moderation.listUsers.queryOptions({ input: USERS_QUERY_INPUT })
@@ -161,9 +167,11 @@ export function ModeratorMessagesPanel() {
 		orpc.bambi.directMessages.listSent.infiniteOptions({
 			getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
 			initialPageParam: null as SentCursor | null,
+			// order를 input에 넣으면 쿼리키가 정렬별로 갈라져 전환 시 커서·캐시가 자동 분리된다.
 			input: (cursor: SentCursor | null) => ({
 				cursor: cursor ?? undefined,
 				limit: SENT_PAGE_SIZE,
+				order: sentOrder,
 			}),
 		})
 	);
@@ -213,17 +221,15 @@ export function ModeratorMessagesPanel() {
 		if (keyword.length === 0) {
 			return [];
 		}
-		return users
-			.filter(
-				(candidate) =>
-					candidate.deletedAt === null &&
-					!NON_MESSAGEABLE_ROLES.has(candidate.role) &&
-					!selectedIds.has(candidate.userId) &&
-					[candidate.name, candidate.loginId ?? ""].some((field) =>
-						field.toLowerCase().includes(keyword)
-					)
-			)
-			.slice(0, CANDIDATE_LIMIT);
+		return users.filter(
+			(candidate) =>
+				candidate.deletedAt === null &&
+				!NON_MESSAGEABLE_ROLES.has(candidate.role) &&
+				!selectedIds.has(candidate.userId) &&
+				[candidate.name, candidate.loginId ?? ""].some((field) =>
+					field.toLowerCase().includes(keyword)
+				)
+		);
 	}, [recipientSearch, users, selectedIds]);
 
 	const roles = useMemo(() => {
@@ -284,6 +290,7 @@ export function ModeratorMessagesPanel() {
 				onSuccess: async (result) => {
 					setIsConfirmOpen(false);
 					resetForm();
+					// listSent.key()는 order 없는 부분 키 — 최신순·오래된순 두 캐시 모두 무효화한다.
 					await queryClient.invalidateQueries({
 						queryKey: orpc.bambi.directMessages.listSent.key(),
 					});
@@ -347,7 +354,8 @@ export function ModeratorMessagesPanel() {
 								value={recipientSearch}
 							/>
 							{candidates.length > 0 ? (
-								<ul className="flex flex-col gap-1 rounded-lg border border-border bg-card p-1">
+								// 8행 높이(max-h-72)까지만 보이고 그 이상은 스크롤 — 매칭 전량 노출.
+								<ul className="flex max-h-72 flex-col gap-1 overflow-y-auto rounded-lg border border-border bg-card p-1">
 									{candidates.map((candidate) => (
 										<li key={candidate.userId}>
 											<button
@@ -426,8 +434,21 @@ export function ModeratorMessagesPanel() {
 				</Card>
 
 				<Card>
-					<CardHeader>
+					<CardHeader className="flex flex-row items-center justify-between gap-2">
 						<CardTitle className="text-base">발송 이력</CardTitle>
+						<ToggleGroup
+							aria-label="발송 이력 정렬"
+							onValueChange={(value) => {
+								const next = value.at(-1);
+								if (next === "newest" || next === "oldest") {
+									setSentOrder(next);
+								}
+							}}
+							value={[sentOrder]}
+						>
+							<ToggleGroupItem value="newest">최신순</ToggleGroupItem>
+							<ToggleGroupItem value="oldest">오래된순</ToggleGroupItem>
+						</ToggleGroup>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-3">
 						{sentQuery.isPending ? (

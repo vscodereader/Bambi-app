@@ -8,9 +8,11 @@ import {
 import { ORPCError } from "@orpc/server";
 import {
 	and,
+	asc,
 	count,
 	desc,
 	eq,
+	gt,
 	inArray,
 	isNotNull,
 	isNull,
@@ -59,6 +61,7 @@ const listMineInput = z.object({
 const listSentInput = z.object({
 	cursor: cursorInput.optional(),
 	limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+	order: z.enum(["newest", "oldest"]).default("newest"),
 });
 
 const messageIdInput = z.object({ messageId: z.string().uuid() });
@@ -190,16 +193,20 @@ export const directMessagesRouter = {
 	}),
 
 	listSent: adminProcedure.input(listSentInput).handler(async ({ input }) => {
+		// 커서 비교 연산자와 orderBy 방향은 반드시 같아야 페이지가 겹치거나 빠지지 않는다.
+		const isOldest = input.order === "oldest";
+		const beyond = isOldest ? gt : lt;
+		const orderDir = isOldest ? asc : desc;
 		const cursorCreatedAt = input.cursor
 			? new Date(input.cursor.createdAt)
 			: null;
-		const olderThanCursor =
+		const beyondCursor =
 			cursorCreatedAt && input.cursor
 				? or(
-						lt(bambiDirectMessage.createdAt, cursorCreatedAt),
+						beyond(bambiDirectMessage.createdAt, cursorCreatedAt),
 						and(
 							eq(bambiDirectMessage.createdAt, cursorCreatedAt),
-							lt(bambiDirectMessage.id, input.cursor.messageId)
+							beyond(bambiDirectMessage.id, input.cursor.messageId)
 						)
 					)
 				: undefined;
@@ -228,8 +235,11 @@ export const directMessagesRouter = {
 			})
 			.from(bambiDirectMessage)
 			.leftJoin(user, eq(user.id, bambiDirectMessage.senderUserId))
-			.where(olderThanCursor)
-			.orderBy(desc(bambiDirectMessage.createdAt), desc(bambiDirectMessage.id))
+			.where(beyondCursor)
+			.orderBy(
+				orderDir(bambiDirectMessage.createdAt),
+				orderDir(bambiDirectMessage.id)
+			)
 			.limit(input.limit + 1);
 
 		const hasMore = rows.length > input.limit;
