@@ -55,6 +55,38 @@ export const communityAuthorRoleLabel = (
 ): string =>
 	COMMUNITY_AUTHOR_ROLE_LABELS[role ?? ""] ?? COMMUNITY_AUTHOR_FALLBACK;
 
+// Tiptap 문서 JSON에서 표시용 평문을 뽑는다(목록 1줄 미리보기용). JSON이 아니면 옛
+// 평문 본문이므로 원문을 그대로 돌려준다(하위호환). 블록은 공백으로 이어 붙인다 —
+// 미리보기는 어차피 한 줄로 잘리므로 문단 구분은 필요 없다.
+export const communityBodyToText = (body: string): string => {
+	let doc: unknown;
+	try {
+		doc = JSON.parse(body);
+	} catch {
+		return body;
+	}
+	if (
+		!doc ||
+		typeof doc !== "object" ||
+		(doc as { type?: unknown }).type !== "doc"
+	) {
+		return body;
+	}
+	const parts: string[] = [];
+	const walk = (node: { content?: unknown[]; text?: unknown }) => {
+		if (typeof node.text === "string") {
+			parts.push(node.text);
+		}
+		if (Array.isArray(node.content)) {
+			for (const child of node.content) {
+				walk(child as { content?: unknown[]; text?: unknown });
+			}
+		}
+	};
+	walk(doc as { content?: unknown[] });
+	return parts.join(" ");
+};
+
 export const COMMUNITY_BOARDS: BuiltinBoardMeta[] = [
 	{
 		adminOnly: true,

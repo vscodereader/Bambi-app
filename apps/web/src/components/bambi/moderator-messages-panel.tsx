@@ -33,7 +33,11 @@ import {
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
-import { Textarea } from "@bambi-app/ui/components/textarea";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@bambi-app/ui/components/toggle-group";
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { InferRouterOutputs } from "@orpc/server";
 import {
 	useInfiniteQuery,
@@ -44,19 +48,24 @@ import {
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { CommunityPostEditor } from "@/components/bambi/community-editor";
+import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
 const TITLE_MAX = 100;
+// 본문 텍스트(서식 제외) 카운터·발송 게이트 기준. 서버 저장은 Tiptap JSON이라
+// 이 상한은 화면 텍스트 UX 기준일 뿐이고, 서버는 JSON 직렬화 상한을 따로 검증한다.
 const BODY_MAX = 2000;
-const CANDIDATE_LIMIT = 8;
 const SENT_PAGE_SIZE = 20;
 const USERS_QUERY_INPUT = { limit: 1000 } as const;
 // 발송 대상이 될 수 없는 역할(운영자·비회원)은 검색 후보·수신자 지정에서 제외한다 —
 // 서버도 개별 지정 경로에서 같은 역할을 거른다.
 const NON_MESSAGEABLE_ROLES = new Set(["admin", "guest"]);
+
+type SentOrder = "newest" | "oldest";
 
 interface SentCursor {
 	createdAt: string;
@@ -103,9 +112,7 @@ function SentDetailBody({ detail }: { detail: SentDetail | undefined }) {
 				{describeTargets(detail.message.targetRoles)} ·{" "}
 				{formatDateTime(detail.message.createdAt)}
 			</DialogDescription>
-			<p className="m-0 whitespace-pre-wrap text-foreground text-sm leading-relaxed">
-				{detail.message.body}
-			</p>
+			<PostBodyViewer body={detail.message.body} />
 			<div className="flex flex-col gap-2">
 				<span className="font-semibold text-foreground text-sm">
 					수신자 {detail.message.recipientCount}명
@@ -150,9 +157,15 @@ export function ModeratorMessagesPanel() {
 	const [recipientSearch, setRecipientSearch] = useState("");
 	const [selected, setSelected] = useState<SelectedRecipient[]>([]);
 	const [title, setTitle] = useState("");
+	// body는 Tiptap 문서 JSON 문자열(제출용), bodyText는 그 순수 텍스트(비어있음·카운터 판정용).
 	const [body, setBody] = useState("");
+	const [bodyText, setBodyText] = useState("");
+	// 발송 성공 후 에디터를 초기화하기 위한 리마운트 키 — CommunityPostEditor는 value를
+	// 마운트 시 1회만 읽는 비제어 규약이라 내용을 비우려면 새로 마운트해야 한다.
+	const [editorKey, setEditorKey] = useState(0);
 	const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 	const [detailMessageId, setDetailMessageId] = useState<null | string>(null);
+	const [sentOrder, setSentOrder] = useState<SentOrder>("newest");
 
 	const usersQuery = useQuery(
 		orpc.bambi.moderation.listUsers.queryOptions({ input: USERS_QUERY_INPUT })
@@ -161,9 +174,11 @@ export function ModeratorMessagesPanel() {
 		orpc.bambi.directMessages.listSent.infiniteOptions({
 			getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
 			initialPageParam: null as SentCursor | null,
+			// order를 input에 넣으면 쿼리키가 정렬별로 갈라져 전환 시 커서·캐시가 자동 분리된다.
 			input: (cursor: SentCursor | null) => ({
 				cursor: cursor ?? undefined,
 				limit: SENT_PAGE_SIZE,
+				order: sentOrder,
 			}),
 		})
 	);
@@ -213,17 +228,15 @@ export function ModeratorMessagesPanel() {
 		if (keyword.length === 0) {
 			return [];
 		}
-		return users
-			.filter(
-				(candidate) =>
-					candidate.deletedAt === null &&
-					!NON_MESSAGEABLE_ROLES.has(candidate.role) &&
-					!selectedIds.has(candidate.userId) &&
-					[candidate.name, candidate.loginId ?? ""].some((field) =>
-						field.toLowerCase().includes(keyword)
-					)
-			)
-			.slice(0, CANDIDATE_LIMIT);
+		return users.filter(
+			(candidate) =>
+				candidate.deletedAt === null &&
+				!NON_MESSAGEABLE_ROLES.has(candidate.role) &&
+				!selectedIds.has(candidate.userId) &&
+				[candidate.name, candidate.loginId ?? ""].some((field) =>
+					field.toLowerCase().includes(keyword)
+				)
+		);
 	}, [recipientSearch, users, selectedIds]);
 
 	const roles = useMemo(() => {
@@ -238,8 +251,12 @@ export function ModeratorMessagesPanel() {
 	}, [roleJobSeeker, roleEmployer]);
 
 	const hasTarget = roles.length > 0 || selected.length > 0;
+	const bodyLength = bodyText.trim().length;
 	const canSend =
-		hasTarget && title.trim().length > 0 && body.trim().length > 0;
+		hasTarget &&
+		title.trim().length > 0 &&
+		bodyLength > 0 &&
+		bodyLength <= BODY_MAX;
 
 	const addRecipient = (recipient: SelectedRecipient) => {
 		setSelected((prev) =>
@@ -260,6 +277,8 @@ export function ModeratorMessagesPanel() {
 		setSelected([]);
 		setTitle("");
 		setBody("");
+		setBodyText("");
+		setEditorKey((key) => key + 1);
 		setRecipientSearch("");
 	};
 
@@ -271,7 +290,7 @@ export function ModeratorMessagesPanel() {
 	const handleSend = () => {
 		sendMutation.mutate(
 			{
-				body: body.trim(),
+				body,
 				recipientUserIds: selected.map((item) => item.id),
 				roles,
 				title: title.trim(),
@@ -284,6 +303,7 @@ export function ModeratorMessagesPanel() {
 				onSuccess: async (result) => {
 					setIsConfirmOpen(false);
 					resetForm();
+					// listSent.key()는 order 없는 부분 키 — 최신순·오래된순 두 캐시 모두 무효화한다.
 					await queryClient.invalidateQueries({
 						queryKey: orpc.bambi.directMessages.listSent.key(),
 					});
@@ -347,7 +367,8 @@ export function ModeratorMessagesPanel() {
 								value={recipientSearch}
 							/>
 							{candidates.length > 0 ? (
-								<ul className="flex flex-col gap-1 rounded-lg border border-border bg-card p-1">
+								// 8행 높이(max-h-72)까지만 보이고 그 이상은 스크롤 — 매칭 전량 노출.
+								<ul className="flex max-h-72 flex-col gap-1 overflow-y-auto rounded-lg border border-border bg-card p-1">
 									{candidates.map((candidate) => (
 										<li key={candidate.userId}>
 											<button
@@ -400,17 +421,27 @@ export function ModeratorMessagesPanel() {
 						</div>
 
 						<div className="flex flex-col gap-2">
-							<Label htmlFor="message-body">내용</Label>
-							<Textarea
-								id="message-body"
-								maxLength={BODY_MAX}
-								onChange={(event) => setBody(event.target.value)}
-								placeholder="쪽지 내용을 입력하세요."
-								rows={6}
-								value={body}
+							<span className="font-medium text-sm">내용</span>
+							{/* 수다방 본문 에디터 재사용 — 굵게·기울임·목록·링크 서식과 이미지 URL 삽입.
+							    이미지 파일 업로드는 커뮤니티 이미지 업로드 보류 정책과 동일하게 끈다. */}
+							<CommunityPostEditor
+								allowUpload={false}
+								key={editorKey}
+								onChange={({ json, text }) => {
+									setBody(json);
+									setBodyText(text);
+								}}
+								value=""
 							/>
-							<span className="text-muted-foreground text-xs">
-								{body.length} / {BODY_MAX}
+							<span
+								className={cn(
+									"text-xs",
+									bodyLength > BODY_MAX
+										? "text-destructive"
+										: "text-muted-foreground"
+								)}
+							>
+								{bodyLength} / {BODY_MAX}
 							</span>
 						</div>
 
@@ -426,8 +457,21 @@ export function ModeratorMessagesPanel() {
 				</Card>
 
 				<Card>
-					<CardHeader>
+					<CardHeader className="flex flex-row items-center justify-between gap-2">
 						<CardTitle className="text-base">발송 이력</CardTitle>
+						<ToggleGroup
+							aria-label="발송 이력 정렬"
+							onValueChange={(value) => {
+								const next = value.at(-1);
+								if (next === "newest" || next === "oldest") {
+									setSentOrder(next);
+								}
+							}}
+							value={[sentOrder]}
+						>
+							<ToggleGroupItem value="newest">최신순</ToggleGroupItem>
+							<ToggleGroupItem value="oldest">오래된순</ToggleGroupItem>
+						</ToggleGroup>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-3">
 						{sentQuery.isPending ? (

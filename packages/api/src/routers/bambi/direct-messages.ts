@@ -8,9 +8,11 @@ import {
 import { ORPCError } from "@orpc/server";
 import {
 	and,
+	asc,
 	count,
 	desc,
 	eq,
+	gt,
 	inArray,
 	isNotNull,
 	isNull,
@@ -23,7 +25,6 @@ import z from "zod";
 import { adminProcedure, protectedProcedure } from "../../index";
 import { requireActiveBambiProfile } from "../../services/bambi-authz";
 import {
-	DIRECT_MESSAGE_BODY_MAX,
 	DIRECT_MESSAGE_TITLE_MAX,
 	expandTargetRoles,
 	mergeRecipientUserIds,
@@ -32,6 +33,10 @@ import { notifyBambiNotification } from "../../services/bambi-notifications";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
+// 본문은 Tiptap 문서 JSON 문자열이라 직렬화 기준 상한을 둔다(community BODY_MAX 관례).
+// 화면에 보이는 텍스트 2000자 제한(DIRECT_MESSAGE_BODY_MAX)은 클라이언트 UX 기준이며,
+// 서식 태그·이미지 URL을 감싼 JSON은 그보다 훨씬 커질 수 있어 여기서는 재지 않는다.
+const BODY_JSON_MAX = 30_000;
 // 전체 구직자 브로드캐스트가 수천 행일 수 있어 insert를 나눈다(파라미터 한도 대비).
 const INSERT_CHUNK_SIZE = 500;
 // ponytail: 수신자당 개별 INSERT+emit, 대량 브로드캐스트가 상시화되면 알림 배치 insert로 승격
@@ -41,7 +46,7 @@ const sendInput = z.object({
 	roles: z.array(z.enum(["job_seeker", "employer"])).default([]),
 	recipientUserIds: z.array(z.string().min(1)).max(1000).default([]),
 	title: z.string().trim().min(1).max(DIRECT_MESSAGE_TITLE_MAX),
-	body: z.string().trim().min(1).max(DIRECT_MESSAGE_BODY_MAX),
+	body: z.string().trim().min(1).max(BODY_JSON_MAX),
 });
 
 // 정렬 총순서 (created_at, message_id) — notifications.list와 같은 keyset 규칙.
@@ -59,6 +64,7 @@ const listMineInput = z.object({
 const listSentInput = z.object({
 	cursor: cursorInput.optional(),
 	limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+	order: z.enum(["newest", "oldest"]).default("newest"),
 });
 
 const messageIdInput = z.object({ messageId: z.string().uuid() });
@@ -190,16 +196,20 @@ export const directMessagesRouter = {
 	}),
 
 	listSent: adminProcedure.input(listSentInput).handler(async ({ input }) => {
+		// 커서 비교 연산자와 orderBy 방향은 반드시 같아야 페이지가 겹치거나 빠지지 않는다.
+		const isOldest = input.order === "oldest";
+		const beyond = isOldest ? gt : lt;
+		const orderDir = isOldest ? asc : desc;
 		const cursorCreatedAt = input.cursor
 			? new Date(input.cursor.createdAt)
 			: null;
-		const olderThanCursor =
+		const beyondCursor =
 			cursorCreatedAt && input.cursor
 				? or(
-						lt(bambiDirectMessage.createdAt, cursorCreatedAt),
+						beyond(bambiDirectMessage.createdAt, cursorCreatedAt),
 						and(
 							eq(bambiDirectMessage.createdAt, cursorCreatedAt),
-							lt(bambiDirectMessage.id, input.cursor.messageId)
+							beyond(bambiDirectMessage.id, input.cursor.messageId)
 						)
 					)
 				: undefined;
@@ -228,8 +238,11 @@ export const directMessagesRouter = {
 			})
 			.from(bambiDirectMessage)
 			.leftJoin(user, eq(user.id, bambiDirectMessage.senderUserId))
-			.where(olderThanCursor)
-			.orderBy(desc(bambiDirectMessage.createdAt), desc(bambiDirectMessage.id))
+			.where(beyondCursor)
+			.orderBy(
+				orderDir(bambiDirectMessage.createdAt),
+				orderDir(bambiDirectMessage.id)
+			)
 			.limit(input.limit + 1);
 
 		const hasMore = rows.length > input.limit;
