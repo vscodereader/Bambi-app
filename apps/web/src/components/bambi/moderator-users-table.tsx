@@ -211,6 +211,8 @@ function getColumns({
 					<span className="text-muted-foreground">-</span>
 				) : (
 					<Button
+						// Link는 <a>라 네이티브 버튼이 아니므로 base-ui에 명시(콘솔 경고 방지).
+						nativeButton={false}
 						render={
 							<Link href={`/moderator/messages?to=${user.id}` as Route} />
 						}
