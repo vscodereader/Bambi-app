@@ -20,8 +20,11 @@ describe("모바일 신고창 밀도", () => {
 	});
 
 	it("사유 터치 높이를 유지하면서 간격·입력창·액션 높이를 줄인다", () => {
-		expect(formSource).toContain("flex min-h-11 cursor-pointer");
+		expect(formSource).toContain(
+			"flex min-h-11 cursor-pointer items-center gap-3 rounded-md"
+		);
 		expect(formSource).toContain('"min-h-16 md:min-h-20"');
 		expect(formSource).toContain('className="grid grid-cols-2 gap-2.5"');
+		expect(formSource).not.toContain("rounded-[14px]");
 	});
 });

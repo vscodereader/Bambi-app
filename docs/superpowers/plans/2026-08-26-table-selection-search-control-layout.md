@@ -70,6 +70,7 @@
 - 모바일 DialogContent는 기존 `w-80`, `gap-3`, `p-4` 토큰을 사용한다.
 - 신고 폼은 모바일에서 기존 spacing·typography 토큰으로 gap·padding·제목·입력 높이를 한 단계 줄인다.
 - 사유 항목은 `min-h-11`을 사용해 최소 터치 높이를 유지한다.
+- `safety-kit.tsx`의 기존 `rounded-[14px]` 하드코딩은 같은 14px 반경을 제공하는 디자인 토큰 `rounded-md`로 모두 치환한다.
 - 취소·접수 버튼은 모바일에서도 2열로 배치한다.
 - 선택 사유 색상·상태 배지·서버 제출 로직은 변경하지 않는다.
 
@@ -103,7 +104,7 @@
 - [x] 공고 검수 상세 카드 폭 테스트 통과
 - [x] 변경 파일이 네 번째 작업의 소스 1개·테스트 1개와 갱신된 설계서로 한정됨
 
-**추가 작업 검증 결과:** 관련 Vitest 4파일 5테스트, `pnpm --filter web check-types`, 변경 TypeScript 파일 Biome, `git diff --check`를 통과했다.
+**추가 작업 검증 결과:** 관련 Vitest 4파일 5테스트, `pnpm --filter web check-types`, 변경 TypeScript 파일 Biome, `git diff --check`를 통과했다. 후속 하드코딩 점검에서 신고 폼의 14px 반경을 동일 값의 `rounded-md` 토큰으로 치환하고 회귀 단언을 추가했다.
 
 ## 커밋 구분
 

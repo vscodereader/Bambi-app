@@ -246,7 +246,7 @@ export function GuardSummary({
 		return (
 			<div
 				className={cn(
-					"flex items-center gap-2.5 rounded-[14px] px-3.5 py-3",
+					"flex items-center gap-2.5 rounded-md px-3.5 py-3",
 					SEV_BG_CLASS[tone].ok,
 					SEV_FG_CLASS[tone].ok
 				)}
@@ -272,7 +272,7 @@ export function GuardSummary({
 	return (
 		<div
 			className={cn(
-				"flex flex-col gap-2.5 rounded-[14px] p-3.5",
+				"flex flex-col gap-2.5 rounded-md p-3.5",
 				SEV_BG_CLASS[tone][key]
 			)}
 		>
@@ -410,7 +410,7 @@ export function ReportForm({
 					return (
 						<button
 							className={cn(
-								"flex min-h-11 cursor-pointer items-center gap-3 rounded-[14px] border px-3 py-2 text-left transition-all md:px-3.5 md:py-3",
+								"flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-left transition-all md:px-3.5 md:py-3",
 								on
 									? "border-[color:var(--color-primary)] bg-coral-50"
 									: "border-[color:var(--border-default)] bg-card"
@@ -452,7 +452,7 @@ export function ReportForm({
 			</div>
 			<textarea
 				className={cn(
-					"box-border w-full resize-none rounded-[14px] border border-[color:var(--border-default)] bg-card p-3.5 text-base text-foreground leading-normal outline-none",
+					"box-border w-full resize-none rounded-md border border-[color:var(--border-default)] bg-card p-3.5 text-base text-foreground leading-normal outline-none",
 					compact ? "min-h-14" : "min-h-16 md:min-h-20"
 				)}
 				onChange={(e) => setDetail(e.target.value)}
