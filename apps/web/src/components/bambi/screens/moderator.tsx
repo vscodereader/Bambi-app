@@ -845,7 +845,7 @@ export function QueueDetail({
 					<div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
 						{item.detected.length > 0 ? (
 							<div>
-								<div className="mb-2 font-bold text-[13px] text-foreground">
+								<div className="mb-2 font-bold text-foreground text-sm">
 									공고 본문 · 감지 표현 강조
 								</div>
 								<div className="rounded-md border border-border bg-secondary p-4">
@@ -862,7 +862,7 @@ export function QueueDetail({
 								<span className="inline-flex size-4.5 text-muted-foreground">
 									<AlertCircle />
 								</span>
-								<span className="font-bold text-[13px] text-foreground">
+								<span className="font-bold text-foreground text-sm">
 									본문 없음 · 이미지로만 등록된 공고
 								</span>
 							</div>
