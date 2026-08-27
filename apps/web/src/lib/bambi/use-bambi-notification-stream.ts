@@ -230,6 +230,9 @@ export function useBambiNotificationStream(enabled: boolean): void {
 		const refreshNotifications = () => {
 			invalidate(orpc.bambi.notifications.unreadCount.queryKey());
 			invalidate(orpc.bambi.notifications.list.key());
+			// 쪽지 도착도 이 경로로 온다(direct_message 타입) — 쪽지 배지도 함께 무효화한다.
+			// 전체 이벤트에 한 줄이면 충분하다(과도 무효화 비용 미미, targetType 분기 불필요).
+			invalidate(orpc.bambi.directMessages.unreadCount.queryKey());
 		};
 
 		return subscribeNotificationStream({

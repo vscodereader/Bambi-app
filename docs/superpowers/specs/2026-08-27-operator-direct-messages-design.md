@@ -89,7 +89,7 @@
 
 ## 3. 웹
 
-### 쪽지함 `/seeker/messages` (전 역할 공용)
+### 쪽지함 `/seeker/me/messages` (전 역할 공용)
 
 - 탭: 받은 쪽지 / 보관함. 목록 행: 제목·발송 시각·안읽음 표시, 열면 상세
   (Dialog 또는 확장)와 동시에 읽음 처리. 행 액션: 보관(해제)·삭제(확인 다이얼로그).
@@ -102,7 +102,7 @@
 - `bambi-notification-stream.ts` 리터럴 유니온에 `direct_message` 추가
   (DB enum과 값 복제 규칙 — 파일 상단 주석 관례).
 - `notification-labels.ts`: `direct_message` → 제목 "운영자 쪽지가 도착했어요",
-  본문 `metadata.title`, 딥링크 `/seeker/messages`.
+  본문 `metadata.title`, 딥링크 `/seeker/me/messages`.
 
 ### 운영자 `/moderator/messages`
 

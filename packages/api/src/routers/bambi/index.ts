@@ -12,6 +12,7 @@ import { communityBoardsRouter } from "./community-boards";
 import { contentHistoryRouter } from "./content-history";
 import { crawledJobsRouter } from "./crawled-jobs";
 import { crawlerRouter } from "./crawler";
+import { directMessagesRouter } from "./direct-messages";
 import { jobsRouter } from "./jobs";
 import { mainPopupsRouter } from "./main-popups";
 import { memberGradesRouter } from "./member-grades";
@@ -47,6 +48,7 @@ export const bambiRouter: {
 	contentHistory: typeof contentHistoryRouter;
 	crawledJobs: typeof crawledJobsRouter;
 	crawler: typeof crawlerRouter;
+	directMessages: typeof directMessagesRouter;
 	jobs: typeof jobsRouter;
 	mainPopups: typeof mainPopupsRouter;
 	memberGrades: typeof memberGradesRouter;
@@ -79,6 +81,7 @@ export const bambiRouter: {
 	contentHistory: contentHistoryRouter,
 	crawledJobs: crawledJobsRouter,
 	crawler: crawlerRouter,
+	directMessages: directMessagesRouter,
 	jobs: jobsRouter,
 	mainPopups: mainPopupsRouter,
 	memberGrades: memberGradesRouter,
