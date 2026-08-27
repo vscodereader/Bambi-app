@@ -133,6 +133,23 @@ describe("validateJobForm 상세 블록 상한", () => {
 		expect(result.ok).toBe(true);
 	});
 
+	it("기본 상세설명과 구조화 블록을 각각 보존한다", () => {
+		const descriptionBlocks = [
+			{ id: "heading", text: "제목 블록", type: "heading" as const },
+			{ id: "paragraph", text: "문단 블록", type: "paragraph" as const },
+		];
+		const result = validateJobForm(baseForm, {
+			...options,
+			descriptionBlocks,
+		});
+
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.input.description).toBe(baseForm.description);
+		expect(result.ok && result.input.descriptionBlocks).toEqual(
+			descriptionBlocks
+		);
+	});
+
 	it("최대 개수를 넘기면 안내 문구로 거절한다", () => {
 		const result = validateJobForm(baseForm, {
 			...options,

@@ -3,6 +3,7 @@
 // 밤비 — 운영자 콘솔 라우트 간 공유 상태(검수 큐/신고/사용자/선택/토스트).
 // 레이아웃에 ModProvider를 두면 /moderator/* 라우트 전환에도 상태가 유지된다.
 
+import { toFullJobDescription } from "@bambi-app/api/services/bambi-job-description-blocks";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	createContext,
@@ -106,7 +107,11 @@ interface ModContextValue {
 interface ApiQueueItem {
 	createdAt: Date | string;
 	description: string;
-	descriptionBlocks: { text: string }[];
+	descriptionBlocks: {
+		id: string;
+		text: string;
+		type: "bullet_list" | "callout" | "heading" | "paragraph";
+	}[];
 	// 서버가 저장 시점에 판정한 금칙어 원문. 클라이언트가 규칙을 다시 구현하지 않는다.
 	detectedTerms: string[];
 	hasCoverImage: boolean;
@@ -212,7 +217,10 @@ const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
 
 	return {
 		company: item.organizationDisplayName,
-		desc: item.description,
+		desc: toFullJobDescription({
+			description: item.description,
+			descriptionBlocks: item.descriptionBlocks,
+		}),
 		detected,
 		flags: [...detectionFlags, ...mediaFlags],
 		id: item.id,
