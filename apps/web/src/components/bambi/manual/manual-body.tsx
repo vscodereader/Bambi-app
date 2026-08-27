@@ -38,7 +38,7 @@ function Heading2({ children }: { children?: ReactNode }) {
 function Heading3({ children }: { children?: ReactNode }) {
 	return (
 		<h3
-			className="mt-10 mb-3 scroll-mt-24 font-semibold text-xl"
+			className="mt-10 mb-3 scroll-mt-24 font-semibold text-lg md:text-xl"
 			id={githubSlug(textOf(children))}
 		>
 			{children}
@@ -129,11 +129,19 @@ function Blockquote({ children }: { children?: ReactNode }) {
 
 // 표는 자체 오버플로 래퍼로 감싼다. table 오버라이드가 streamdown 기본 table(자체
 // overflow 래퍼 포함)을 통째로 대체하므로 래퍼 중복은 생기지 않는다.
+// 래퍼는 aria-label 있는 section(=region 랜드마크)+tabIndex=0으로 포커스 가능하게 해,
+// 키보드 사용자가 넘치는 표를 가로 스크롤할 수 있게 한다(axe scrollable-region-focusable).
+// 포커스 표시는 브라우저 기본 outline에 맡긴다.
 function Table({ children }: { children?: ReactNode }) {
 	return (
-		<div className="my-4 w-full overflow-x-auto rounded-lg border">
+		<section
+			aria-label="표"
+			className="my-4 w-full overflow-x-auto rounded-lg border"
+			// biome-ignore lint/a11y/noNoninteractiveTabindex: 스크롤 컨테이너는 포커스 가능해야 키보드로 가로 스크롤할 수 있다
+			tabIndex={0}
+		>
 			<table className="w-full border-collapse text-sm">{children}</table>
-		</div>
+		</section>
 	);
 }
 

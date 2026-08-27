@@ -76,7 +76,7 @@ export function ManualToc({ headings }: { headings: ManualHeading[] }) {
 					<a
 						aria-current={isActive ? "location" : undefined}
 						className={cn(
-							"border-transparent border-l-2 pl-3 text-muted-foreground no-underline transition-colors hover:text-foreground",
+							"border-transparent border-l-2 py-1 pl-3 text-muted-foreground no-underline transition-colors hover:text-foreground",
 							heading.depth === 3 && "pl-7",
 							isActive && "border-primary font-medium text-foreground"
 						)}

@@ -18,6 +18,7 @@ export function ManualTabs({
 		<nav aria-label="매뉴얼 전환" className="flex flex-wrap gap-2">
 			{keys.map((key) => (
 				<Link
+					aria-current={key === active ? "page" : undefined}
 					className={buttonVariants({
 						size: "sm",
 						variant: key === active ? "secondary" : "ghost",
