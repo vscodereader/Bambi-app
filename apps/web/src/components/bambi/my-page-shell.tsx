@@ -29,9 +29,11 @@ import {
 	BookOpenIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
-	ClipboardListIcon,
 	ClockIcon,
 	DollarCircle,
+	FileTextIcon,
+	FlagIcon,
+	InboxIcon,
 	LockIcon,
 	Message,
 	SettingsIcon,
@@ -61,12 +63,12 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 	{ href: MY_PAGE_HUB_HREF, icon: <UserIcon />, label: "내 정보" },
 	{
 		href: "/seeker/me/reports" as Route,
-		icon: <ClipboardListIcon />,
+		icon: <FlagIcon />,
 		label: "내 신고 내역",
 	},
 	{
 		href: "/seeker/me/content" as Route,
-		icon: <ClipboardListIcon />,
+		icon: <FileTextIcon />,
 		label: "글 관리",
 	},
 	{
@@ -84,7 +86,7 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 		icon: <DollarCircle />,
 		label: "포인트 내역",
 	},
-	{ href: MESSAGES_HREF, icon: <Message />, label: "쪽지함" },
+	{ href: MESSAGES_HREF, icon: <InboxIcon />, label: "쪽지함" },
 	{
 		href: "/seeker/me/settings" as Route,
 		icon: <SettingsIcon />,
