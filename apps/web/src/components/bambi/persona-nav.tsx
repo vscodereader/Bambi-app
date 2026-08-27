@@ -218,6 +218,7 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 		path.startsWith("/moderator/points") ||
 		path.startsWith("/moderator/employers") ||
 		path.startsWith("/moderator/team-invites") ||
+		path.startsWith("/moderator/messages") ||
 		path.startsWith("/moderator/payments") ||
 		path.startsWith("/moderator/content") ||
 		path.startsWith("/moderator/support") ||

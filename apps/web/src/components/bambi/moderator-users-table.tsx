@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import type { Route } from "next";
 import Link from "next/link";
@@ -195,6 +196,27 @@ function getColumns({
 					{user.joined}
 				</span>
 			),
+		},
+		{
+			id: "message",
+			header: "쪽지",
+			headerClassName: CENTER_HEADER,
+			cellClassName: CENTER_CELL,
+			// 탈퇴 계정은 서버가 수신자에서 제외하므로 진입점을 아예 숨긴다.
+			cell: (user) =>
+				user.deletedAt ? (
+					<span className="text-muted-foreground">-</span>
+				) : (
+					<Button
+						render={
+							<Link href={`/moderator/messages?to=${user.id}` as Route} />
+						}
+						size="sm"
+						variant="outline"
+					>
+						쪽지
+					</Button>
+				),
 		},
 	];
 }
