@@ -6,6 +6,7 @@ import {
 } from "@bambi-app/ui/components/accordion";
 import { notFound } from "next/navigation";
 import { ManualBody } from "@/components/bambi/manual/manual-body";
+import { ManualScrollTop } from "@/components/bambi/manual/manual-scroll-top";
 import { ManualTabs } from "@/components/bambi/manual/manual-tabs";
 import { ManualToc } from "@/components/bambi/manual/manual-toc";
 import { type ManualKey, manualKeysForRole } from "@/lib/bambi/manual";
@@ -50,6 +51,9 @@ export async function ManualScreen({ manualKey }: { manualKey: ManualKey }) {
 					<ManualBody markdown={doc.markdown} />
 				</div>
 			</div>
+
+			{/* 모바일·태블릿(<lg) 전용 "맨 위로" — 문의하기 FAB 위에 얹힌다. */}
+			<ManualScrollTop />
 		</div>
 	);
 }
