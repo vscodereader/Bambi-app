@@ -595,6 +595,12 @@ const seekerMeSections: {
 		description: "출석 기록·보유 포인트·구매 내역을 한곳에서 확인해요.",
 	},
 	{
+		href: "/seeker/me/messages" as Route,
+		icon: <Message />,
+		label: "쪽지함",
+		description: "운영자가 보낸 쪽지를 확인해요.",
+	},
+	{
 		href: "/seeker/me/settings" as Route,
 		icon: <SettingsIcon />,
 		label: "계정 설정",
