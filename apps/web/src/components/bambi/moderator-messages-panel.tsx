@@ -4,6 +4,7 @@
 // 대상은 역할 축(구직자[법률자문 포함]/구인자) + 특정 사용자 지정을 섞어 쓴다.
 // 수신자 검색은 별도 API 없이 moderation.listUsers(전량) 결과를 클라이언트 필터한다.
 
+import type { AppRouter } from "@bambi-app/api/routers/index";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -33,7 +34,13 @@ import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Textarea } from "@bambi-app/ui/components/textarea";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { InferRouterOutputs } from "@orpc/server";
+import {
+	useInfiniteQuery,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -45,7 +52,16 @@ import { orpc } from "@/utils/orpc";
 const TITLE_MAX = 100;
 const BODY_MAX = 2000;
 const CANDIDATE_LIMIT = 8;
+const SENT_PAGE_SIZE = 20;
 const USERS_QUERY_INPUT = { limit: 1000 } as const;
+// 발송 대상이 될 수 없는 역할(운영자·비회원)은 검색 후보·수신자 지정에서 제외한다 —
+// 서버도 개별 지정 경로에서 같은 역할을 거른다.
+const NON_MESSAGEABLE_ROLES = new Set(["admin", "guest"]);
+
+interface SentCursor {
+	createdAt: string;
+	messageId: string;
+}
 
 // 발송 이력의 대상 요약 라벨. targetRoles는 발송 시 스냅샷된 역할 축 배열이라
 // enum 원값을 그대로 렌더하지 않고 이 맵을 거친다(빈 배열 = 개별 지정만).
@@ -66,6 +82,64 @@ interface SelectedRecipient {
 	name: string;
 }
 
+type SentDetail =
+	InferRouterOutputs<AppRouter>["bambi"]["directMessages"]["sentDetail"];
+
+// 발송 상세 다이얼로그 본문. 헤드라인 수신자 수는 서버 총계(recipientCount)를 쓰고,
+// 목록은 최근 1000명 상한이라 초과 시 안내 한 줄을 덧붙인다.
+function SentDetailBody({ detail }: { detail: SentDetail | undefined }) {
+	if (!detail) {
+		return (
+			<div className="flex flex-col gap-2">
+				<Skeleton className="h-6 w-40" />
+				<Skeleton className="h-20 w-full" />
+			</div>
+		);
+	}
+	return (
+		<>
+			<DialogTitle>{detail.message.title}</DialogTitle>
+			<DialogDescription>
+				{describeTargets(detail.message.targetRoles)} ·{" "}
+				{formatDateTime(detail.message.createdAt)}
+			</DialogDescription>
+			<p className="m-0 whitespace-pre-wrap text-foreground text-sm leading-relaxed">
+				{detail.message.body}
+			</p>
+			<div className="flex flex-col gap-2">
+				<span className="font-semibold text-foreground text-sm">
+					수신자 {detail.message.recipientCount}명
+				</span>
+				<ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+					{detail.recipients.map((recipient) => (
+						<li
+							className="flex items-center justify-between gap-2 text-sm"
+							key={recipient.recipientUserId}
+						>
+							<span className="truncate text-foreground">
+								{recipient.recipientName}
+							</span>
+							{recipient.readAt ? (
+								<Badge variant="success">
+									{formatDateTime(recipient.readAt)} 읽음
+								</Badge>
+							) : (
+								<Badge variant="secondary">안읽음</Badge>
+							)}
+						</li>
+					))}
+				</ul>
+				{detail.recipients.length >= 1000 &&
+				detail.message.recipientCount > 1000 ? (
+					<span className="text-muted-foreground text-xs">
+						최근 1000명만 표시됩니다.
+					</span>
+				) : null}
+			</div>
+		</>
+	);
+}
+
 export function ModeratorMessagesPanel() {
 	const queryClient = useQueryClient();
 	const searchParams = useSearchParams();
@@ -83,8 +157,15 @@ export function ModeratorMessagesPanel() {
 	const usersQuery = useQuery(
 		orpc.bambi.moderation.listUsers.queryOptions({ input: USERS_QUERY_INPUT })
 	);
-	const sentQuery = useQuery(
-		orpc.bambi.directMessages.listSent.queryOptions({ input: {} })
+	const sentQuery = useInfiniteQuery(
+		orpc.bambi.directMessages.listSent.infiniteOptions({
+			getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+			initialPageParam: null as SentCursor | null,
+			input: (cursor: SentCursor | null) => ({
+				cursor: cursor ?? undefined,
+				limit: SENT_PAGE_SIZE,
+			}),
+		})
 	);
 	const detailQuery = useQuery(
 		orpc.bambi.directMessages.sentDetail.queryOptions({
@@ -129,6 +210,7 @@ export function ModeratorMessagesPanel() {
 			.filter(
 				(candidate) =>
 					candidate.deletedAt === null &&
+					!NON_MESSAGEABLE_ROLES.has(candidate.role) &&
 					!selectedIds.has(candidate.userId) &&
 					[candidate.name, candidate.loginId ?? ""].some((field) =>
 						field.toLowerCase().includes(keyword)
@@ -204,7 +286,7 @@ export function ModeratorMessagesPanel() {
 		);
 	};
 
-	const sentItems = sentQuery.data?.items ?? [];
+	const sentItems = sentQuery.data?.pages.flatMap((page) => page.items) ?? [];
 
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
@@ -383,6 +465,20 @@ export function ModeratorMessagesPanel() {
 								</div>
 							</button>
 						))}
+
+						{sentQuery.hasNextPage ? (
+							<Button
+								className="self-center"
+								disabled={sentQuery.isFetchingNextPage}
+								onClick={() => {
+									sentQuery.fetchNextPage().catch(() => undefined);
+								}}
+								type="button"
+								variant="outline"
+							>
+								{sentQuery.isFetchingNextPage ? "불러오는 중…" : "더 보기"}
+							</Button>
+						) : null}
 					</CardContent>
 				</Card>
 			</div>
@@ -415,48 +511,8 @@ export function ModeratorMessagesPanel() {
 				}}
 				open={detailMessageId !== null}
 			>
-				<DialogContent className="w-[560px]">
-					{detailQuery.data ? (
-						<>
-							<DialogTitle>{detailQuery.data.message.title}</DialogTitle>
-							<DialogDescription>
-								{describeTargets(detailQuery.data.message.targetRoles)} ·{" "}
-								{formatDateTime(detailQuery.data.message.createdAt)}
-							</DialogDescription>
-							<p className="m-0 whitespace-pre-wrap text-foreground text-sm leading-relaxed">
-								{detailQuery.data.message.body}
-							</p>
-							<div className="flex flex-col gap-2">
-								<span className="font-semibold text-foreground text-sm">
-									수신자 {detailQuery.data.recipients.length}명
-								</span>
-								<ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
-									{detailQuery.data.recipients.map((recipient) => (
-										<li
-											className="flex items-center justify-between gap-2 text-sm"
-											key={recipient.recipientUserId}
-										>
-											<span className="truncate text-foreground">
-												{recipient.recipientName}
-											</span>
-											{recipient.readAt ? (
-												<Badge variant="success">
-													{formatDateTime(recipient.readAt)} 읽음
-												</Badge>
-											) : (
-												<Badge variant="secondary">안읽음</Badge>
-											)}
-										</li>
-									))}
-								</ul>
-							</div>
-						</>
-					) : (
-						<div className="flex flex-col gap-2">
-							<Skeleton className="h-6 w-40" />
-							<Skeleton className="h-20 w-full" />
-						</div>
-					)}
+				<DialogContent className="sm:w-full sm:max-w-xl">
+					<SentDetailBody detail={detailQuery.data} />
 				</DialogContent>
 			</Dialog>
 		</div>

@@ -202,9 +202,10 @@ function getColumns({
 			header: "쪽지",
 			headerClassName: CENTER_HEADER,
 			cellClassName: CENTER_CELL,
-			// 탈퇴 계정은 서버가 수신자에서 제외하므로 진입점을 아예 숨긴다.
+			// 탈퇴 계정·발송 불가 역할(운영자·비회원)은 서버가 수신자에서 제외하므로
+			// 진입점을 아예 숨긴다.
 			cell: (user) =>
-				user.deletedAt ? (
+				user.deletedAt || user.role === "admin" || user.role === "guest" ? (
 					<span className="text-muted-foreground">-</span>
 				) : (
 					<Button

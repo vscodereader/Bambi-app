@@ -34,6 +34,8 @@ const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
 // 전체 구직자 브로드캐스트가 수천 행일 수 있어 insert를 나눈다(파라미터 한도 대비).
 const INSERT_CHUNK_SIZE = 500;
+// ponytail: 수신자당 개별 INSERT+emit, 대량 브로드캐스트가 상시화되면 알림 배치 insert로 승격
+const NOTIFY_CHUNK_SIZE = 25;
 
 const sendInput = z.object({
 	roles: z.array(z.enum(["job_seeker", "employer"])).default([]),
@@ -86,9 +88,12 @@ export const directMessagesRouter = {
 	send: adminProcedure.input(sendInput).handler(async ({ context, input }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
+		// 중복 역할은 한 번만 — 스냅샷·확장 입력 양쪽에서 정규화해 쓴다.
+		const roles = [...new Set(input.roles)];
+
 		// 역할 브로드캐스트 대상: 해당 역할의 활성 프로필 계정(탈퇴 계정은 user 삭제
 		// 아닌 soft라 bambi_profile이 남는다 — user.deletedAt으로 거른다).
-		const expandedRoles = expandTargetRoles(input.roles);
+		const expandedRoles = expandTargetRoles(roles);
 		const roleUserIds =
 			expandedRoles.length > 0
 				? (
@@ -105,17 +110,21 @@ export const directMessagesRouter = {
 					).map((row) => row.userId)
 				: [];
 
-		// 개별 지정은 실존·미탈퇴 계정만 남긴다(지운 계정 id가 섞여도 조용히 제외).
+		// 개별 지정은 실존·미탈퇴 + 발송 가능 역할(구직자·법률자문·구인자)만 남긴다.
+		// admin·guest는 조용히 제외하고, 프로필 없는 온보딩 전 계정은 job_seeker로 취급
+		// (moderation.listUsers의 coalesce 관례). 지운 계정 id가 섞여도 조용히 빠진다.
 		const explicitUserIds =
 			input.recipientUserIds.length > 0
 				? (
 						await db
 							.select({ id: user.id })
 							.from(user)
+							.leftJoin(bambiProfile, eq(bambiProfile.userId, user.id))
 							.where(
 								and(
 									inArray(user.id, input.recipientUserIds),
-									isNull(user.deletedAt)
+									isNull(user.deletedAt),
+									sql`coalesce(${bambiProfile.role}, 'job_seeker') in ('job_seeker', 'employer', 'legal_advisor')`
 								)
 							)
 					).map((row) => row.id)
@@ -136,7 +145,7 @@ export const directMessagesRouter = {
 				.insert(bambiDirectMessage)
 				.values({
 					senderUserId: profile.userId,
-					targetRoles: input.roles,
+					targetRoles: roles,
 					title: input.title,
 					body: input.body,
 				})
@@ -160,14 +169,21 @@ export const directMessagesRouter = {
 		});
 
 		// 커밋 후 best-effort 알림 — 알림 실패가 발송을 깨지 않는다(래퍼가 삼킨다).
-		for (const recipientUserId of recipientUserIds) {
-			await notifyBambiNotification({
-				actorUserId: profile.userId,
-				metadata: { title: input.title },
-				recipientUserId,
-				targetId: messageId,
-				targetType: "direct_message",
-			});
+		// 청크 단위 병렬로 순차 왕복을 줄인다(래퍼가 개별 실패를 삼켜 Promise.all 안전).
+		for (let i = 0; i < recipientUserIds.length; i += NOTIFY_CHUNK_SIZE) {
+			await Promise.all(
+				recipientUserIds
+					.slice(i, i + NOTIFY_CHUNK_SIZE)
+					.map((recipientUserId) =>
+						notifyBambiNotification({
+							actorUserId: profile.userId,
+							metadata: { title: input.title },
+							recipientUserId,
+							targetId: messageId,
+							targetType: "direct_message",
+						})
+					)
+			);
 		}
 
 		return { messageId, recipientCount: recipientUserIds.length };
@@ -234,6 +250,12 @@ export const directMessagesRouter = {
 	sentDetail: adminProcedure
 		.input(messageIdInput)
 		.handler(async ({ input }) => {
+			// listSent와 같은 상관 서브쿼리 — 아래 recipients는 1000건 상한이라 실제
+			// 발송 수와 다를 수 있어 정확한 총계를 헤드라인용으로 따로 센다.
+			const recipientCountSql = sql<number>`(
+				select count(*)::int from ${bambiDirectMessageRecipient}
+				where ${bambiDirectMessageRecipient.messageId} = ${bambiDirectMessage.id}
+			)`;
 			const [message] = await db
 				.select({
 					messageId: bambiDirectMessage.id,
@@ -241,6 +263,7 @@ export const directMessagesRouter = {
 					body: bambiDirectMessage.body,
 					targetRoles: bambiDirectMessage.targetRoles,
 					senderName: user.name,
+					recipientCount: recipientCountSql,
 					createdAt: bambiDirectMessage.createdAt,
 				})
 				.from(bambiDirectMessage)

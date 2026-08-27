@@ -110,6 +110,9 @@ export function MessagesScreen() {
 
 	const read = useMutation(
 		orpc.bambi.directMessages.read.mutationOptions({
+			onError: () => {
+				toast.error("쪽지를 읽음 처리하지 못했어요");
+			},
 			onSuccess: (result) => {
 				applyUnreadCount(result.unreadCount);
 				invalidateList();
