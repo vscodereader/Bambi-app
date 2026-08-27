@@ -50,6 +50,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CommunityPostEditor } from "@/components/bambi/community-editor";
 import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
+import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { formatDateTime } from "@/lib/bambi-format";
@@ -93,10 +94,45 @@ interface SelectedRecipient {
 
 type SentDetail =
 	InferRouterOutputs<AppRouter>["bambi"]["directMessages"]["sentDetail"];
+type SentRecipient = SentDetail["recipients"][number];
+
+// 수신자 목록 테이블 컬럼. 상태 정렬은 읽음 시각(안읽음=0)으로 걸어 안읽음이 한데 묶인다.
+const RECIPIENT_COLUMNS: DataColumn<SentRecipient>[] = [
+	{
+		id: "recipientName",
+		header: "수신자",
+		sortValue: (recipient) => recipient.recipientName,
+		cell: (recipient) => (
+			<span
+				className="block max-w-[16rem] truncate text-foreground"
+				title={recipient.recipientName}
+			>
+				{recipient.recipientName}
+			</span>
+		),
+	},
+	{
+		id: "readAt",
+		header: "상태",
+		headerClassName: "whitespace-nowrap",
+		cellClassName: "whitespace-nowrap",
+		sortValue: (recipient) =>
+			recipient.readAt ? new Date(recipient.readAt).getTime() : 0,
+		cell: (recipient) =>
+			recipient.readAt ? (
+				<Badge variant="success">{formatDateTime(recipient.readAt)} 읽음</Badge>
+			) : (
+				<Badge variant="secondary">안읽음</Badge>
+			),
+	},
+];
 
 // 발송 상세 다이얼로그 본문. 헤드라인 수신자 수는 서버 총계(recipientCount)를 쓰고,
 // 목록은 최근 1000명 상한이라 초과 시 안내 한 줄을 덧붙인다.
+// 페이지 리셋은 부모가 detailMessageId를 key로 걸어 리마운트로 처리한다(다른 쪽지 = 1페이지부터).
 function SentDetailBody({ detail }: { detail: SentDetail | undefined }) {
+	const [page, setPage] = useState(0);
+
 	if (!detail) {
 		return (
 			<div className="flex flex-col gap-2">
@@ -117,25 +153,16 @@ function SentDetailBody({ detail }: { detail: SentDetail | undefined }) {
 				<span className="font-semibold text-foreground text-sm">
 					수신자 {detail.message.recipientCount}명
 				</span>
-				<ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
-					{detail.recipients.map((recipient) => (
-						<li
-							className="flex items-center justify-between gap-2 text-sm"
-							key={recipient.recipientUserId}
-						>
-							<span className="truncate text-foreground">
-								{recipient.recipientName}
-							</span>
-							{recipient.readAt ? (
-								<Badge variant="success">
-									{formatDateTime(recipient.readAt)} 읽음
-								</Badge>
-							) : (
-								<Badge variant="secondary">안읽음</Badge>
-							)}
-						</li>
-					))}
-				</ul>
+				<DataTable
+					columns={RECIPIENT_COLUMNS}
+					data={detail.recipients}
+					emptyMessage="수신자가 없습니다"
+					getRowKey={(recipient) => recipient.recipientUserId}
+					onPageChange={setPage}
+					page={page}
+					pageSize={10}
+					tableClassName="overflow-hidden rounded-xl border border-border"
+				/>
 				{detail.recipients.length >= 1000 &&
 				detail.message.recipientCount > 1000 ? (
 					<span className="text-muted-foreground text-xs">
@@ -563,7 +590,7 @@ export function ModeratorMessagesPanel() {
 				open={detailMessageId !== null}
 			>
 				<DialogContent className="sm:w-full sm:max-w-xl">
-					<SentDetailBody detail={detailQuery.data} />
+					<SentDetailBody detail={detailQuery.data} key={detailMessageId} />
 				</DialogContent>
 			</Dialog>
 		</div>
