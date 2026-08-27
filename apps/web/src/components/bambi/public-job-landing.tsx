@@ -20,6 +20,7 @@ import {
 	HOURS_PLACEHOLDER,
 	toMarketplaceJob,
 } from "@/lib/bambi/api-job-mapper";
+import { guideForIndustrySlug, guidePath } from "@/lib/bambi/guide";
 import {
 	findJobLandingIndustry,
 	findJobLandingRegion,
@@ -361,6 +362,54 @@ function LandingContentSections({ industry, region }: JobLandingTarget) {
 	);
 }
 
+// 업종 랜딩 → 매핑된 관련 가이드 진입 소블록(매핑 없는 업종은 통째 생략).
+function RelatedGuideChip({ industrySlug }: { industrySlug: string }) {
+	const guide = guideForIndustrySlug(industrySlug);
+
+	if (!guide) {
+		return null;
+	}
+
+	return (
+		<section className="flex flex-col gap-2">
+			<h2 className="m-0 font-extrabold text-base">알바 가이드</h2>
+			<ul className="flex list-none flex-wrap gap-2 p-0">
+				<li>
+					<Badge
+						render={
+							<Link href={guidePath(guide.slug) as Route}>{guide.title}</Link>
+						}
+						variant="outline"
+					/>
+				</li>
+			</ul>
+		</section>
+	);
+}
+
+// 인덱스 랜딩 → 가이드 허브 진입 섹션.
+function GuideHubChip() {
+	return (
+		<section className="flex flex-col gap-2">
+			<h2 className="m-0 font-extrabold text-base">알바 가이드</h2>
+			<p className="m-0 text-muted-foreground text-sm">
+				업종별 알바의 뜻과 근무 방식, 자주 묻는 질문을 정리한 가이드를
+				모았습니다.
+			</p>
+			<ul className="flex list-none flex-wrap gap-2 p-0">
+				<li>
+					<Badge
+						render={
+							<Link href={"/jobs/guide" as Route}>알바 가이드 전체 보기</Link>
+						}
+						variant="outline"
+					/>
+				</li>
+			</ul>
+		</section>
+	);
+}
+
 function LandingLinkChips({ items, title }: LandingLinkSection) {
 	return (
 		<section className="flex flex-col gap-2">
@@ -415,8 +464,12 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 			</header>
 
 			<section className="flex flex-col gap-3">
+				{/* 0건일 때 "0개"를 노출하면 AI·검색엔진이 "이 지역엔 이 업종이 없다"로
+				    오인용할 수 있어, 0건일 때만 중립 서술로 바꾼다(1건 이상은 그대로 건수 노출). */}
 				<h2 className="m-0 font-extrabold text-lg">
-					모집 중인 공고 {jobs.length}개
+					{jobs.length > 0
+						? `모집 중인 공고 ${jobs.length}개`
+						: "지금은 새 공고를 준비 중입니다 — 공고는 수시로 업데이트됩니다"}
 				</h2>
 				{/* 그리드 기본 구간에도 grid-cols-1(minmax(0,1fr))을 명시한다 — 안 주면 auto 트랙이
 				    카드 안 truncate(nowrap) 텍스트 폭만큼 벌어져 모바일에서 가로 스크롤이 생긴다. */}
@@ -440,6 +493,9 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 			</section>
 
 			<LandingContentSections industry={industry} region={region} />
+
+			{industry ? <RelatedGuideChip industrySlug={industry.slug} /> : null}
+			{region ? null : <GuideHubChip />}
 
 			{buildLinkSections(target).map((section) => (
 				<LandingLinkChips
