@@ -203,9 +203,11 @@ function getColumns({
 			headerClassName: CENTER_HEADER,
 			cellClassName: CENTER_CELL,
 			// 탈퇴 계정·발송 불가 역할(운영자·비회원)은 서버가 수신자에서 제외하므로
-			// 진입점을 아예 숨긴다.
+			// 진입점을 아예 숨긴다. role은 표시 라벨("운영자")이라 비교는 roleKey로 한다.
 			cell: (user) =>
-				user.deletedAt || user.role === "admin" || user.role === "guest" ? (
+				user.deletedAt ||
+				user.roleKey === "admin" ||
+				user.roleKey === "guest" ? (
 					<span className="text-muted-foreground">-</span>
 				) : (
 					<Button

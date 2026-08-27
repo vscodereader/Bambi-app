@@ -185,7 +185,14 @@ export function ModeratorMessagesPanel() {
 		if (appliedPreset.current || !presetUserId || users.length === 0) {
 			return;
 		}
-		const target = users.find((candidate) => candidate.userId === presetUserId);
+		// URL 조작으로 발송 불가 대상(운영자·비회원·탈퇴)을 프리셋하는 경로도 후보
+		// 검색과 같은 필터로 막는다 — 서버가 최종 거부하지만 조용한 실패 UX를 만들지 않게.
+		const target = users.find(
+			(candidate) =>
+				candidate.userId === presetUserId &&
+				candidate.deletedAt === null &&
+				!NON_MESSAGEABLE_ROLES.has(candidate.role)
+		);
 		if (target) {
 			appliedPreset.current = true;
 			setSelected((prev) =>
