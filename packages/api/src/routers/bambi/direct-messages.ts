@@ -25,7 +25,6 @@ import z from "zod";
 import { adminProcedure, protectedProcedure } from "../../index";
 import { requireActiveBambiProfile } from "../../services/bambi-authz";
 import {
-	DIRECT_MESSAGE_BODY_MAX,
 	DIRECT_MESSAGE_TITLE_MAX,
 	expandTargetRoles,
 	mergeRecipientUserIds,
@@ -34,6 +33,10 @@ import { notifyBambiNotification } from "../../services/bambi-notifications";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
+// 본문은 Tiptap 문서 JSON 문자열이라 직렬화 기준 상한을 둔다(community BODY_MAX 관례).
+// 화면에 보이는 텍스트 2000자 제한(DIRECT_MESSAGE_BODY_MAX)은 클라이언트 UX 기준이며,
+// 서식 태그·이미지 URL을 감싼 JSON은 그보다 훨씬 커질 수 있어 여기서는 재지 않는다.
+const BODY_JSON_MAX = 30_000;
 // 전체 구직자 브로드캐스트가 수천 행일 수 있어 insert를 나눈다(파라미터 한도 대비).
 const INSERT_CHUNK_SIZE = 500;
 // ponytail: 수신자당 개별 INSERT+emit, 대량 브로드캐스트가 상시화되면 알림 배치 insert로 승격
@@ -43,7 +46,7 @@ const sendInput = z.object({
 	roles: z.array(z.enum(["job_seeker", "employer"])).default([]),
 	recipientUserIds: z.array(z.string().min(1)).max(1000).default([]),
 	title: z.string().trim().min(1).max(DIRECT_MESSAGE_TITLE_MAX),
-	body: z.string().trim().min(1).max(DIRECT_MESSAGE_BODY_MAX),
+	body: z.string().trim().min(1).max(BODY_JSON_MAX),
 });
 
 // 정렬 총순서 (created_at, message_id) — notifications.list와 같은 keyset 규칙.

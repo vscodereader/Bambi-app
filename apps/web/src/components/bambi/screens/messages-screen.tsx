@@ -35,8 +35,10 @@ import {
 } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { MyPageShell } from "@/components/bambi/my-page-shell";
+import { communityBodyToText } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
 const PAGE_SIZE = 20;
@@ -227,7 +229,7 @@ export function MessagesScreen() {
 										</span>
 									</div>
 									<p className="m-0 truncate text-muted-foreground text-sm">
-										{item.body}
+										{communityBodyToText(item.body)}
 									</p>
 									<span className="text-muted-foreground text-xs">
 										{formatSentAt(item.createdAt)}
@@ -267,9 +269,7 @@ export function MessagesScreen() {
 						<DialogDescription>
 							{formatSentAt(selected.createdAt)}
 						</DialogDescription>
-						<p className="m-0 whitespace-pre-wrap text-foreground text-sm">
-							{selected.body}
-						</p>
+						<PostBodyViewer body={selected.body} />
 						<div className="flex flex-wrap justify-end gap-2">
 							<Button
 								disabled={setArchived.isPending}

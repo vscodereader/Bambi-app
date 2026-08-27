@@ -33,11 +33,11 @@ import {
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
-import { Textarea } from "@bambi-app/ui/components/textarea";
 import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { InferRouterOutputs } from "@orpc/server";
 import {
 	useInfiniteQuery,
@@ -48,12 +48,16 @@ import {
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { CommunityPostEditor } from "@/components/bambi/community-editor";
+import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
 const TITLE_MAX = 100;
+// 본문 텍스트(서식 제외) 카운터·발송 게이트 기준. 서버 저장은 Tiptap JSON이라
+// 이 상한은 화면 텍스트 UX 기준일 뿐이고, 서버는 JSON 직렬화 상한을 따로 검증한다.
 const BODY_MAX = 2000;
 const SENT_PAGE_SIZE = 20;
 const USERS_QUERY_INPUT = { limit: 1000 } as const;
@@ -108,9 +112,7 @@ function SentDetailBody({ detail }: { detail: SentDetail | undefined }) {
 				{describeTargets(detail.message.targetRoles)} ·{" "}
 				{formatDateTime(detail.message.createdAt)}
 			</DialogDescription>
-			<p className="m-0 whitespace-pre-wrap text-foreground text-sm leading-relaxed">
-				{detail.message.body}
-			</p>
+			<PostBodyViewer body={detail.message.body} />
 			<div className="flex flex-col gap-2">
 				<span className="font-semibold text-foreground text-sm">
 					수신자 {detail.message.recipientCount}명
@@ -155,7 +157,12 @@ export function ModeratorMessagesPanel() {
 	const [recipientSearch, setRecipientSearch] = useState("");
 	const [selected, setSelected] = useState<SelectedRecipient[]>([]);
 	const [title, setTitle] = useState("");
+	// body는 Tiptap 문서 JSON 문자열(제출용), bodyText는 그 순수 텍스트(비어있음·카운터 판정용).
 	const [body, setBody] = useState("");
+	const [bodyText, setBodyText] = useState("");
+	// 발송 성공 후 에디터를 초기화하기 위한 리마운트 키 — CommunityPostEditor는 value를
+	// 마운트 시 1회만 읽는 비제어 규약이라 내용을 비우려면 새로 마운트해야 한다.
+	const [editorKey, setEditorKey] = useState(0);
 	const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 	const [detailMessageId, setDetailMessageId] = useState<null | string>(null);
 	const [sentOrder, setSentOrder] = useState<SentOrder>("newest");
@@ -244,8 +251,12 @@ export function ModeratorMessagesPanel() {
 	}, [roleJobSeeker, roleEmployer]);
 
 	const hasTarget = roles.length > 0 || selected.length > 0;
+	const bodyLength = bodyText.trim().length;
 	const canSend =
-		hasTarget && title.trim().length > 0 && body.trim().length > 0;
+		hasTarget &&
+		title.trim().length > 0 &&
+		bodyLength > 0 &&
+		bodyLength <= BODY_MAX;
 
 	const addRecipient = (recipient: SelectedRecipient) => {
 		setSelected((prev) =>
@@ -266,6 +277,8 @@ export function ModeratorMessagesPanel() {
 		setSelected([]);
 		setTitle("");
 		setBody("");
+		setBodyText("");
+		setEditorKey((key) => key + 1);
 		setRecipientSearch("");
 	};
 
@@ -277,7 +290,7 @@ export function ModeratorMessagesPanel() {
 	const handleSend = () => {
 		sendMutation.mutate(
 			{
-				body: body.trim(),
+				body,
 				recipientUserIds: selected.map((item) => item.id),
 				roles,
 				title: title.trim(),
@@ -408,17 +421,27 @@ export function ModeratorMessagesPanel() {
 						</div>
 
 						<div className="flex flex-col gap-2">
-							<Label htmlFor="message-body">내용</Label>
-							<Textarea
-								id="message-body"
-								maxLength={BODY_MAX}
-								onChange={(event) => setBody(event.target.value)}
-								placeholder="쪽지 내용을 입력하세요."
-								rows={6}
-								value={body}
+							<span className="font-medium text-sm">내용</span>
+							{/* 수다방 본문 에디터 재사용 — 굵게·기울임·목록·링크 서식과 이미지 URL 삽입.
+							    이미지 파일 업로드는 커뮤니티 이미지 업로드 보류 정책과 동일하게 끈다. */}
+							<CommunityPostEditor
+								allowUpload={false}
+								key={editorKey}
+								onChange={({ json, text }) => {
+									setBody(json);
+									setBodyText(text);
+								}}
+								value=""
 							/>
-							<span className="text-muted-foreground text-xs">
-								{body.length} / {BODY_MAX}
+							<span
+								className={cn(
+									"text-xs",
+									bodyLength > BODY_MAX
+										? "text-destructive"
+										: "text-muted-foreground"
+								)}
+							>
+								{bodyLength} / {BODY_MAX}
 							</span>
 						</div>
 

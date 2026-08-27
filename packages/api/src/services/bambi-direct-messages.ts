@@ -5,6 +5,9 @@
 export type DirectMessageTargetRole = "employer" | "job_seeker";
 
 export const DIRECT_MESSAGE_TITLE_MAX = 100;
+// 본문 텍스트(서식 제외 순수 글자) UX 상한 — 작성 화면의 0/2000 카운터 기준값.
+// 서버 저장은 Tiptap JSON 문자열이라 라우터가 별도 JSON 상한(BODY_JSON_MAX=30_000)으로
+// 검증하고, 이 값은 클라이언트가 참고하는 텍스트 기준 상수로만 남긴다.
 export const DIRECT_MESSAGE_BODY_MAX = 2000;
 
 type ExpandedRole = "employer" | "job_seeker" | "legal_advisor";
