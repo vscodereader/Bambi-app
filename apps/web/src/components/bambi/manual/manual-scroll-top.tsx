@@ -31,7 +31,7 @@ export function ManualScrollTop() {
 	return (
 		<Button
 			aria-label="맨 위로"
-			className="fixed right-4 bottom-36 z-50 size-11 rounded-full shadow-[var(--shadow-card)] md:bottom-22 lg:hidden"
+			className="fixed right-4 bottom-36 z-50 size-13 rounded-full md:bottom-22 lg:hidden"
 			onClick={() => {
 				const reduceMotion = window.matchMedia(
 					"(prefers-reduced-motion: reduce)"
@@ -39,9 +39,8 @@ export function ManualScrollTop() {
 				window.scrollTo({ behavior: reduceMotion ? "auto" : "smooth", top: 0 });
 			}}
 			size="icon-lg"
-			variant="outline"
 		>
-			<ArrowUp className="size-5" />
+			<ArrowUp className="size-6" />
 		</Button>
 	);
 }
