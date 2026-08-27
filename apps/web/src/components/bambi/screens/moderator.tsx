@@ -797,7 +797,7 @@ export function QueueDetail({
 			    데스크톱에 그 틀을 그대로 쓰면 내용이 짧을 때 뷰포트 높이만큼 빈 판이 생기고
 			    액션 바가 본문에서 수백 px 아래로 떨어진다. lg부터는 문서처럼 흐르게 두고
 			    카드 한 장으로 감싼다 — 페이지 배경이 bg-secondary라 이 카드가 경계를 만든다. */}
-			<div className="flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto px-6 pt-1 pb-5 lg:mb-6 lg:flex-none lg:gap-6 lg:overflow-visible lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:px-7 lg:pt-6 lg:pb-7 lg:shadow-[var(--shadow-card)]">
+			<div className="flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto px-6 pt-1 pb-5 lg:mx-6 lg:mb-6 lg:flex-none lg:gap-6 lg:overflow-visible lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:px-7 lg:pt-6 lg:pb-7 lg:shadow-[var(--shadow-card)]">
 				{/* 제목과 급여·접수는 "무엇을 심사하는가" 한 덩어리다. 데스크톱에서는 한 줄에
 				    붙여 판단 재료가 시작되는 지점을 위로 끌어올린다. 모바일 순서(제목 → 메타)는
 				    DOM 그대로여야 해서 래퍼를 display:contents로 접어 둔다. */}
