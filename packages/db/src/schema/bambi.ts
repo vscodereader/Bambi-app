@@ -207,6 +207,8 @@ export const notificationTargetType = pgEnum("notification_target_type", [
 	"point_transaction",
 	// 포인트몰 보유 아이템 만료 임박 알림 등.
 	"point_shop_order",
+	// 운영자 쪽지 도착 알림.
+	"direct_message",
 ]);
 
 // 수다방 게시판 정의. 운영자가 코드 배포 없이 추가·수정할 수 있도록 enum이 아니라
@@ -1989,6 +1991,47 @@ export const bambiNotification = pgTable(
 			"bambi_notification_recipient_one_of_ck",
 			sql`num_nonnulls(${table.recipientUserId}, ${table.recipientRole}) = 1`
 		),
+	]
+);
+
+// 운영자 쪽지. 본문 1행 + 수신자 행 분리 — 역할 브로드캐스트에서 본문을 수신자 수만큼
+// 복제하지 않고, 읽음·보관·삭제 상태는 수신자 행에만 둔다. 답장 없음(수신 전용) —
+// 양방향이 필요한 문의는 support-chat이 담당한다.
+export const bambiDirectMessage = pgTable("bambi_direct_message", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	// 발송 운영자. 운영자 계정이 삭제돼도 쪽지는 남아야 하므로 set null.
+	senderUserId: text("sender_user_id").references(() => user.id, {
+		onDelete: "set null",
+	}),
+	// 발송 시 선택한 역할 축 스냅샷(표시용). 개별 지정만이면 빈 배열.
+	targetRoles: text("target_roles").array().notNull().default([]),
+	title: text("title").notNull(),
+	body: text("body").notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const bambiDirectMessageRecipient = pgTable(
+	"bambi_direct_message_recipient",
+	{
+		messageId: uuid("message_id")
+			.notNull()
+			.references(() => bambiDirectMessage.id, { onDelete: "cascade" }),
+		recipientUserId: text("recipient_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		readAt: timestamp("read_at"),
+		archivedAt: timestamp("archived_at"),
+		// 소프트 삭제. 수신자 화면에서만 사라지고 운영자 발송 이력·읽음 통계는 남는다.
+		deletedAt: timestamp("deleted_at"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.messageId, table.recipientUserId] }),
+		index("bambi_dm_recipient_user_idx").on(table.recipientUserId),
+		// 쪽지함 배지 카운트 전용 부분 인덱스.
+		index("bambi_dm_recipient_unread_idx")
+			.on(table.recipientUserId)
+			.where(sql`${table.readAt} IS NULL AND ${table.deletedAt} IS NULL`),
 	]
 );
 

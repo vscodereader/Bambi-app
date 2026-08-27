@@ -27,10 +27,10 @@ describe("테스트 사이트 계정 제재·운영자 채팅·페이지네이�
 		expect(pageControls).toContain('<span className="sr-only">페이지</span>');
 	});
 
-	it("사용자 제재 이력을 서버에서 10개씩 페이지 조회한다", () => {
+	it("사용자 제재 이력을 서버에서 5개씩 페이지 조회한다", () => {
 		const moderator = source("components/bambi/screens/moderator.tsx");
 
-		expect(moderator).toContain("USER_MODERATION_HISTORY_PAGE_SIZE = 10");
+		expect(moderator).toContain("USER_MODERATION_HISTORY_PAGE_SIZE = 5");
 		expect(moderator).toContain("listUserModerationActions.queryOptions");
 		expect(moderator).toContain("Math.ceil(totalCount");
 		expect(moderator).toContain("<PageControls");

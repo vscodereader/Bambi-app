@@ -355,6 +355,12 @@ export default function ModeratorUsersPage() {
 						</SelectContent>
 					</Select>
 				</div>
+				<Button
+					onClick={() => router.push("/moderator/messages" as Route)}
+					variant="outline"
+				>
+					쪽지 보내기
+				</Button>
 			</div>
 
 			{roleTarget ? (

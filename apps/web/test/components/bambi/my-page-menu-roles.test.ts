@@ -16,16 +16,22 @@ describe("내 정보 메뉴 역할별 숨김", () => {
 		expect(shell).not.toContain("employer: [");
 	});
 
-	it("운영자는 신고·면접·차단·이용 가이드·고객센터를 감춘다", () => {
+	it("운영자는 신고·면접·차단·쪽지함·이용 가이드·고객센터를 감춘다", () => {
 		for (const href of [
 			"/seeker/me/reports",
 			"/seeker/me/interviews",
 			"/seeker/me/blocks",
+			"/seeker/me/messages",
 			"/manual",
 			"/support",
 		]) {
 			expect(shell).toContain(`\t\t"${href}",`);
 		}
+	});
+
+	it("쪽지함은 사이드바 내비와 구직자 허브 카드 두 곳에 있다", () => {
+		expect(shell).toContain('label: "쪽지함"');
+		expect(seeker).toContain('label: "쪽지함"');
 	});
 
 	it("숨김 판정은 역할(useBambiAuth)로 하고 두 화면이 같은 표를 쓴다", () => {

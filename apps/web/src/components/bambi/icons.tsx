@@ -26,6 +26,7 @@ import {
 	Flag,
 	House,
 	Image as ImageIconBase,
+	Inbox,
 	Lock,
 	type LucideIcon,
 	type LucideProps,
@@ -83,6 +84,7 @@ export const Flash = fill(Zap);
 export const FlagIcon = fill(Flag);
 export const Home2 = fill(House);
 export const ImageIcon = fill(ImageIconBase);
+export const InboxIcon = fill(Inbox);
 export const LockIcon = fill(Lock);
 export const MapPinIcon = fill(MapPin);
 export const MedalIcon = fill(Medal);
