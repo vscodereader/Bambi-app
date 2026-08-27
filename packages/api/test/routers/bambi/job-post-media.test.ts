@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import type { Context } from "@/context";
@@ -26,8 +26,13 @@ const [
 ]);
 
 const { member, organization, user } = authSchema;
-const { bambiProfile, employerOrganizationProfile, jobPost, jobPostMedia } =
-	bambiSchema;
+const {
+	bambiNotification,
+	bambiProfile,
+	employerOrganizationProfile,
+	jobPost,
+	jobPostMedia,
+} = bambiSchema;
 
 interface JobPostMediaFixture {
 	organizationId: string;
@@ -150,6 +155,16 @@ const createJobPostMediaFixture = async (): Promise<JobPostMediaFixture> => {
 const cleanupJobPostMediaFixture = async (
 	fixture: JobPostMediaFixture
 ): Promise<void> => {
+	// 공고 등록 알림은 actor FK가 user를 참조한다. 공고 cascade만으로 지워지지 않으므로
+	// 사용자보다 먼저 제거해야 픽스처가 dev DB에 남지 않는다.
+	await db
+		.delete(bambiNotification)
+		.where(
+			or(
+				inArray(bambiNotification.actorUserId, fixture.userIds),
+				inArray(bambiNotification.recipientUserId, fixture.userIds)
+			)
+		);
 	await db
 		.delete(jobPostMedia)
 		.where(
@@ -279,9 +294,7 @@ describe("bambi jobs router media and block content", () => {
 				.from(jobPostMedia)
 				.where(eq(jobPostMedia.jobPostId, created.id));
 
-			expect(created.description).toBe(
-				"주요 업무\n\n고객 응대와 예약 관리를 담당합니다."
-			);
+			expect(created.description).toBe(createJobInput(fixture).description);
 			expect(created.descriptionBlocks).toEqual(
 				createJobInput(fixture).descriptionBlocks
 			);
@@ -379,6 +392,9 @@ describe("bambi jobs router media and block content", () => {
 
 			expect(publicDetail.descriptionBlocks).toEqual(
 				createJobInput(fixture).descriptionBlocks
+			);
+			expect(publicDetail.description).toBe(
+				createJobInput(fixture).description
 			);
 			expect(publicDetail.media.cover).toEqual(
 				expect.objectContaining({

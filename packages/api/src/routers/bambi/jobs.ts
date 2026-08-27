@@ -495,10 +495,8 @@ const prepareJobPostContent = async (
 	}
 
 	const normalizedBlocks = normalizeJobDescriptionBlocks(descriptionBlocks);
-	const description =
-		normalizedBlocks.length > 0
-			? toPlainJobDescription(normalizedBlocks)
-			: input.description.trim();
+	const description = input.description.trim();
+	const blockDescription = toPlainJobDescription(normalizedBlocks);
 
 	return {
 		description,
@@ -509,6 +507,7 @@ const prepareJobPostContent = async (
 		detectedTerms: await detectBannedTerms([
 			input.title,
 			description,
+			blockDescription,
 			input.interviewNotes ?? "",
 			collectLayoutModerationText(adBannerLayout),
 		]),
