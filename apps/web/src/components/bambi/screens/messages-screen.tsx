@@ -267,7 +267,7 @@ export function MessagesScreen() {
 					<DialogContent>
 						<DialogTitle>{selected.title}</DialogTitle>
 						<DialogDescription>
-							{formatSentAt(selected.createdAt)}
+							{`${selected.senderName ?? "운영자"} · ${formatSentAt(selected.createdAt)}`}
 						</DialogDescription>
 						<PostBodyViewer body={selected.body} />
 						<div className="flex flex-wrap justify-end gap-2">
@@ -287,7 +287,7 @@ export function MessagesScreen() {
 							<Button
 								onClick={() => setPendingDelete(selected)}
 								type="button"
-								variant="outline"
+								variant="destructive"
 							>
 								삭제
 							</Button>
