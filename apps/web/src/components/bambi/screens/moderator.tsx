@@ -700,7 +700,7 @@ function QueueContentSection({
 
 	if (isError) {
 		return (
-			<div className="rounded-md border border-border bg-secondary px-4 py-3 text-[13px] text-muted-foreground">
+			<div className="rounded-md border border-border bg-secondary px-4 py-3 text-muted-foreground text-sm">
 				공고 내용을 불러오지 못했습니다.
 			</div>
 		);
@@ -713,7 +713,7 @@ function QueueContentSection({
 	return (
 		<Accordion className="rounded-xl border border-border px-4">
 			<AccordionItem value="job-content">
-				<AccordionTrigger className="font-bold text-[13px]">
+				<AccordionTrigger className="font-bold text-sm">
 					공고 내용
 				</AccordionTrigger>
 				<AccordionContent className="pb-4">

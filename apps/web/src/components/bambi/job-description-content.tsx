@@ -23,7 +23,7 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 			});
 
 		return (
-			<ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-[15px] leading-relaxed">
+			<ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-base leading-relaxed">
 				{items.map((item) => (
 					<li key={item.key}>{item.text}</li>
 				))}
@@ -33,14 +33,14 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 
 	if (block.type === "callout") {
 		return (
-			<p className="m-0 whitespace-pre-line border border-coral-200 bg-coral-50 p-3 text-[15px] text-coral-800 leading-relaxed">
+			<p className="m-0 whitespace-pre-line border border-coral-200 bg-coral-50 p-3 text-base text-coral-800 leading-relaxed">
 				{block.text}
 			</p>
 		);
 	}
 
 	return (
-		<p className="m-0 whitespace-pre-line text-[15px] text-foreground leading-relaxed">
+		<p className="m-0 whitespace-pre-line text-base text-foreground leading-relaxed">
 			{block.text}
 		</p>
 	);
@@ -61,7 +61,7 @@ export function JobDescriptionContent({
 	return (
 		<div className="flex flex-col gap-4">
 			{content.showDescription ? (
-				<p className="m-0 whitespace-pre-line text-[15px] text-foreground leading-relaxed">
+				<p className="m-0 whitespace-pre-line text-base text-foreground leading-relaxed">
 					{content.description}
 				</p>
 			) : null}
