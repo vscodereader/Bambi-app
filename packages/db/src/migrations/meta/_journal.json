@@ -799,6 +799,48 @@
       "when": 1787731227359,
       "tag": "0113_lazy_moonstone",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1787732812417,
+      "tag": "0114_freezing_ulik",
+      "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1787791207980,
+      "tag": "0115_repair-attendance-restore-ticket-ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1787799988157,
+      "tag": "0116_unify-attendance-streak-reward-policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1787803433016,
+      "tag": "0117_wild_timeslip",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1787806052142,
+      "tag": "0118_seed-existing-point-shop-product-types",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1787806506720,
+      "tag": "0119_stormy_the_order",
+      "breakpoints": true
     }
   ]
 }

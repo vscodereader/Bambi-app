@@ -453,12 +453,7 @@ export const attendanceRouter = {
 				.where(eq(bambiAttendance.userId, profile.userId))
 				.orderBy(desc(bambiAttendance.attendedOn));
 			const attendedDatesDesc = rows.map((row) => row.attendedOn);
-			const rewardStreakDays = countAttendanceStreak(
-				rows
-					.filter((row) => row.streakRewardEligible)
-					.map((row) => row.attendedOn),
-				today
-			);
+			const streakDays = countAttendanceStreak(attendedDatesDesc, today);
 
 			// 패널 초기 렌더에 잔액이 함께 필요하다(출석 전에도 보여야 해서 checkIn 응답만으론 부족).
 			// 등급표는 잔액과 병렬로 읽는다 — 서로 의존하지 않는 조회다.
@@ -528,12 +523,11 @@ export const attendanceRouter = {
 				restoreTicketBalance:
 					itemBalanceMap.get("attendance_restore_ticket") ?? 0,
 				nextDrawTicketIn:
-					profile.role === "job_seeker" ? 7 - (rewardStreakDays % 7) : null,
-				rewardStreakDays:
-					profile.role === "job_seeker" ? rewardStreakDays : null,
+					profile.role === "job_seeker" ? 7 - (streakDays % 7) : null,
+				rewardStreakDays: profile.role === "job_seeker" ? streakDays : null,
 				// 다음 등급까지 남은 포인트도 등급 기준(포인트몰 제외) 합계로 계산한다.
 				pointsToNext: upcoming ? upcoming.minPoints - gradeBasis : null,
-				streakDays: countAttendanceStreak(attendedDatesDesc, today),
+				streakDays,
 				today,
 				totalDays: attendedDatesDesc.length,
 			};

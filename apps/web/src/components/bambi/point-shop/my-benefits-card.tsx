@@ -98,6 +98,7 @@ export function MyBenefitsCard(): React.JSX.Element {
 								</div>
 								{item.itemType === "draw_ticket" ? (
 									<Button
+										className="no-underline!"
 										nativeButton={false}
 										render={<Link href="/point-shop/draw" />}
 										size="sm"

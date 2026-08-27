@@ -7,7 +7,7 @@ import {
 	bambiPointDrawPrize,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure } from "../../index";
@@ -19,8 +19,9 @@ import {
 } from "../../services/bambi-member-items";
 import { notifyBambiNotification } from "../../services/bambi-notifications";
 import {
-	selectWeightedPrize,
-	sumPrizeWeights,
+	resolvePrizeProbabilities,
+	selectProbabilityPrize,
+	TOTAL_PROBABILITY_UNITS,
 } from "../../services/bambi-point-draw";
 import {
 	awardMemberPoints,
@@ -31,9 +32,43 @@ const DRAW_ROLES = new Set<string>(["job_seeker", "employer"]);
 const prizeInput = z.object({
 	isActive: z.boolean(),
 	points: z.number().int().min(1).max(10_000_000),
+	probabilityUnits: z
+		.number()
+		.int()
+		.min(1)
+		.max(TOTAL_PROBABILITY_UNITS)
+		.nullable(),
 	sortOrder: z.number().int().min(0).max(100_000),
-	weight: z.number().int().min(1).max(1_000_000),
 });
+const prizeSaveInput = prizeInput.omit({ sortOrder: true }).extend({
+	id: z.string().uuid().nullable(),
+});
+type DrawTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+const assertPrizeConfiguration = async (tx: DrawTransaction): Promise<void> => {
+	const activePrizes = await tx
+		.select({
+			id: bambiPointDrawPrize.id,
+			points: bambiPointDrawPrize.points,
+			probabilityUnits: bambiPointDrawPrize.probabilityUnits,
+		})
+		.from(bambiPointDrawPrize)
+		.where(eq(bambiPointDrawPrize.isActive, true))
+		.orderBy(asc(bambiPointDrawPrize.sortOrder), asc(bambiPointDrawPrize.id));
+	if (activePrizes.length === 0) {
+		return;
+	}
+	try {
+		resolvePrizeProbabilities(activePrizes);
+	} catch (error) {
+		throw new ORPCError("BAD_REQUEST", {
+			message:
+				error instanceof Error
+					? error.message
+					: "당첨 확률 설정을 확인해 주세요.",
+		});
+	}
+};
 
 const requireDrawProfile = async (
 	session: Parameters<typeof requireActiveBambiProfile>[0]
@@ -48,15 +83,16 @@ const requireDrawProfile = async (
 };
 
 export const pointDrawRouter = {
-	adminCreatePrize: adminProcedure
-		.input(prizeInput)
-		.handler(async ({ input }) => {
-			const [created] = await db
+	adminCreatePrize: adminProcedure.input(prizeInput).handler(({ input }) =>
+		db.transaction(async (tx) => {
+			const [created] = await tx
 				.insert(bambiPointDrawPrize)
 				.values(input)
 				.returning();
+			await assertPrizeConfiguration(tx);
 			return created;
-		}),
+		})
+	),
 
 	adminListPrizes: adminProcedure.handler(async () =>
 		db
@@ -65,42 +101,127 @@ export const pointDrawRouter = {
 			.orderBy(asc(bambiPointDrawPrize.sortOrder), asc(bambiPointDrawPrize.id))
 	),
 
-	adminRemovePrize: adminProcedure
-		.input(z.object({ id: z.string().uuid() }))
-		.handler(async ({ input }) => {
-			const [removed] = await db
-				.delete(bambiPointDrawPrize)
-				.where(eq(bambiPointDrawPrize.id, input.id))
-				.returning({ id: bambiPointDrawPrize.id });
-			if (!removed) {
-				throw new ORPCError("NOT_FOUND", {
-					message: "당첨 설정을 찾을 수 없어요.",
+	adminSavePrizes: adminProcedure
+		.input(z.object({ prizes: z.array(prizeSaveInput) }))
+		.handler(({ input }) => {
+			const persistedIds = input.prizes.flatMap((prize) =>
+				prize.id === null ? [] : [prize.id]
+			);
+			if (new Set(persistedIds).size !== persistedIds.length) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "중복된 당첨 항목이 있어요.",
 				});
 			}
-			return removed;
+			const activePrizes = input.prizes
+				.map((prize, index) => ({
+					id: prize.id ?? `new-${index}`,
+					isActive: prize.isActive,
+					points: prize.points,
+					probabilityUnits: prize.probabilityUnits,
+				}))
+				.filter((prize) => prize.isActive);
+			if (activePrizes.length > 0) {
+				try {
+					resolvePrizeProbabilities(activePrizes);
+				} catch (error) {
+					throw new ORPCError("BAD_REQUEST", {
+						message:
+							error instanceof Error
+								? error.message
+								: "당첨 확률 설정을 확인해 주세요.",
+					});
+				}
+			}
+
+			return db.transaction(async (tx) => {
+				const existingRows = await tx
+					.select({ id: bambiPointDrawPrize.id })
+					.from(bambiPointDrawPrize);
+				const existingIds = new Set(existingRows.map((row) => row.id));
+				if (persistedIds.some((id) => !existingIds.has(id))) {
+					throw new ORPCError("NOT_FOUND", {
+						message:
+							"다른 곳에서 변경된 당첨 항목이 있어요. 새로고침 후 다시 시도해 주세요.",
+					});
+				}
+				const removedIds = existingRows
+					.map((row) => row.id)
+					.filter((id) => !persistedIds.includes(id));
+				if (removedIds.length > 0) {
+					await tx
+						.delete(bambiPointDrawPrize)
+						.where(inArray(bambiPointDrawPrize.id, removedIds));
+				}
+				for (const [sortOrder, prize] of input.prizes.entries()) {
+					const values = {
+						isActive: prize.isActive,
+						points: prize.points,
+						probabilityUnits: prize.probabilityUnits,
+						sortOrder,
+						updatedAt: new Date(),
+					};
+					if (prize.id === null) {
+						await tx.insert(bambiPointDrawPrize).values(values);
+					} else {
+						await tx
+							.update(bambiPointDrawPrize)
+							.set(values)
+							.where(eq(bambiPointDrawPrize.id, prize.id));
+					}
+				}
+				await assertPrizeConfiguration(tx);
+				return tx
+					.select()
+					.from(bambiPointDrawPrize)
+					.orderBy(
+						asc(bambiPointDrawPrize.sortOrder),
+						asc(bambiPointDrawPrize.id)
+					);
+			});
 		}),
+
+	adminRemovePrize: adminProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.handler(({ input }) =>
+			db.transaction(async (tx) => {
+				const [removed] = await tx
+					.delete(bambiPointDrawPrize)
+					.where(eq(bambiPointDrawPrize.id, input.id))
+					.returning({ id: bambiPointDrawPrize.id });
+				if (!removed) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "당첨 설정을 찾을 수 없어요.",
+					});
+				}
+				await assertPrizeConfiguration(tx);
+				return removed;
+			})
+		),
 
 	adminUpdatePrize: adminProcedure
 		.input(prizeInput.extend({ id: z.string().uuid() }))
-		.handler(async ({ input }) => {
-			const [updated] = await db
-				.update(bambiPointDrawPrize)
-				.set({
-					isActive: input.isActive,
-					points: input.points,
-					sortOrder: input.sortOrder,
-					updatedAt: new Date(),
-					weight: input.weight,
-				})
-				.where(eq(bambiPointDrawPrize.id, input.id))
-				.returning();
-			if (!updated) {
-				throw new ORPCError("NOT_FOUND", {
-					message: "당첨 설정을 찾을 수 없어요.",
-				});
-			}
-			return updated;
-		}),
+		.handler(({ input }) =>
+			db.transaction(async (tx) => {
+				const [updated] = await tx
+					.update(bambiPointDrawPrize)
+					.set({
+						isActive: input.isActive,
+						points: input.points,
+						probabilityUnits: input.probabilityUnits,
+						sortOrder: input.sortOrder,
+						updatedAt: new Date(),
+					})
+					.where(eq(bambiPointDrawPrize.id, input.id))
+					.returning();
+				if (!updated) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "당첨 설정을 찾을 수 없어요.",
+					});
+				}
+				await assertPrizeConfiguration(tx);
+				return updated;
+			})
+		),
 
 	draw: protectedProcedure
 		.input(z.object({ requestId: z.string().uuid() }))
@@ -138,7 +259,7 @@ export const pointDrawRouter = {
 					.select({
 						id: bambiPointDrawPrize.id,
 						points: bambiPointDrawPrize.points,
-						weight: bambiPointDrawPrize.weight,
+						probabilityUnits: bambiPointDrawPrize.probabilityUnits,
 					})
 					.from(bambiPointDrawPrize)
 					.where(eq(bambiPointDrawPrize.isActive, true))
@@ -148,13 +269,21 @@ export const pointDrawRouter = {
 						message: "운영자가 뽑기 보상을 준비 중입니다.",
 					});
 				}
-				const totalWeight = sumPrizeWeights(prizes);
-				if (!Number.isSafeInteger(totalWeight) || totalWeight <= 0) {
-					throw new ORPCError("INTERNAL_SERVER_ERROR", {
-						message: "당첨 설정을 확인해 주세요.",
+				let resolvedPrizes: ReturnType<typeof resolvePrizeProbabilities>;
+				try {
+					resolvedPrizes = resolvePrizeProbabilities(prizes);
+				} catch (error) {
+					throw new ORPCError("BAD_REQUEST", {
+						message:
+							error instanceof Error
+								? error.message
+								: "당첨 확률 설정을 확인해 주세요.",
 					});
 				}
-				const prize = selectWeightedPrize(prizes, randomInt(totalWeight));
+				const prize = selectProbabilityPrize(
+					resolvedPrizes,
+					randomInt(TOTAL_PROBABILITY_UNITS)
+				);
 				let ticketUse: Awaited<ReturnType<typeof adjustMemberItem>>;
 				try {
 					ticketUse = await adjustMemberItem(tx, {
@@ -187,7 +316,7 @@ export const pointDrawRouter = {
 						pointTransactionId: award.transactionId,
 						prizeId: prize.id,
 						prizePointsSnapshot: prize.points,
-						prizeWeightSnapshot: prize.weight,
+						prizeProbabilityUnitsSnapshot: prize.appliedProbabilityUnits,
 						requestId: input.requestId,
 						ticketTransactionId: ticketUse.transactionId,
 						userId: profile.userId,

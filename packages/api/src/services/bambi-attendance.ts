@@ -58,13 +58,13 @@ export interface AttendanceRewardRun {
 	startOn: string;
 }
 
-// 새 체크인·복구 날짜를 포함하는 보상 대상 연속 구간. 배포 전 행은 라우터에서 제외하고
-// streak_reward_eligible=true 날짜만 넘긴다.
+// 새 체크인·복구 날짜를 포함하는 전체 출석 연속 구간. 화면의 현재 연속 출석과 같은 기존·일반·
+// 복구 출석 날짜를 모두 사용해 표시 일수와 보상 일수가 어긋나지 않게 한다.
 export const resolveAttendanceRewardRun = (
-	eligibleDates: readonly string[],
+	attendedDates: readonly string[],
 	triggerAttendedOn: string
 ): AttendanceRewardRun | null => {
-	const dates = [...new Set(eligibleDates)].sort();
+	const dates = [...new Set(attendedDates)].sort();
 	const triggerIndex = dates.indexOf(triggerAttendedOn);
 	if (triggerIndex < 0) {
 		return null;

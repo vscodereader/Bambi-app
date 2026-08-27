@@ -24,12 +24,7 @@ export async function reconcileAttendanceDrawTicket(
 	const rows = await tx
 		.select({ attendedOn: bambiAttendance.attendedOn })
 		.from(bambiAttendance)
-		.where(
-			and(
-				eq(bambiAttendance.userId, args.userId),
-				eq(bambiAttendance.streakRewardEligible, true)
-			)
-		)
+		.where(eq(bambiAttendance.userId, args.userId))
 		.orderBy(asc(bambiAttendance.attendedOn));
 	const run = resolveAttendanceRewardRun(
 		rows.map((row) => row.attendedOn),

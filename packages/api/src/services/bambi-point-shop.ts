@@ -39,6 +39,11 @@ export const POINT_SHOP_BENEFIT_TYPES = [
 ] as const;
 export type PointShopBenefitType = (typeof POINT_SHOP_BENEFIT_TYPES)[number];
 
+export const POINT_SHOP_QUANTITY_ITEM_BENEFIT_TYPES = [
+	"draw_ticket",
+	"attendance_restore_ticket",
+] as const satisfies readonly PointShopBenefitType[];
+
 export const POINT_SHOP_AUDIENCES = ["all", "employer", "job_seeker"] as const;
 export type PointShopAudience = (typeof POINT_SHOP_AUDIENCES)[number];
 
@@ -64,8 +69,8 @@ export function isUsableBenefit(benefitType: PointShopBenefitType): boolean {
 export function isQuantityItemBenefit(
 	benefitType: PointShopBenefitType
 ): benefitType is "attendance_restore_ticket" | "draw_ticket" {
-	return (
-		benefitType === "draw_ticket" || benefitType === "attendance_restore_ticket"
+	return POINT_SHOP_QUANTITY_ITEM_BENEFIT_TYPES.some(
+		(quantityType) => quantityType === benefitType
 	);
 }
 

@@ -9,6 +9,7 @@ import {
 	bambiPointShopItem,
 	bambiPointShopLayoutRow,
 	bambiPointShopOrder,
+	bambiPointShopProductType,
 	bambiPointTransaction,
 	bambiProfile,
 	jobBoostPurchase,
@@ -113,6 +114,7 @@ const itemInput = z.object({
 	isActive: z.boolean(),
 	name: z.string().trim().min(1).max(60),
 	pricePoints: z.number().int().min(0).max(10_000_000).nullable(),
+	productTypeId: z.string().uuid().nullable(),
 	sortOrder: z.number().int().min(0).max(100_000),
 	stockQuantity: nullableStockInput,
 	usageLimitDays: nullableSpecInput,
@@ -166,6 +168,52 @@ const buildValidatedBenefitColumns = (input: z.infer<typeof itemInput>) => {
 };
 
 export const pointShopRouter = {
+	adminListProductTypes: adminProcedure.handler(async () =>
+		db
+			.select()
+			.from(bambiPointShopProductType)
+			.orderBy(
+				asc(bambiPointShopProductType.createdAt),
+				asc(bambiPointShopProductType.id)
+			)
+	),
+	adminCreateProductType: adminProcedure
+		.input(z.object({ name: z.string().trim().min(1).max(60) }))
+		.handler(
+			async ({ input }) =>
+				(
+					await db
+						.insert(bambiPointShopProductType)
+						.values({ name: input.name })
+						.returning()
+				)[0]
+		),
+	adminUpdateProductType: adminProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				name: z.string().trim().min(1).max(60),
+				showInInventory: z.boolean(),
+			})
+		)
+		.handler(
+			async ({ input }) =>
+				(
+					await db
+						.update(bambiPointShopProductType)
+						.set({ name: input.name, showInInventory: input.showInInventory })
+						.where(eq(bambiPointShopProductType.id, input.id))
+						.returning()
+				)[0]
+		),
+	adminRemoveProductType: adminProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.handler(async ({ input }) =>
+			db
+				.delete(bambiPointShopProductType)
+				.where(eq(bambiPointShopProductType.id, input.id))
+				.returning()
+		),
 	adminCreateCategory: adminProcedure
 		.input(
 			z.object({
@@ -551,6 +599,7 @@ export const pointShopRouter = {
 				imageUrl: bambiPointShopItem.imageUrl,
 				name: bambiPointShopItem.name,
 				pricePoints: bambiPointShopItem.pricePoints,
+				productTypeId: bambiPointShopItem.productTypeId,
 				stockQuantity: bambiPointShopItem.stockQuantity,
 				// 끌올·연장 사용기한(구매 후 N일, null=무기한). 구매 전 다이얼로그가
 				// 만료=소멸 정책을 사전 고지하려면 목록 응답에 실려야 한다(§3.4·확정 결정).
@@ -1108,6 +1157,7 @@ export const pointShopRouter = {
 				isActive: bambiPointShopItem.isActive,
 				name: bambiPointShopItem.name,
 				pricePoints: bambiPointShopItem.pricePoints,
+				productTypeId: bambiPointShopItem.productTypeId,
 				sortOrder: bambiPointShopItem.sortOrder,
 				stockQuantity: bambiPointShopItem.stockQuantity,
 				updatedAt: bambiPointShopItem.updatedAt,
@@ -1152,6 +1202,7 @@ export const pointShopRouter = {
 				isActive: input.isActive,
 				name: input.name,
 				pricePoints: input.pricePoints,
+				productTypeId: input.productTypeId,
 				sortOrder: input.sortOrder,
 			})
 			.returning({ id: bambiPointShopItem.id });
@@ -1220,6 +1271,7 @@ export const pointShopRouter = {
 						isActive: input.isActive,
 						name: input.name,
 						pricePoints: input.pricePoints,
+						productTypeId: input.productTypeId,
 						sortOrder: input.sortOrder,
 						updatedAt: new Date(),
 					})

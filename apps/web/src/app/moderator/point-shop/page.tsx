@@ -6,6 +6,7 @@
 // 들지 않고 서버가 준 status를 그대로 보여준다.
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import { POINT_SHOP_BENEFIT_TYPES } from "@bambi-app/api/services/bambi-point-shop";
 import {
 	Accordion,
 	AccordionContent,
@@ -84,51 +85,15 @@ type ItemRow = Awaited<
 type OrderRow = Awaited<
 	ReturnType<AppRouterClient["bambi"]["pointShop"]["adminListOrders"]>
 >[number];
+type ProductTypeRow = Awaited<
+	ReturnType<AppRouterClient["bambi"]["pointShop"]["adminListProductTypes"]>
+>[number];
 
 // 혜택 유형·구매 대상 값은 서버 응답에서 좁혀온다(enum 원값은 라벨 맵으로만 화면에 낸다).
 type BenefitType = ItemRow["benefitType"];
 type Audience = ItemRow["audience"];
-
 const AUDIENCE_OPTIONS: Audience[] = ["all", "employer", "job_seeker"];
 
-type ProductType = "general" | "gift_card" | "point_ticket" | "boost_ticket";
-
-const PRODUCT_TYPE_OPTIONS: Array<{ label: string; value: ProductType }> = [
-	{ label: "일반 상품", value: "general" },
-	{ label: "포인트권", value: "point_ticket" },
-	{ label: "끌어올리기권", value: "boost_ticket" },
-	{ label: "상품권", value: "gift_card" },
-];
-
-const productTypeForBenefit = (benefitType: BenefitType): ProductType => {
-	if (benefitType.startsWith("boost_")) {
-		return "boost_ticket";
-	}
-	if (
-		benefitType === "draw_ticket" ||
-		benefitType === "attendance_restore_ticket"
-	) {
-		return "point_ticket";
-	}
-	return benefitType === "coupon" ? "gift_card" : "general";
-};
-
-const benefitForProductType = (
-	productType: ProductType,
-	current: BenefitType
-): BenefitType => {
-	if (productType === "boost_ticket") {
-		return "boost_manual_period";
-	}
-	if (productType === "point_ticket") {
-		return current === "attendance_restore_ticket"
-			? "attendance_restore_ticket"
-			: "draw_ticket";
-	}
-	return productType === "gift_card" ? "coupon" : "none";
-};
-
-// 보유·사용형(끌올·연장)만 사용기한을 갖고, 구직 회원 단독 지정도 이 유형에서만 막힌다.
 const USABLE_BENEFIT_TYPES = new Set<BenefitType>([
 	"boost_manual_period",
 	"boost_manual_count",
@@ -617,6 +582,7 @@ interface ItemFormValues {
 	isActive: boolean;
 	name: string;
 	pricePoints: null | number;
+	productTypeId: null | string;
 	sortOrder: number;
 	stockQuantity: null | number;
 	usageLimitDays: null | number;
@@ -633,66 +599,32 @@ function ItemBenefitFields({
 	const isPeriod = isPeriodBenefitType(draft.benefitType);
 	const isUsable = USABLE_BENEFIT_TYPES.has(draft.benefitType);
 	const audienceConflict = isUsable && draft.audience === "job_seeker";
-	const productType = productTypeForBenefit(draft.benefitType);
 	return (
 		<>
 			<div className="flex flex-col gap-2">
-				<Label htmlFor="point-shop-item-product-type">상품 유형</Label>
+				<Label htmlFor="point-shop-item-benefit-type">구매 후 실행 동작</Label>
 				<Select
-					items={PRODUCT_TYPE_OPTIONS}
-					onValueChange={(value) => {
-						if (value) {
-							const nextType = value as ProductType;
-							onChange({
-								audience:
-									nextType === "boost_ticket" ? "employer" : draft.audience,
-								benefitType: benefitForProductType(nextType, draft.benefitType),
-							});
-						}
-					}}
-					value={productType}
+					items={POINT_SHOP_BENEFIT_TYPES.map((value) => ({
+						label: pointShopBenefitTypeLabel(value),
+						value,
+					}))}
+					onValueChange={(value) =>
+						value && onChange({ benefitType: value as BenefitType })
+					}
+					value={draft.benefitType}
 				>
-					<SelectTrigger
-						className={SELECT_TRIGGER_CLASSNAME}
-						id="point-shop-item-product-type"
-					>
+					<SelectTrigger id="point-shop-item-benefit-type">
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						{PRODUCT_TYPE_OPTIONS.map((option) => (
-							<SelectItem key={option.value} value={option.value}>
-								{option.label}
+						{POINT_SHOP_BENEFIT_TYPES.map((value) => (
+							<SelectItem key={value} value={value}>
+								{pointShopBenefitTypeLabel(value)}
 							</SelectItem>
 						))}
 					</SelectContent>
 				</Select>
 			</div>
-			{productType === "boost_ticket" ? (
-				<div className="flex flex-wrap gap-4 rounded-lg border border-border p-3">
-					{(
-						[
-							["boost_manual_period", "수동"],
-							["boost_auto_period", "자동"],
-							["boost_manual_count", "횟수권"],
-						] as const
-					).map(([value, label]) => (
-						<label
-							className="flex items-center gap-2"
-							htmlFor={`point-shop-boost-type-${value}`}
-							key={value}
-						>
-							<Checkbox
-								checked={draft.benefitType === value}
-								id={`point-shop-boost-type-${value}`}
-								onCheckedChange={(checked) =>
-									checked === true && onChange({ benefitType: value })
-								}
-							/>
-							<span>{label}</span>
-						</label>
-					))}
-				</div>
-			) : null}
 			{isPeriod ? (
 				<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
 					<div className="flex flex-col gap-2">
@@ -885,18 +817,23 @@ function ItemForm({
 	item,
 	onClose,
 	onSubmit,
+	productTypes,
 }: {
 	categories: Array<{ id: string; name: string }>;
 	isPending: boolean;
 	item: ItemRow | null;
 	onClose: () => void;
 	onSubmit: (values: ItemFormValues) => void;
+	productTypes: ProductTypeRow[];
 }) {
 	const [name, setName] = useState(item?.name ?? "");
 	const [categoryId, setCategoryId] = useState(
 		item?.categoryId ?? categories[0]?.id ?? ""
 	);
 	const [description, setDescription] = useState(item?.description ?? "");
+	const [productTypeId, setProductTypeId] = useState<null | string>(
+		item?.productTypeId ?? null
+	);
 	const [benefit, setBenefit] = useState<BenefitDraft>(() =>
 		initialBenefitDraft(item)
 	);
@@ -924,6 +861,7 @@ function ItemForm({
 		name.trim() !== item.name ||
 		(description.trim() || null) !== item.description ||
 		categoryId !== item.categoryId ||
+		productTypeId !== item.productTypeId ||
 		imageUrl !== item.imageUrl ||
 		isActive !== item.isActive ||
 		parsedPrice !== item.pricePoints ||
@@ -1038,6 +976,28 @@ function ItemForm({
 					</SelectContent>
 				</Select>
 			</div>
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="point-shop-item-dynamic-type">상품 유형</Label>
+				<Select
+					items={productTypes.map((type) => ({
+						label: type.name,
+						value: type.id,
+					}))}
+					onValueChange={setProductTypeId}
+					value={productTypeId}
+				>
+					<SelectTrigger id="point-shop-item-dynamic-type">
+						<SelectValue placeholder="상품 유형 선택" />
+					</SelectTrigger>
+					<SelectContent>
+						{productTypes.map((type) => (
+							<SelectItem key={type.id} value={type.id}>
+								{type.name}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
 			<ItemBenefitFields draft={benefit} onChange={updateBenefit} />
 			<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
 				<div className="flex flex-col gap-2">
@@ -1129,6 +1089,7 @@ function ItemForm({
 							isActive,
 							name: name.trim(),
 							pricePoints: parsedPrice,
+							productTypeId,
 							sortOrder: parsedSortOrder,
 						})
 					}
@@ -1153,6 +1114,10 @@ function ItemsTab() {
 	const layoutQuery = useQuery(
 		orpc.bambi.pointShop.adminGetCatalogLayout.queryOptions()
 	);
+	const productTypesQuery = useQuery(
+		orpc.bambi.pointShop.adminListProductTypes.queryOptions()
+	);
+	const productTypes = productTypesQuery.data ?? [];
 	const categories = (layoutQuery.data?.categories ?? []).filter(
 		(category) => category.kind === "standard"
 	);
@@ -1346,6 +1311,7 @@ function ItemsTab() {
 								}
 								createMutation.mutate(values);
 							}}
+							productTypes={productTypes}
 						/>
 					) : null}
 				</DialogContent>

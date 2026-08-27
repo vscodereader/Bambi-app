@@ -16,6 +16,7 @@ import {
 	uuid,
 	varchar,
 } from "drizzle-orm/pg-core";
+import { POINT_DRAW_TOTAL_PROBABILITY_UNITS } from "../point-draw-constants";
 
 import { organization, team, user } from "./auth";
 
@@ -2189,7 +2190,7 @@ export const bambiPointDrawPrize = pgTable(
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
 		points: integer("points").notNull(),
-		weight: integer("weight").notNull(),
+		probabilityUnits: integer("probability_units"),
 		isActive: boolean("is_active").default(true).notNull(),
 		sortOrder: integer("sort_order").default(0).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -2204,8 +2205,8 @@ export const bambiPointDrawPrize = pgTable(
 			sql`${table.points} > 0`
 		),
 		check(
-			"bambi_point_draw_prize_weight_positive_ck",
-			sql`${table.weight} > 0`
+			"bambi_point_draw_prize_probability_units_ck",
+			sql`${table.probabilityUnits} IS NULL OR (${table.probabilityUnits} > 0 AND ${table.probabilityUnits} <= ${sql.raw(String(POINT_DRAW_TOTAL_PROBABILITY_UNITS))})`
 		),
 	]
 );
@@ -2222,7 +2223,8 @@ export const bambiPointDraw = pgTable(
 			onDelete: "set null",
 		}),
 		prizePointsSnapshot: integer("prize_points_snapshot").notNull(),
-		prizeWeightSnapshot: integer("prize_weight_snapshot").notNull(),
+		prizeWeightSnapshot: integer("prize_weight_snapshot"),
+		prizeProbabilityUnitsSnapshot: integer("prize_probability_units_snapshot"),
 		awardedPoints: integer("awarded_points").notNull(),
 		ticketTransactionId: uuid("ticket_transaction_id")
 			.notNull()
@@ -2463,6 +2465,21 @@ export const bambiPointShopLayoutRow = pgTable(
 	]
 );
 
+export const bambiPointShopProductType = pgTable(
+	"bambi_point_shop_product_type",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		name: text("name").notNull(),
+		showInInventory: boolean("show_in_inventory").default(false).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("bambi_point_shop_product_type_name_uidx").on(
+			sql`lower(${table.name})`
+		),
+	]
+);
+
 // 포인트몰 판매 아이템. 혜택 유형(benefit_type)에 따라 수동 지급·쿠폰·끌올·광고 연장을
 // 연결한다. 선택 재고(stock_quantity)는 null이면 무제한, 값이 있으면 구매 시 조건부 원자
 // 차감·품절 거부한다.
@@ -2479,6 +2496,10 @@ export const bambiPointShopItem = pgTable("bambi_point_shop_item", {
 	categoryId: uuid("category_id")
 		.notNull()
 		.references(() => bambiPointShopCategory.id, { onDelete: "restrict" }),
+	productTypeId: uuid("product_type_id").references(
+		() => bambiPointShopProductType.id,
+		{ onDelete: "set null" }
+	),
 	// 연결 혜택 유형. 기존 행은 none 폴백이라 백필 불필요.
 	benefitType: pointShopBenefitType("benefit_type").notNull().default("none"),
 	// 구매 자격 대상. 목록 노출은 전원, 구매만 자격 검사.

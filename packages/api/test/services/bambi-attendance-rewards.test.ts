@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveAttendanceRewardRun } from "../../src/services/bambi-attendance";
 
 describe("resolveAttendanceRewardRun", () => {
-	it("earns one claim on seven consecutive eligible dates", () => {
+	it("earns one claim on seven consecutive attendance dates", () => {
 		const dates = [
 			"2026-08-12",
 			"2026-08-13",
@@ -35,7 +35,7 @@ describe("resolveAttendanceRewardRun", () => {
 		expect(resolveAttendanceRewardRun(dates, "2026-08-05")?.length).toBe(2);
 	});
 
-	it("can build a historical run from restored eligible dates", () => {
+	it("can build a historical run from restored attendance dates", () => {
 		const dates = [
 			"2025-01-01",
 			"2025-01-02",
