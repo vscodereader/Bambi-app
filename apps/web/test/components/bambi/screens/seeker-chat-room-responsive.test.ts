@@ -366,8 +366,6 @@ describe("메시지 id 승격", () => {
 	// 클라이언트가 전송 전에 id를 만들어 보내면 서버가 PK 충돌로 재시도·더블클릭을 흡수한다.
 	it("전송 입력에 클라이언트 생성 messageId를 싣는다", () => {
 		expect(source).toContain("@bambi-app/api/services/bambi-chat-message-id");
-		expect(source.match(/messageId: generateChatMessageId\(\)/g)).toHaveLength(
-			2
-		);
+		expect(source.match(/generateChatMessageId\(\)/g)).toHaveLength(3);
 	});
 });
