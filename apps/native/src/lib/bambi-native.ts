@@ -7,6 +7,10 @@ const WORK_SCHEDULE_MAX_LENGTH = 200;
 const DESCRIPTION_MIN_LENGTH = 10;
 const DESCRIPTION_MAX_LENGTH = 2000;
 const INTERVIEW_NOTES_MAX_LENGTH = 500;
+// packages/auth가 emailAndPassword 길이를 지정하지 않아 better-auth 기본값(8/128)이 그대로
+// 서버 규칙이다. 서버가 min/maxPasswordLength를 설정하면 이 두 값도 같이 옮겨야 한다.
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 128;
 
 export type NativeHomeRoute =
 	| "/(employer)"
@@ -239,3 +243,32 @@ export const getConfirmedScheduleId = (
 	schedules: NativeScheduleSummary[]
 ): null | string =>
 	schedules.find((schedule) => schedule.status === "confirmed")?.id ?? null;
+
+export interface NativeLoginErrors {
+	loginId?: string;
+	password?: string;
+}
+
+// 아이디 규칙(@bambi-app/auth의 login-id.ts)이 영문·숫자와 밑줄·마침표·하이픈만 허용해
+// "@"가 들어갈 수 없다. 그래서 웹(apps/web의 isEmailLoginId)과 똑같이 "@" 포함 여부만으로
+// signIn.email과 signIn.username을 가른다. 형식·존재 검증은 서버가 한다.
+export const isEmailLoginId = (value: string): boolean => value.includes("@");
+
+export const validateNativeLoginInput = (
+	loginId: string,
+	password: string
+): NativeLoginErrors => {
+	const errors: NativeLoginErrors = {};
+
+	if (!trim(loginId)) {
+		errors.loginId = "아이디 또는 이메일을 입력해 주세요.";
+	}
+
+	if (password.length < PASSWORD_MIN_LENGTH) {
+		errors.password = "비밀번호는 8자 이상이어야 해요.";
+	} else if (password.length > PASSWORD_MAX_LENGTH) {
+		errors.password = "비밀번호는 128자까지 입력할 수 있어요.";
+	}
+
+	return errors;
+};
