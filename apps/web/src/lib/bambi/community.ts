@@ -45,6 +45,7 @@ export const communityAuthorName = (
 // 작성인 유형(author_role) 표시 라벨. enum 원값을 그대로 렌더하지 않으며, 목록에 없는
 // 값(job_seeker·admin·미래 값)은 중립 폴백("회원")으로 표시한다.
 const COMMUNITY_AUTHOR_ROLE_LABELS: Record<string, string> = {
+	admin: "관리자",
 	employer: "업소 회원",
 	guest: "비회원",
 	legal_advisor: "법률자문",

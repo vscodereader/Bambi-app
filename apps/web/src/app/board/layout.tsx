@@ -3,6 +3,10 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/bambi/ds";
+import {
+	PUBLIC_AD_RAIL_SURFACE,
+	PublicSideAdRailLayout,
+} from "@/components/bambi/public-side-ad-rail-layout";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 
 // 비로그인 공개 읽기(/board) 셸. 로그인 상태를 전제로 하는 앱 셸(탭바·내 메뉴) 대신
@@ -41,7 +45,9 @@ export default function PublicBoardLayout({
 					APP_CONTENT_WIDTH
 				)}
 			>
-				{children}
+				<PublicSideAdRailLayout promotionSurface={PUBLIC_AD_RAIL_SURFACE.board}>
+					{children}
+				</PublicSideAdRailLayout>
 			</main>
 		</div>
 	);

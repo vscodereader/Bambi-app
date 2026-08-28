@@ -13,13 +13,11 @@ import {
 	EmptyHeader,
 	EmptyTitle,
 } from "@bambi-app/ui/components/empty";
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import Link from "next/link";
 import { cache, Fragment } from "react";
-import {
-	HOURS_PLACEHOLDER,
-	toMarketplaceJob,
-} from "@/lib/bambi/api-job-mapper";
+import { toMarketplaceJob } from "@/lib/bambi/api-job-mapper";
 import { guideForIndustrySlug, guidePath } from "@/lib/bambi/guide";
 import {
 	findJobLandingIndustry,
@@ -52,6 +50,11 @@ import type { Job } from "@/lib/bambi/types";
 import { publicClient } from "@/utils/orpc-public";
 import { JobCoverImage } from "./job-cover-image";
 import { JsonLd } from "./json-ld";
+import {
+	PublicJobHitProvider,
+	PublicJobHitRibbon,
+	PublicJobHitStatusBadges,
+} from "./public-job-hit";
 
 // 첫 화면에 실을 공고 수. 더보기·페이징은 두지 않는다 — 랜딩의 역할은 색인용 진입점이지
 // 전체 목록 열람이 아니고, 더 보려면 /seeker 목록으로 넘어가는 게 정상 동선이다.
@@ -183,7 +186,11 @@ const buildLinkSections = ({
 	];
 };
 
-function LandingBreadcrumb({ industry, region }: JobLandingTarget) {
+function LandingBreadcrumb({
+	compact = false,
+	industry,
+	region,
+}: JobLandingTarget & { compact?: boolean }) {
 	// 화면 nav와 JSON-LD가 같은 계층·순서를 공유한다 — 구조화 데이터가 화면에 없는 경로를
 	// 주장하면 리치 결과에서 빠진다. 모든 계층이 홈 › 채용 정보로 시작하고, 인덱스도 그린다.
 	const breadcrumbItems: BreadcrumbItem[] = [
@@ -202,7 +209,10 @@ function LandingBreadcrumb({ industry, region }: JobLandingTarget) {
 			<JsonLd data={breadcrumbJsonLd(breadcrumbItems)} />
 			<nav
 				aria-label="현재 위치"
-				className="flex flex-wrap items-center gap-1 text-muted-foreground text-sm"
+				className={cn(
+					"flex flex-wrap items-center gap-1 text-muted-foreground text-sm",
+					compact && "text-xs md:text-sm"
+				)}
 			>
 				{breadcrumbItems.map((item, index) => {
 					const isCurrent = index === breadcrumbItems.length - 1;
@@ -237,42 +247,45 @@ function LandingJobCard({ job }: { job: Job }) {
 
 	return (
 		<Link
-			className="flex gap-3 rounded-lg border border-border bg-card p-3 no-underline transition-colors hover:border-primary/40"
+			className="relative flex h-full flex-col gap-2 overflow-hidden rounded-lg border border-border bg-card p-2 no-underline transition-colors hover:border-primary/40 has-[[data-hit-ribbon]]:border-primary"
 			href={href}
 		>
-			{cover ? (
-				// 목록 썸네일은 블러로 가린다 — 수다방 목록과 같은 기준이다. 원본은 상세에서 본다.
-				<JobCoverImage
-					className="size-10 shrink-0 rounded-lg border border-border object-cover blur-sm"
-					height={40}
-					media={cover}
-					width={40}
-				/>
-			) : null}
-			<div className="flex min-w-0 flex-1 flex-col gap-1">
-				{/* 모바일(1열)은 제목을 2줄까지 보여준다 — 한 줄 truncate면 좁은 폭에서 핵심
-				    키워드가 잘린다. 다열 그리드(sm+)는 행 높이 정렬을 위해 한 줄 유지. */}
-				<h3 className="m-0 line-clamp-2 font-extrabold text-base text-foreground sm:line-clamp-1">
-					{job.title}
-				</h3>
-				{/* 시/도·시군구(세부지역). 상세 주소(동·번지)는 싣지 않는다. */}
-				<p className="m-0 truncate text-muted-foreground text-sm">
-					{job.company} · {job.location}
-				</p>
-				{/* 급여는 DB 저장 표기 그대로(협의면 "급여 협의"), 근무시간은 실제 값이 있을 때만. */}
-				<p className="m-0 font-bold text-foreground text-sm">{job.pay}</p>
-				{job.hours && job.hours !== HOURS_PLACEHOLDER ? (
-					<p className="m-0 truncate text-muted-foreground text-sm">
-						근무시간 {job.hours}
-					</p>
+			<PublicJobHitRibbon jobId={job.id} />
+			<div className="flex min-w-0 items-start gap-4">
+				{cover ? (
+					// 메인 공고 카드와 같은 가로형 썸네일 비율을 쓰되, 공개 랜딩에서는 기존처럼
+					// 블러를 유지한다. 원본 이미지는 로그인 후 상세 화면에서만 확인한다.
+					<JobCoverImage
+						className="h-14 w-30 shrink-0 rounded-md border border-border object-cover blur-sm"
+						height={56}
+						media={cover}
+						width={120}
+					/>
 				) : null}
-				<div className="flex flex-wrap items-center gap-1">
-					<Badge variant="secondary">{job.type}</Badge>
-					{job.verified ? <Badge variant="success">인증 완료</Badge> : null}
-					{job.instantInterview ? (
-						<Badge variant="outline">당일면접</Badge>
-					) : null}
+				<div className="flex min-w-0 flex-1 flex-col gap-1">
+					<h3 className="m-0 truncate font-extrabold text-foreground text-sm">
+						{job.title}
+					</h3>
+					{/* 시/도·시군구(세부지역). 상세 주소(동·번지)는 싣지 않는다. */}
+					<p className="m-0 truncate text-muted-foreground text-xs">
+						{job.company} · {job.location}
+					</p>
+					<div className="flex flex-wrap items-center gap-1">
+						<Badge variant="secondary">{job.type}</Badge>
+						{job.verified ? <Badge variant="success">인증 완료</Badge> : null}
+					</div>
 				</div>
+			</div>
+			<div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
+				{/* 급여는 DB 저장 표기 그대로 사용한다(협의면 "급여 협의"). */}
+				<p className="m-0 shrink-0 whitespace-nowrap font-extrabold text-base text-coral-600">
+					{job.pay}
+				</p>
+				<PublicJobHitStatusBadges
+					beginnerFriendly={job.beginnerFriendly}
+					instantInterview={job.instantInterview}
+					jobId={job.id}
+				/>
 			</div>
 		</Link>
 	);
@@ -433,6 +446,7 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 	// 조회 실패(null)든 진짜 0건이든 화면은 소개·링크를 그대로 띄운다 — null을 []로 취급.
 	const jobs = (await loadLandingJobs(target)) ?? [];
 	const heading = jobLandingHeading(target);
+	const isIndexLanding = !(region || industry);
 
 	return (
 		<div className="flex flex-col gap-8 py-8">
@@ -446,15 +460,34 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 					})}
 				/>
 			) : null}
-			<header className="flex flex-col gap-3">
-				<LandingBreadcrumb industry={industry} region={region} />
-				<h1 className="m-0 font-extrabold text-2xl sm:text-3xl">{heading}</h1>
+			<header className="-mx-2 flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-2 py-6 md:mx-0 md:p-8">
+				<LandingBreadcrumb
+					compact={isIndexLanding}
+					industry={industry}
+					region={region}
+				/>
+				<h1
+					className={cn(
+						"m-0 font-extrabold",
+						isIndexLanding
+							? "text-center text-xl md:text-left md:text-3xl"
+							: "text-2xl sm:text-3xl"
+					)}
+				>
+					{heading}
+				</h1>
 				{jobLandingIntro(target).map((paragraph) => (
-					<p className="m-0 text-muted-foreground text-sm" key={paragraph}>
+					<p
+						className={cn(
+							"m-0 text-muted-foreground text-sm",
+							isIndexLanding && "text-xs md:text-sm"
+						)}
+						key={paragraph}
+					>
 						{paragraph}
 					</p>
 				))}
-				<div>
+				<div className="flex justify-center md:justify-start">
 					<Button
 						nativeButton={false}
 						render={<Link href={SIGNUP_HREF}>회원가입하고 채팅으로 문의</Link>}
@@ -474,11 +507,20 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 				{/* 그리드 기본 구간에도 grid-cols-1(minmax(0,1fr))을 명시한다 — 안 주면 auto 트랙이
 				    카드 안 truncate(nowrap) 텍스트 폭만큼 벌어져 모바일에서 가로 스크롤이 생긴다. */}
 				{jobs.length > 0 ? (
-					<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-						{jobs.map((job) => (
-							<LandingJobCard job={job} key={job.id} />
-						))}
-					</div>
+					<PublicJobHitProvider
+						jobs={jobs.map((job) => ({
+							beginnerFriendly: job.beginnerFriendly,
+							id: job.id,
+							instantInterview: job.instantInterview,
+							regionKey: job.regionCode || job.region || job.location,
+						}))}
+					>
+						<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+							{jobs.map((job) => (
+								<LandingJobCard job={job} key={job.id} />
+							))}
+						</div>
+					</PublicJobHitProvider>
 				) : (
 					<Empty className="border border-border">
 						<EmptyHeader>
@@ -514,6 +556,7 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 					먼저 공개하지 않아도 됩니다.
 				</p>
 				<Button
+					className="self-center md:self-start"
 					nativeButton={false}
 					render={<Link href={SIGNUP_HREF}>회원가입하고 시작하기</Link>}
 					size="lg"

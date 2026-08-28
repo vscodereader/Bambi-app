@@ -44,6 +44,7 @@ export const COMMUNITY_BOARD_ICONS = [
 	"Megaphone",
 	"Sparkles",
 	"Coffee",
+	"Moon",
 	"Music",
 	"Heart",
 	"Star",

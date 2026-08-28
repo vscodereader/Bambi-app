@@ -39,6 +39,11 @@ export const getPublicBoardByKey = (key: string): PublicBoardMeta | undefined =>
 
 export const PUBLIC_BOARD_INDEX_PATH = "/board";
 
+// 공개 허브와 게시판 전체 보기 상단이 공유하는 인기글 개수. 두 화면이 따로 숫자를
+// 가지면 허브에 보인 글과 전체 보기 상단이 달라지므로 단일 소스로 유지한다.
+export const PUBLIC_BOARD_POPULAR_POST_LIMIT = 5;
+export const PUBLIC_BOARD_VISIBLE_POST_LIMIT = 10;
+
 // 지금 보고 있는 화면이 공개 영역(/board)인지. 글 폼·참여 UI가 공개 영역과 회원
 // 수다방 양쪽에서 쓰이므로, 이동 경로는 신분이 아니라 "어느 영역에 있는가"로 정한다
 // (여성 인증 게스트는 회원 수다방에서도 글·댓글을 쓴다).

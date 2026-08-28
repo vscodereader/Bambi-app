@@ -1,3 +1,5 @@
+import { SEEKER_LOGIN_PATH } from "./auth-paths";
+
 export interface GateInput {
 	hasSession: boolean;
 	// 수다방에 들어올 수 있는 게스트(서명·만료 유효 + gid + 여성). 읽기 게이트(isGuest)보다
@@ -81,7 +83,7 @@ const isCommunity = (pathname: string): boolean =>
 	pathname === COMMUNITY_ROOT || pathname.startsWith(`${COMMUNITY_ROOT}/`);
 // 그냥 들어온 비로그인 방문자에게는 로그인 폼을 먼저 보인다. 재방문자가 다수라
 // 로그인이 기본이고, 가입은 카드 안의 전환 링크로 한 번에 갈 수 있다.
-const LOGIN_REDIRECT = "/seeker?auth=login";
+const LOGIN_REDIRECT = SEEKER_LOGIN_PATH;
 // 게스트가 허용되지 않은 경로로 진입할 때. 이 경우엔 계정이 없는 게 확정이라
 // 가입 쪽을 열고, guestBlocked 신호로 "회원가입 후에 볼 수 있어요" 토스트를 띄운다.
 const GUEST_BLOCKED_REDIRECT = "/seeker?auth=signup&guestBlocked=1";

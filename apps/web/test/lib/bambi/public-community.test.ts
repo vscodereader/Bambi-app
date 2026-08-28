@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { communityAuthorRoleLabel } from "@/lib/bambi/community";
 import {
 	communityBodyText,
 	getPublicBoardBySlug,
@@ -75,5 +76,11 @@ describe("communityBodyText", () => {
 	it("falls back to plain text and truncates", () => {
 		expect(communityBodyText("그냥  평문\n입니다")).toBe("그냥 평문 입니다");
 		expect(communityBodyText("가나다라마", 3)).toBe("가나…");
+	});
+});
+
+describe("public community role labels", () => {
+	it("labels admin-authored comments as 관리자", () => {
+		expect(communityAuthorRoleLabel("admin")).toBe("관리자");
 	});
 });
