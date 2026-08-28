@@ -272,3 +272,152 @@ export const validateNativeLoginInput = (
 
 	return errors;
 };
+
+// 목록 한 행이 쓰는 필드만 좁혀 둔 클라이언트 타입. 서버 응답(bambi.jobs.list)은 더 넓은
+// 객체를 주지만 구조적 타이핑으로 그대로 들어온다. 연락처 계열 필드는 서버 selection에
+// 애초에 없으므로 여기에도 추가하지 않는다.
+export interface NativeSeekerJob {
+	employerDisplayName: null | string;
+	employerVerificationStatus: null | string;
+	id: string;
+	industryCategory: string;
+	instantInterview: boolean | null;
+	payAmount: null | number;
+	// 크롤 공고가 섞여 내려오는 목록이라 단위가 비어 있을 수 있다.
+	payUnit: null | string;
+	promotionLabel: null | string;
+	region: string;
+	// "crawled"면 jobs.getById가 job_post만 조회해 상세가 NOT_FOUND다 — 링크를 걸지 않는다.
+	// job_post 쪽 값은 "converted" | "original"이다.
+	source: string;
+	title: string;
+	workSchedule: null | string;
+}
+
+export interface NativeJobBadge {
+	label: string;
+	tone: "success" | "warning";
+}
+
+export interface NativeSeekerJobPage {
+	sections: {
+		organic: NativeSeekerJob[];
+		recommended: NativeSeekerJob[];
+		special: NativeSeekerJob[];
+		urgent: NativeSeekerJob[];
+	};
+}
+
+export const jobSectionTitles = {
+	organic: "전체 공고",
+	recommended: "추천 광고",
+	special: "스페셜 광고",
+	urgent: "급구 광고",
+} as const;
+
+export type NativeJobSectionKey = keyof typeof jobSectionTitles;
+
+// 웹의 세로 액센트 바 색 언어를 그대로 옮긴다(스페셜=coral, 급구=amber, 추천=blue).
+const jobSectionAccentClassNames = {
+	organic: "bg-border",
+	recommended: "bg-link",
+	special: "bg-accent",
+	urgent: "bg-warning",
+} as const;
+
+export interface NativeJobSection {
+	accentClassName: (typeof jobSectionAccentClassNames)[NativeJobSectionKey];
+	data: NativeSeekerJob[];
+	key: NativeJobSectionKey;
+	title: string;
+}
+
+// 유료 자리는 첫 페이지에서만 내려온다(2페이지부터는 organic만 이어진다). 배열 순서가
+// 곧 화면 순서다.
+const paidJobSectionKeys = ["special", "urgent", "recommended"] as const;
+
+const toJobSection = (
+	key: NativeJobSectionKey,
+	data: NativeSeekerJob[]
+): NativeJobSection => ({
+	accentClassName: jobSectionAccentClassNames[key],
+	data,
+	key,
+	title: jobSectionTitles[key],
+});
+
+export const buildSeekerJobSections = (
+	pages: NativeSeekerJobPage[],
+	config: { urgentHidden: boolean }
+): NativeJobSection[] => {
+	const [firstPage] = pages;
+	const paidSections = paidJobSectionKeys
+		.filter((key) => !(key === "urgent" && config.urgentHidden))
+		.map((key) => toJobSection(key, firstPage?.sections[key] ?? []));
+	// 서버가 수집 행을 유료 섹션과 전체 공고에 동시에 담으므로 전체 공고에서 걷어낸다.
+	// 페이지끼리도 겹칠 수 있다 — organicOffset이 offset 기반이라 1페이지를 받은 뒤 새
+	// 공고가 목록 앞에 삽입되면 밀려난 행이 2페이지에 다시 내려온다. 그대로 두면
+	// SectionList가 duplicate key 경고를 내고 같은 카드가 두 번 그려진다.
+	const seenIds = new Set(
+		paidSections.flatMap((section) => section.data.map((job) => job.id))
+	);
+	const organic: NativeSeekerJob[] = [];
+
+	for (const job of pages.flatMap((page) => page.sections.organic)) {
+		if (seenIds.has(job.id)) {
+			continue;
+		}
+
+		seenIds.add(job.id);
+		organic.push(job);
+	}
+
+	return [...paidSections, toJobSection("organic", organic)].filter(
+		(section) => section.data.length > 0
+	);
+};
+
+// 배지 예산은 카드당 2개다 — 규칙을 더 넣으면 여기서 잘라내야 한다. 지역·업종·평점은
+// 배지로 승격하지 않고 회색 메타 줄로 내린다.
+export const buildJobCardBadges = (job: NativeSeekerJob): NativeJobBadge[] => {
+	const badges: NativeJobBadge[] = [];
+
+	// 두 필드 모두 truthy 검사다. 크롤 행은 false/"none"으로 내려오므로 기본값 true나 !!
+	// 강제를 넣으면 우리가 확인한 적 없는 업소에 "인증 완료"가 붙는다.
+	if (job.instantInterview) {
+		badges.push({ label: "당일면접", tone: "warning" });
+	}
+
+	if (job.employerVerificationStatus === "verified") {
+		badges.push({ label: verificationStatusLabels.verified, tone: "success" });
+	}
+
+	return badges;
+};
+
+// bambi-screen.tsx의 formatPay와 같은 규칙. 이 파일은 react-native를 import 하지 않는
+// 순수 모듈이라(테스트가 노드에서 그대로 돈다) 컴포넌트 모듈에서 끌어오지 않고 같이 둔다.
+const formatJobPay = (amount: null | number, unit: null | string): string => {
+	if (amount === null) {
+		return "급여 협의";
+	}
+
+	const money = `${amount.toLocaleString("ko-KR")}원`;
+
+	return unit ? `${money} / ${unit}` : money;
+};
+
+// 행 하나를 한 문장으로 합성해 카드의 accessibilityLabel에 넣는다. 카드 내부 Text가
+// 6~7노드로 쪼개져 낭독되면 20행 페이지에 120회 넘는 스와이프가 필요하다.
+export const describeJobForScreenReader = (
+	job: NativeSeekerJob,
+	badges: NativeJobBadge[] = buildJobCardBadges(job)
+): string =>
+	[
+		job.title,
+		job.employerDisplayName ?? "밤비알바 구인자",
+		job.region,
+		job.workSchedule ?? "일정 협의",
+		formatJobPay(job.payAmount, job.payUnit),
+		...badges.map((badge) => badge.label),
+	].join(", ");

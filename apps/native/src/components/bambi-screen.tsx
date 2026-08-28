@@ -26,7 +26,7 @@ interface HeaderProps {
 
 interface PillProps {
 	children: ReactNode;
-	tone?: "danger" | "neutral" | "success" | "warning";
+	tone?: "accent" | "danger" | "neutral" | "success" | "warning";
 }
 
 export function BambiScreen({
@@ -129,34 +129,56 @@ export function Pill({
 	children,
 	tone = "neutral",
 }: PropsWithChildren<PillProps>) {
+	// muted에는 -soft-foreground 토큰이 없어 neutral만 text-muted를 유지한다.
+	//
+	// -soft-foreground는 heroui theme.css에서 원색을 검정 쪽으로 섞어(warning 65%+black
+	// 35%, danger/accent 80%+black 20%, success 70%+black 30%) 만드는 값이라 밝은 표면
+	// 전용이다. 15% 배경 위 대비를 재 보면 라이트는 크게 좋아지지만(1.8~2.7 → 4.3~5.3)
+	// 다크(surface-secondary)에서는 오히려 1.9~2.5로 무너지고, 이건 --warning을 웹 값으로
+	// 덮었기 때문이 아니라 heroui 다크 기본값(2.1)에서도 같다. 그래서 다크에서는 원색으로
+	// 되돌린다(3.1~5.5). 색은 새로 짓지 않고 이미 있는 토큰만 쓴다.
 	const className = {
-		danger: "bg-danger/15 text-danger",
+		accent: "bg-accent/15 text-accent-soft-foreground dark:text-accent",
+		danger: "bg-danger/15 text-danger-soft-foreground dark:text-danger",
 		neutral: "bg-muted/20 text-muted",
-		success: "bg-success/15 text-success",
-		warning: "bg-warning/15 text-warning",
+		success: "bg-success/15 text-success-soft-foreground dark:text-success",
+		warning: "bg-warning/15 text-warning-soft-foreground dark:text-warning",
 	}[tone];
 
+	// selectable을 두지 않는다 — Android에서 textIsSelectable=true인 TextView는 스스로
+	// clickable/focusable이 되어 카드(부모 Pressable)로 터치가 전파되지 않는다.
 	return (
 		<Text
 			className={`self-start rounded-full px-2.5 py-1 font-semibold text-xs ${className}`}
-			selectable
 		>
 			{children}
 		</Text>
 	);
 }
 
+// accessibilityLabel을 주면 카드 전체가 스크린리더 단일 노드가 된다.
 export function CardLink({
+	accessibilityLabel,
 	children,
 	href,
-}: PropsWithChildren<{ href: Href }>) {
+}: PropsWithChildren<{ accessibilityLabel?: string; href: Href }>) {
 	const foregroundColor = useThemeColor("foreground");
 
 	return (
 		<Link asChild href={href}>
-			<Pressable className="rounded-lg active:opacity-75">
+			<Pressable
+				accessibilityLabel={accessibilityLabel}
+				accessibilityRole={accessibilityLabel ? "button" : undefined}
+				accessible={accessibilityLabel ? true : undefined}
+				className="rounded-lg active:opacity-75"
+			>
 				<Surface className="rounded-lg p-4" variant="secondary">
-					<View className="flex-row items-center gap-3">
+					<View
+						className="flex-row items-center gap-3"
+						importantForAccessibility={
+							accessibilityLabel ? "no-hide-descendants" : undefined
+						}
+					>
 						<View className="flex-1">{children}</View>
 						<Ionicons
 							color={foregroundColor}
