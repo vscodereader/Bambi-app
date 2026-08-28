@@ -131,11 +131,15 @@ export interface CommunityCommentItem {
 	authorName: string | null;
 	authorRole: CommunityAuthorRole | null;
 	body: string;
+	// 랜덤 보너스 당첨액(0=꽝). 공개값 — 모든 열람자에게 배지로 보인다.
+	bonusPoints: number;
 	canDelete: boolean;
 	canEdit: boolean;
 	createdAt: Date | string;
 	id: string;
 	isDeleted: boolean;
+	// 이 댓글이 딴 전역 마일스톤 회차(없으면 null). "전체 N번째 댓글" 배지 근거.
+	milestoneCommentCount: number | null;
 	parentCommentId: string | null;
 }
 
@@ -628,7 +632,7 @@ function CommentRow({
 		>
 			<div className="flex flex-col gap-1">
 				<div className="flex items-center justify-between gap-2">
-					<span className="flex items-center gap-1.5 font-semibold text-xs">
+					<span className="flex flex-wrap items-center gap-1.5 font-semibold text-xs">
 						{comment.authorGender ? (
 							<SecretAuthorMark gender={comment.authorGender} />
 						) : (
@@ -655,6 +659,19 @@ function CommentRow({
 					    어느 쪽이 전문가 답변인지 알 수 없다. */}
 						{!comment.authorGender && comment.authorRole === "legal_advisor" ? (
 							<Badge variant="dark">법률자문</Badge>
+						) : null}
+						{/* 당첨 배지(공개) — 전역 선착 마일스톤과 랜덤 보너스. 익명성과 무관한
+						    성취 표시라 비밀글에서도 노출한다(신원을 드러내지 않음). */}
+						{comment.milestoneCommentCount === null ? null : (
+							<Badge variant="success">
+								🏆 전체 {comment.milestoneCommentCount.toLocaleString("ko-KR")}
+								번째 댓글 보너스 당첨
+							</Badge>
+						)}
+						{comment.bonusPoints > 0 ? (
+							<Badge variant="success">
+								🎉 {comment.bonusPoints.toLocaleString("ko-KR")}P 보너스 당첨
+							</Badge>
 						) : null}
 					</span>
 					{isEditing ? null : (

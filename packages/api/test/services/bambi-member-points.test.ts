@@ -7,12 +7,51 @@ dotenv.config({ path: "../../apps/server/.env" });
 const {
 	applyPointsCap,
 	assertGradeDeletable,
+	isGradeExcludedPointReason,
 	isPointsCapAllowed,
+	JOB_PAYMENT_POINT_REASONS,
 	nextGrade,
+	POINT_SHOP_REASONS,
 	reconcilePoints,
 	resolveCommentAward,
 	resolveGrade,
+	rollCommentBonus,
 } = await import("@/services/bambi-member-points");
+
+describe("isGradeExcludedPointReason", () => {
+	it.each([
+		POINT_SHOP_REASONS.purchase,
+		POINT_SHOP_REASONS.refund,
+		JOB_PAYMENT_POINT_REASONS.use("job-1"),
+		JOB_PAYMENT_POINT_REASONS.refund("job-1"),
+		JOB_PAYMENT_POINT_REASONS.refundForfeited("job-1"),
+	])("소비와 대응 환급은 등급 기준에서 제외한다: %s", (reason) => {
+		expect(isGradeExcludedPointReason(reason)).toBe(true);
+	});
+
+	it.each([
+		"attendance",
+		"signup_bonus",
+		"community_post",
+		"community_post_revoke",
+		"공고 등록 포인트 사용",
+	])("적립·회수와 접두사가 불완전한 거래는 등급 기준에 포함한다: %s", (reason) => {
+		expect(isGradeExcludedPointReason(reason)).toBe(false);
+	});
+});
+
+// 순차 random 스텁: rollCommentBonus는 최대 두 번(확률 판정→금액) 부른다. 값이 떨어지면 마지막 값을 반복.
+function seq(...values: number[]): () => number {
+	let i = 0;
+	return () => values[Math.min(i++, values.length - 1)] ?? 0;
+}
+
+const BONUS_ON = {
+	enabled: true,
+	chancePercent: 10,
+	minPoints: 5,
+	maxPoints: 50,
+};
 
 const GRADES = [
 	{ id: "g0", name: "새싹", minPoints: 0, color: null },
@@ -130,5 +169,66 @@ describe("resolveCommentAward", () => {
 	});
 	it("게시판 댓글 포인트가 0이면 0", () => {
 		expect(resolveCommentAward("u1", "u2", 0)).toBe(0);
+	});
+});
+
+describe("rollCommentBonus", () => {
+	it("비활성이면 당첨 random이라도 0", () => {
+		expect(rollCommentBonus({ ...BONUS_ON, enabled: false }, 50, seq(0))).toBe(
+			0
+		);
+	});
+	it("기본 적립 0 이하(게스트·셀프)면 0", () => {
+		expect(rollCommentBonus(BONUS_ON, 0, seq(0))).toBe(0);
+	});
+	it("확률 0 이하면 0", () => {
+		expect(
+			rollCommentBonus({ ...BONUS_ON, chancePercent: 0 }, 50, seq(0))
+		).toBe(0);
+	});
+	it("꽝: random*100이 확률 이상이면 0(경계 =확률도 꽝)", () => {
+		// 확률 10 → 0.10*100=10 >= 10 → 꽝
+		expect(rollCommentBonus(BONUS_ON, 50, seq(0.1))).toBe(0);
+	});
+	it("당첨 경계: random*100 < 확률이면 지급 구간 정수", () => {
+		// 확률 10 → 0.099*100=9.9 < 10 → 당첨
+		const bonus = rollCommentBonus(BONUS_ON, 50, seq(0.099, 0));
+		expect(bonus).toBe(5); // 금액 random 0 → min
+	});
+	it("금액 random이 상한 근처면 max까지(floor로 초과 안 함)", () => {
+		const bonus = rollCommentBonus(BONUS_ON, 50, seq(0, 0.999_999));
+		expect(bonus).toBe(50);
+	});
+	it("min==max면 그 값 고정", () => {
+		const bonus = rollCommentBonus(
+			{ enabled: true, chancePercent: 100, minPoints: 20, maxPoints: 20 },
+			50,
+			seq(0, 0.5)
+		);
+		expect(bonus).toBe(20);
+	});
+	it("min>max 방어: max를 min으로 끌어올려 역구간 방지", () => {
+		const bonus = rollCommentBonus(
+			{ enabled: true, chancePercent: 100, minPoints: 50, maxPoints: 5 },
+			50,
+			seq(0, 0.999)
+		);
+		expect(bonus).toBe(50);
+	});
+	it("음수 방어: min 음수는 0으로 클램프", () => {
+		const bonus = rollCommentBonus(
+			{ enabled: true, chancePercent: 100, minPoints: -10, maxPoints: 0 },
+			50,
+			seq(0, 0)
+		);
+		expect(bonus).toBe(0);
+	});
+	it("항상 정수이고 [min,max] 범위 안", () => {
+		for (let r = 0; r < 1; r += 0.017) {
+			const bonus = rollCommentBonus(BONUS_ON, 50, seq(0, r));
+			expect(Number.isInteger(bonus)).toBe(true);
+			expect(bonus).toBeGreaterThanOrEqual(5);
+			expect(bonus).toBeLessThanOrEqual(50);
+		}
 	});
 });

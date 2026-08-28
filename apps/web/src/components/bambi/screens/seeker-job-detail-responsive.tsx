@@ -2,7 +2,6 @@
 
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
@@ -10,7 +9,7 @@ import { trackContactIntent } from "@/lib/bambi/ga-interaction";
 import { trackJobView } from "@/lib/bambi/ga-job";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { formatMinimumWageLabel } from "@/lib/bambi/minimum-wage";
-import type { Job, JobDescriptionBlock } from "@/lib/bambi/types";
+import type { Job } from "@/lib/bambi/types";
 import { formatPhone } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
@@ -28,6 +27,8 @@ import {
 	ShieldIcon,
 	StarIcon,
 } from "../icons";
+import { JobDescriptionContent } from "../job-description-content";
+import { JobDetailImage } from "../job-detail-image";
 import { JobReviewSection } from "../job-review-section";
 
 interface SeekerJobDetailResponsiveProps {
@@ -57,43 +58,6 @@ const formatReviewValue = ({
 	reviews,
 }: Pick<Job, "rating" | "reviews">): string =>
 	`${reviews}개 · ${reviews > 0 ? rating.toFixed(1) : "신규"}`;
-const BULLET_ITEM_SEPARATOR = /\n+/;
-
-function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
-	if (block.type === "heading") {
-		return <h3 className="m-0 font-extrabold text-lg">{block.text}</h3>;
-	}
-
-	if (block.type === "bullet_list") {
-		const items = block.text
-			.split(BULLET_ITEM_SEPARATOR)
-			.map((item) => item.trim())
-			.filter((item) => item.length > 0);
-
-		return (
-			<ul className="m-0 list-disc space-y-1 pl-5 text-[15px] leading-relaxed">
-				{items.map((item) => (
-					<li key={item}>{item}</li>
-				))}
-			</ul>
-		);
-	}
-
-	if (block.type === "callout") {
-		return (
-			<p className="m-0 whitespace-pre-line border border-coral-200 bg-coral-50 p-3 text-[15px] text-coral-800 leading-relaxed">
-				{block.text}
-			</p>
-		);
-	}
-
-	return (
-		<p className="m-0 whitespace-pre-line text-[15px] text-foreground leading-relaxed">
-			{block.text}
-		</p>
-	);
-}
-
 // 구인자 인증번호는 상세에서 자동 노출한다(면접 왕복 없이 바로 전화). 급여·근무시간 등
 // 다른 InfoTile과 동일한 룩(secondary 아이콘 타일·muted 라벨·foreground 번호)으로 두고,
 // 번호 바로 옆 상담 안내만 primary 색으로 강조한다. 안내가 길어 wrap되므로 값에는
@@ -330,30 +294,23 @@ export function SeekerJobDetailResponsive({
 						</div>
 					</section>
 					<CollapsibleJobDescription>
-						{job.descriptionBlocks?.length ? (
-							<div className="mt-4 grid gap-4">
-								{job.descriptionBlocks.map((block) => (
-									<DescriptionBlock block={block} key={block.id} />
-								))}
-							</div>
-						) : (
-							<p className="mt-3 mb-0 whitespace-pre-line text-[15px] text-foreground leading-relaxed">
-								{job.desc}
-							</p>
-						)}
+						<div className="mt-4">
+							<JobDescriptionContent
+								description={job.desc}
+								descriptionBlocks={job.descriptionBlocks ?? []}
+							/>
+						</div>
 						{job.detailImages?.length ? (
 							// 상세 이미지는 업체가 만든 세로로 긴 홍보 이미지가 대부분이라
 							// 크롭·타일링 없이 본문 폭에 맞춰 원본 비율 그대로 세로로 이어 붙인다.
 							<div className="mt-5 flex flex-col gap-3">
 								{job.detailImages.map((image) => (
-									<Image
+									<JobDetailImage
 										alt={image.altText || image.fileName}
-										className="h-auto w-full rounded-lg border"
-										height={1600}
+										height={image.height}
 										key={image.storageKey}
 										src={image.url}
-										unoptimized
-										width={1200}
+										width={image.width}
 									/>
 								))}
 							</div>

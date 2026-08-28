@@ -13,6 +13,7 @@ export type BambiNotificationTargetType =
 	| "community_comment"
 	| "community_post"
 	| "contact_reveal"
+	| "direct_message"
 	| "employer_verification"
 	| "interview_schedule"
 	| "job_post"

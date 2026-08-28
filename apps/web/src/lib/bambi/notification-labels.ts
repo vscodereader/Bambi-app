@@ -71,6 +71,12 @@ const pointTransactionTitle = (item: BambiNotificationView): null | string => {
 	if (action(item) === "review_republished") {
 		return `포인트 ${amount.toLocaleString("ko-KR")}가 지급되었어요! - 후기 재게시`;
 	}
+	if (action(item) === "comment_milestone") {
+		const commentCount = readNumber(item.metadata, "commentCount");
+		return commentCount === null
+			? `댓글 마일스톤 보너스 ${amount.toLocaleString("ko-KR")}P가 지급됐어요!`
+			: `🏆 전체 ${commentCount.toLocaleString("ko-KR")}번째 댓글 달성! 보너스 ${amount.toLocaleString("ko-KR")}P가 지급됐어요`;
+	}
 	if (action(item) === "point_job_reward") {
 		const category = readString(item.metadata, "category");
 		const label =
@@ -167,6 +173,7 @@ const TITLE_BY_TARGET: Record<string, string> = {
 	community_comment: "댓글에 변동이 있어요",
 	community_post: "내 글에 변동이 있어요",
 	contact_reveal: "연락처가 공개됐어요",
+	direct_message: "운영자 쪽지가 도착했어요",
 	employer_verification: "사업자 인증 상태가 변경됐어요",
 	interview_schedule: "면접 일정에 변동이 있어요",
 	job_post: "공고 상태가 변경됐어요",
@@ -302,6 +309,10 @@ const REASON_VISIBLE_OUTCOMES = new Set([
  * `hard_delete`·`rejected`처럼 단독으로 오므로 마지막 세그먼트로 판정한다.
  */
 export function notificationBody(item: BambiNotificationView): null | string {
+	// 쪽지는 metadata.title(쪽지 제목)을 본문으로 낸다 — 본문 원문은 정본(쪽지함)에서 읽는다.
+	if (item.targetType === "direct_message") {
+		return readString(item.metadata, "title");
+	}
 	// 만료 임박은 어떤 아이템인지 본문에 실어 준다(제목은 유형 불문 공통 문구).
 	if (
 		item.targetType === "point_shop_order" &&
@@ -397,6 +408,8 @@ export function notificationHref(item: BambiNotificationView): null | string {
 		case "community_comment":
 		case "community_post":
 			return communityHref(item);
+		case "direct_message":
+			return "/seeker/me/messages";
 		case "employer_verification":
 			return "/employer/settings";
 		case "job_post":

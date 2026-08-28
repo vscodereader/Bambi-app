@@ -559,7 +559,7 @@ export default function ModeratorEditJobPage({
 						</h2>
 						<p className="mt-1 text-muted-foreground text-sm">
 							기본 상세 설명은 필수예요. 블록형 상세 설명과 면접 안내는
-							선택이며, 블록을 추가하면 기본 설명 대신 공개됩니다.
+							선택이며, 블록을 추가하면 기본 설명 뒤에 함께 공개됩니다.
 						</p>
 					</div>
 					<Card>

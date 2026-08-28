@@ -14,6 +14,7 @@ import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Card,
+	CardAction,
 	CardContent,
 	CardHeader,
 	CardTitle,
@@ -40,6 +41,7 @@ import {
 } from "@bambi-app/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+	DownloadIcon,
 	ExternalLinkIcon,
 	ImageIcon,
 	MoreHorizontalIcon,
@@ -62,12 +64,13 @@ import {
 	parseCrawledJobListState,
 	withCrawledJobListState,
 } from "@/lib/bambi/crawled-job-management";
+import { buildCrawledLeadsCsv } from "@/lib/bambi/crawled-leads-csv";
 import {
 	CRAWLED_POST_STATUS_LABELS,
 	CRAWLED_POST_STATUS_VARIANTS,
 	formatCrawlTimestamp,
 } from "@/lib/bambi/crawler";
-import { orpc } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 
 // 공고·커뮤니티 카드가 같은 눈금으로 페이지를 넘긴다.
 const PAGE_SIZE = CRAWLED_JOB_PAGE_SIZE;
@@ -209,6 +212,27 @@ export function CrawledJobPostsCard() {
 			},
 		})
 	);
+	// 외부 전달용 영업 리드 CSV. 서버가 상태 무관 전체를 내리므로 화면 필터와 무관하다.
+	// 파일 저장까지 성공 콜백에서 끝내 별도 상태를 두지 않는다.
+	const exportMutation = useMutation({
+		mutationFn: () => client.bambi.crawler.exportLeads(),
+		onError: () => toast.error("CSV를 내보내지 못했어요."),
+		onSuccess: (rows) => {
+			const now = new Date();
+			const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+			const url = URL.createObjectURL(
+				new Blob([buildCrawledLeadsCsv(rows)], {
+					type: "text/csv;charset=utf-8",
+				})
+			);
+			const anchor = document.createElement("a");
+			anchor.href = url;
+			anchor.download = `크롤링공고_${stamp}.csv`;
+			anchor.click();
+			URL.revokeObjectURL(url);
+			toast.success(`${rows.length}건을 CSV로 내보냈어요.`);
+		},
+	});
 	const isPending =
 		removeMutation.isPending ||
 		restoreMutation.isPending ||
@@ -260,6 +284,17 @@ export function CrawledJobPostsCard() {
 		<Card>
 			<CardHeader>
 				<CardTitle>수집 공고 관리</CardTitle>
+				<CardAction>
+					<Button
+						disabled={exportMutation.isPending}
+						onClick={() => exportMutation.mutate()}
+						size="sm"
+						variant="outline"
+					>
+						<DownloadIcon />
+						{exportMutation.isPending ? "내보내는 중…" : "CSV 내보내기"}
+					</Button>
+				</CardAction>
 			</CardHeader>
 			<CardContent className="flex flex-col gap-3">
 				<p className="m-0 text-muted-foreground text-xs">
@@ -324,6 +359,7 @@ export function CrawledJobPostsCard() {
 										) : null}
 										<TableHead>제목</TableHead>
 										<TableHead>업소명</TableHead>
+										<TableHead>전화번호</TableHead>
 										<TableHead>지역</TableHead>
 										<TableHead>상태</TableHead>
 										<TableHead>마지막 수집</TableHead>
@@ -376,6 +412,9 @@ export function CrawledJobPostsCard() {
 												)}
 											</TableCell>
 											<TableCell>{item.shopName ?? "—"}</TableCell>
+											<TableCell className="whitespace-nowrap">
+												{item.contactPhone ?? "—"}
+											</TableCell>
 											<TableCell className="whitespace-nowrap">
 												{[item.region, item.district]
 													.filter(Boolean)

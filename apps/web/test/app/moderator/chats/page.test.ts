@@ -22,7 +22,7 @@ describe("운영자 채팅 관리 페이지", () => {
 	});
 	it("첨부 메시지를 누르면 연결된 첨부를 이동·강조하고 2초 뒤 해제한다", () => {
 		expect(dialogSource).toContain("highlightMessageAttachments");
-		expect(dialogSource).toContain("scrollIntoView");
+		expect(dialogSource).toContain("strip.scrollTo(");
 		expect(dialogSource).toContain("}, 2000)");
 		expect(dialogSource).toContain(
 			"highlightedAttachmentIds.has(attachment.id)"

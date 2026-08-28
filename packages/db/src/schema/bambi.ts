@@ -207,6 +207,8 @@ export const notificationTargetType = pgEnum("notification_target_type", [
 	"point_transaction",
 	// 포인트몰 보유 아이템 만료 임박 알림 등.
 	"point_shop_order",
+	// 운영자 쪽지 도착 알림.
+	"direct_message",
 ]);
 
 // 수다방 게시판 정의. 운영자가 코드 배포 없이 추가·수정할 수 있도록 enum이 아니라
@@ -239,12 +241,21 @@ export const communityBoard = pgTable("community_board", {
 		.notNull(),
 });
 
-// 수다방 홈의 행·행 안 순서. best는 가상 게시판이라 FK를 걸지 않고 API가 유효 key를 검증한다.
+// 구직자 메인과 수다방 홈의 독립 배치 표면. 호출부가 문자열을 직접 만들지 않고 이 enum을
+// 단일 소스로 사용한다.
+export const communityBoardLayoutSurface = pgEnum(
+	"community_board_layout_surface",
+	["main", "community"]
+);
+
+// 구직자 메인·수다방 홈의 행과 행 안 순서. best는 가상 게시판이라 FK를 걸지 않고 API가
+// 유효 key를 검증한다. 같은 게시판은 표면별로 한 번씩 배치할 수 있다.
 export const communityBoardHomeLayout = pgTable(
 	"community_board_home_layout",
 	{
-		boardKey: text("board_key").primaryKey(),
+		boardKey: text("board_key").notNull(),
 		rowIndex: integer("row_index").notNull(),
+		surface: communityBoardLayoutSurface("surface").notNull(),
 		position: integer("position").notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -252,7 +263,9 @@ export const communityBoardHomeLayout = pgTable(
 			.notNull(),
 	},
 	(table) => [
+		primaryKey({ columns: [table.surface, table.boardKey] }),
 		uniqueIndex("community_board_home_layout_row_position_uidx").on(
+			table.surface,
 			table.rowIndex,
 			table.position
 		),
@@ -1450,6 +1463,21 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 후기 저장 성공 시 지급할 포인트와 다른 구직자 후기 한 건 열람 비용.
 	reviewWritePoints: integer("review_write_points").default(0).notNull(),
 	reviewViewPoints: integer("review_view_points").default(10).notNull(),
+	// 댓글 포인트 보너스(랜덤 당첨). 켜지면 댓글 적립 시 확률에 따라 추가 포인트를 얹는다.
+	// 당첨액은 댓글 생성 시 확정(community_comment.bonus_points)돼 숨김·복구에도 불변이다.
+	commentBonusEnabled: boolean("comment_bonus_enabled")
+		.default(false)
+		.notNull(),
+	// 당첨 확률(%)·당첨 시 지급 구간(min~max 균등). 운영자가 사이트 설정에서 편집한다.
+	commentBonusChancePercent: integer("comment_bonus_chance_percent")
+		.default(10)
+		.notNull(),
+	commentBonusMinPoints: integer("comment_bonus_min_points")
+		.default(5)
+		.notNull(),
+	commentBonusMaxPoints: integer("comment_bonus_max_points")
+		.default(50)
+		.notNull(),
 	// 구 단일 포인트 광고 금액. 유형별 컬럼 이관 근거로만 남기고 신규 경로에서는 읽지 않는다.
 	pointJobRewardPoints: integer("point_job_reward_points"),
 	premiumPointJobRewardPoints: integer("premium_point_job_reward_points"),
@@ -1966,6 +1994,47 @@ export const bambiNotification = pgTable(
 	]
 );
 
+// 운영자 쪽지. 본문 1행 + 수신자 행 분리 — 역할 브로드캐스트에서 본문을 수신자 수만큼
+// 복제하지 않고, 읽음·보관·삭제 상태는 수신자 행에만 둔다. 답장 없음(수신 전용) —
+// 양방향이 필요한 문의는 support-chat이 담당한다.
+export const bambiDirectMessage = pgTable("bambi_direct_message", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	// 발송 운영자. 운영자 계정이 삭제돼도 쪽지는 남아야 하므로 set null.
+	senderUserId: text("sender_user_id").references(() => user.id, {
+		onDelete: "set null",
+	}),
+	// 발송 시 선택한 역할 축 스냅샷(표시용). 개별 지정만이면 빈 배열.
+	targetRoles: text("target_roles").array().notNull().default([]),
+	title: text("title").notNull(),
+	body: text("body").notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const bambiDirectMessageRecipient = pgTable(
+	"bambi_direct_message_recipient",
+	{
+		messageId: uuid("message_id")
+			.notNull()
+			.references(() => bambiDirectMessage.id, { onDelete: "cascade" }),
+		recipientUserId: text("recipient_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		readAt: timestamp("read_at"),
+		archivedAt: timestamp("archived_at"),
+		// 소프트 삭제. 수신자 화면에서만 사라지고 운영자 발송 이력·읽음 통계는 남는다.
+		deletedAt: timestamp("deleted_at"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.messageId, table.recipientUserId] }),
+		index("bambi_dm_recipient_user_idx").on(table.recipientUserId),
+		// 쪽지함 배지 카운트 전용 부분 인덱스.
+		index("bambi_dm_recipient_unread_idx")
+			.on(table.recipientUserId)
+			.where(sql`${table.readAt} IS NULL AND ${table.deletedAt} IS NULL`),
+	]
+);
+
 // 출석체크. (누가, 며칠) 두 축이면 충분하다 — 복합 PK가 "하루 1회"를 DB에서 보장하므로
 // 애플리케이션은 조건 분기 없이 onConflictDoNothing으로 멱등만 지키면 된다.
 // attended_on은 KST 달력일이다(서버가 services/bambi-attendance의 getKstDateString으로
@@ -2099,6 +2168,44 @@ export const bambiMemberGrade = pgTable("bambi_member_grade", {
 		.$onUpdate(() => /* @__PURE__ */ new Date())
 		.notNull(),
 });
+
+// 누적 댓글 수 마일스톤 → 일회성 보너스 포인트. 운영자 CRUD(코드 하드코딩 대신 배포 없이 편집).
+// comment_count UNIQUE로 같은 기준선 중복을 DB가 거른다. 회수 없음(단조 누적 기준이라 삭제·숨김에도
+// 마일스톤은 되돌리지 않는다).
+export const bambiCommentMilestone = pgTable("bambi_comment_milestone", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	commentCount: integer("comment_count").notNull().unique(),
+	bonusPoints: integer("bonus_points").notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// 전역 선착 마일스톤 지급 이력(멱등). milestone_id UNIQUE로 마일스톤당 전 사이트 1회만
+// 지급된다 — "전체 N번째 댓글"을 처음 단 회원이 가져가고, 지급 판정과 원장 insert 사이
+// 경합이 나도 두 번째는 unique 위반으로 스킵된다.
+export const bambiCommentMilestoneAward = pgTable(
+	"bambi_comment_milestone_award",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		milestoneId: uuid("milestone_id")
+			.notNull()
+			.references(() => bambiCommentMilestone.id, { onDelete: "cascade" }),
+		// 당첨 댓글(전역 선착의 근거). 배지 렌더가 이 링크로 회차를 표시한다. 댓글이
+		// 하드삭제되면 null로 끊되 award 행은 남긴다 — 회차는 이미 소진돼 재지급하지 않는다.
+		commentId: uuid("comment_id").references(
+			(): AnyPgColumn => communityComment.id,
+			{ onDelete: "set null" }
+		),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("bambi_comment_milestone_award_milestone_uidx").on(
+			table.milestoneId
+		),
+	]
+);
 
 // 누적 광고일수 등급 아이콘 판별자. 카드 배지·구인자 안내가 이 값으로 lucide 아이콘을
 // 고른다(원값 직접 렌더 금지 — 화면은 라벨 맵 경유).
@@ -2348,6 +2455,11 @@ export const communityComment = pgTable(
 		body: text("body").notNull(),
 		// 이 댓글에 현재 적립돼 있는 포인트(회수·재적립 기준). 게스트는 0.
 		pointsAwarded: integer("points_awarded").default(0).notNull(),
+		// 생성 시 확정된 랜덤 보너스 당첨액(불변). 숨김 후 복구 시 다시 얹을 근거라 원장 스냅샷과
+		// 분리한다 — pointsAwarded처럼 재추첨하면 복구 때마다 값이 달라진다. 게스트·꽝은 0.
+		bonusPoints: integer("bonus_points").default(0).notNull(),
+		// 위 보너스가 현재 원장에 반영돼 있는 스냅샷(회수·재적립 기준). pointsAwarded의 보너스 축.
+		bonusPointsAwarded: integer("bonus_points_awarded").default(0).notNull(),
 		status: communityContentStatus("status").default("published").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),

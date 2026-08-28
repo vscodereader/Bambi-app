@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { PublicJobLanding } from "@/components/bambi/public-job-landing";
 import {
+	PUBLIC_AD_RAIL_SURFACE,
+	PublicSideAdRailLayout,
+} from "@/components/bambi/public-side-ad-rail-layout";
+import {
 	jobLandingDescription,
 	jobLandingKeywords,
 	jobLandingTitle,
@@ -28,5 +32,9 @@ export const metadata: Metadata = {
 };
 
 export default function JobsLandingPage() {
-	return <PublicJobLanding />;
+	return (
+		<PublicSideAdRailLayout promotionSurface={PUBLIC_AD_RAIL_SURFACE.jobs}>
+			<PublicJobLanding />
+		</PublicSideAdRailLayout>
+	);
 }

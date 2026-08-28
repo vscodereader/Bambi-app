@@ -7,6 +7,7 @@
 // query로 불러오되 폴백 값을 먼저 표시해 로딩 깜빡임을 없앤다.
 "use client";
 
+import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import {
 	Dialog,
 	DialogContent,
@@ -81,27 +82,47 @@ function FooterTel({ tel }: { tel: string }) {
 	);
 }
 
+// 서버에서 미리 조회한 푸터 설정(getFooter 응답). ISR 셸이 SSR HTML에 DB 값을
+// 박아 넣을 때 initialData로 내려준다.
+export type SiteFooterSettings = Awaited<
+	ReturnType<AppRouterClient["bambi"]["siteSettings"]["getFooter"]>
+>;
+
 interface SiteFooterProps {
 	// 콘텐츠 폭 — 헤더와 정렬. 기본은 앱 공통 고정폭.
 	contentWidthClassName?: string;
+	// 서버 컴포넌트 셸이 publicClient로 미리 조회해 내려주는 초기값. 없으면 기존처럼
+	// 클라이언트 조회 전까지 BAMBI_COMPANY 폴백을 그린다. JS를 실행하지 않는
+	// 크롤러(AI봇 등)는 SSR HTML만 보므로, 공개 SEO 표면(/jobs)은 이 값을 내려
+	// 사업자 정보 실값이 정적 HTML에 실리게 한다.
+	initialData?: SiteFooterSettings;
 	// 모바일 고정 하단 탭바가 있는 셸에서 겹침을 막기 위한 하단 여백.
 	withBottomNavClearance?: boolean;
 }
 
 export function SiteFooter({
 	contentWidthClassName = APP_CONTENT_MAX_W,
+	initialData,
 	withBottomNavClearance = false,
 }: SiteFooterProps) {
-	const { data } = useQuery(orpc.bambi.siteSettings.getFooter.queryOptions());
+	const { data } = useQuery({
+		...orpc.bambi.siteSettings.getFooter.queryOptions(),
+		initialData,
+	});
+
+	// 서버 셸이 내려준 initialData를 직접 폴백으로 둔다 — useQuery의 initialData만
+	// 믿으면 SSR 렌더에서 그 값이 반영되지 않는 경로가 있어(/about에서 재현) HTML엔
+	// TODO_ 자리표시자가, 하이드레이션 후엔 실값이 그려져 불일치가 났다.
+	const settings = data ?? initialData;
 
 	// DB에 값이 있으면 그 값, 없으면 코드 상수로 폴백.
-	const intro = data?.footerIntro ?? BAMBI_COMPANY.footerIntro;
-	const operator = data?.operator ?? BAMBI_COMPANY.operator;
-	const ceo = data?.ceo ?? BAMBI_COMPANY.ceo;
-	const bizRegNo = data?.bizRegNo ?? BAMBI_COMPANY.bizRegNo;
-	const address = data?.address ?? BAMBI_COMPANY.address;
-	const email = data?.email ?? BAMBI_COMPANY.email;
-	const tel = data?.tel ?? BAMBI_COMPANY.tel;
+	const intro = settings?.footerIntro ?? BAMBI_COMPANY.footerIntro;
+	const operator = settings?.operator ?? BAMBI_COMPANY.operator;
+	const ceo = settings?.ceo ?? BAMBI_COMPANY.ceo;
+	const bizRegNo = settings?.bizRegNo ?? BAMBI_COMPANY.bizRegNo;
+	const address = settings?.address ?? BAMBI_COMPANY.address;
+	const email = settings?.email ?? BAMBI_COMPANY.email;
+	const tel = settings?.tel ?? BAMBI_COMPANY.tel;
 
 	return (
 		<footer
@@ -205,7 +226,10 @@ export function SiteFooter({
 							{email}
 						</a>
 					</p>
-					<p className="pt-2 text-muted-foreground/80">
+					{/* 연도는 서버(UTC)와 클라이언트(사용자 타임존)가 연말 경계에서 갈릴 수
+					    있어 하이드레이션 불일치(#418)를 낸다. 실제로 갈리는 건 1년에 몇
+					    시간뿐이라 값을 서버에서 내리기보다 이 노드만 경고를 억제한다. */}
+					<p className="pt-2 text-muted-foreground/80" suppressHydrationWarning>
 						© {new Date().getFullYear()} {operator}. All rights reserved.
 					</p>
 				</div>

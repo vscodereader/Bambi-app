@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { SeekerAuthGateScreen } from "@/components/bambi/auth/seeker-auth-gate-screen";
 import { SeekerShell } from "@/components/bambi/seeker-shell";
 import { readVisitorState } from "@/lib/bambi/visitor";
 
@@ -10,9 +9,10 @@ export default async function SeekerLayout({
 }) {
 	const visitor = await readVisitorState();
 
-	// anon은 게이트상 /seeker 외에는 도달할 수 없으므로 children을 버려도 안전하다.
+	// proxy가 anon에게 /seeker와 수다방 홈만 통과시킨다. 두 페이지가 각자 게이트/공개 홈을
+	// 렌더해야 하므로 여기서 children을 버리지 않는다.
 	if (visitor === "anon") {
-		return <SeekerAuthGateScreen />;
+		return children;
 	}
 
 	// 게스트는 셸을 여기서 씌우지 않고 page에 넘긴다. "로그인이 필요한 것을 눌렀는지"는

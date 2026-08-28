@@ -41,3 +41,10 @@ export const pickPointJobCandidate = <T>(
 	const normalized = Math.min(Math.max(randomValue, 0), 1 - Number.EPSILON);
 	return candidates[Math.floor(normalized * candidates.length)] ?? null;
 };
+export const POINT_JOB_REWARD_CATEGORIES = [
+	"premium",
+	"special",
+	"recommended",
+] as const;
+export type PointJobRewardCategory =
+	(typeof POINT_JOB_REWARD_CATEGORIES)[number];

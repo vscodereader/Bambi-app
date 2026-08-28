@@ -16,6 +16,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { orpc } from "@/utils/orpc";
+import { CommentBonusCard } from "./comment-bonus-card";
+import { CommentMilestoneSection } from "./comment-milestone-section";
 
 const parsePoints = (value: string): number | null =>
 	value.trim() === "" ? null : Number(value);
@@ -74,12 +76,24 @@ export default function ModeratorPointSettingsPage() {
 			settingDraft(query.data.recommendedPointJobRotationHours)
 		);
 	}, [query.data]);
-	const globalMutation = useMutation(
-		orpc.bambi.pointSettings.saveAdmin.mutationOptions({
+	const membershipMutation = useMutation(
+		orpc.bambi.pointSettings.saveMembershipAdmin.mutationOptions({
 			onError: (error) =>
-				toast.error(error.message || "포인트 설정을 저장하지 못했어요."),
+				toast.error(error.message || "회원가입·출석 설정을 저장하지 못했어요."),
 			onSuccess: async () => {
-				toast.success("포인트 설정을 저장했어요.");
+				toast.success("회원가입·출석 설정을 저장했어요.");
+				await client.invalidateQueries({
+					queryKey: orpc.bambi.pointSettings.key(),
+				});
+			},
+		})
+	);
+	const pointJobsMutation = useMutation(
+		orpc.bambi.pointSettings.savePointJobsAdmin.mutationOptions({
+			onError: (error) =>
+				toast.error(error.message || "공고 포인트 설정을 저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("공고 포인트 설정을 저장했어요.");
 				await client.invalidateQueries({
 					queryKey: orpc.bambi.pointSettings.key(),
 				});
@@ -89,11 +103,46 @@ export default function ModeratorPointSettingsPage() {
 			},
 		})
 	);
-	const canSaveGlobal =
+	const jobPaymentMutation = useMutation(
+		orpc.bambi.pointSettings.saveJobPaymentAdmin.mutationOptions({
+			onError: (error) =>
+				toast.error(
+					error.message || "공고 결제 포인트 설정을 저장하지 못했어요."
+				),
+			onSuccess: async () => {
+				toast.success("공고 결제 포인트 설정을 저장했어요.");
+				await client.invalidateQueries({
+					queryKey: orpc.bambi.pointSettings.key(),
+				});
+			},
+		})
+	);
+	const membershipChanged = query.data
+		? signup !== String(query.data.signupPoints) ||
+			attendance !== String(query.data.attendancePoints)
+		: false;
+	const canSaveMembership =
 		fieldValid(signup) &&
 		fieldValid(attendance) &&
-		fieldValid(minimum, 0, true) &&
-		fieldValid(maximum, 0, true) &&
+		membershipChanged &&
+		!membershipMutation.isPending;
+	const pointJobsChanged = query.data
+		? reviewWrite !== String(query.data.reviewWritePoints) ||
+			reviewView !== String(query.data.reviewViewPoints) ||
+			premiumPointReward !==
+				settingDraft(query.data.premiumPointJobRewardPoints) ||
+			premiumRotationHours !==
+				settingDraft(query.data.premiumPointJobRotationHours) ||
+			specialPointReward !==
+				settingDraft(query.data.specialPointJobRewardPoints) ||
+			specialRotationHours !==
+				settingDraft(query.data.specialPointJobRotationHours) ||
+			recommendedPointReward !==
+				settingDraft(query.data.recommendedPointJobRewardPoints) ||
+			recommendedRotationHours !==
+				settingDraft(query.data.recommendedPointJobRotationHours)
+		: false;
+	const canSavePointJobs =
 		fieldValid(reviewWrite) &&
 		fieldValid(reviewView) &&
 		fieldValid(premiumPointReward, 0, true) &&
@@ -102,7 +151,25 @@ export default function ModeratorPointSettingsPage() {
 		fieldValid(specialRotationHours, 1) &&
 		fieldValid(recommendedPointReward, 0, true) &&
 		fieldValid(recommendedRotationHours, 1) &&
-		!globalMutation.isPending;
+		pointJobsChanged &&
+		!pointJobsMutation.isPending;
+	const parsedMinimum = parsePoints(minimum);
+	const parsedMaximum = parsePoints(maximum);
+	const jobPaymentRangeValid =
+		parsedMinimum === null ||
+		parsedMinimum === 0 ||
+		parsedMaximum === null ||
+		parsedMaximum >= parsedMinimum;
+	const jobPaymentChanged = query.data
+		? minimum !== settingDraft(query.data.jobPaymentMinPoints) ||
+			maximum !== settingDraft(query.data.jobPaymentMaxPoints)
+		: false;
+	const canSaveJobPayment =
+		fieldValid(minimum, 0, true) &&
+		fieldValid(maximum, 0, true) &&
+		jobPaymentRangeValid &&
+		jobPaymentChanged &&
+		!jobPaymentMutation.isPending;
 	if (query.isError) {
 		return (
 			<EmptyState
@@ -144,6 +211,20 @@ export default function ModeratorPointSettingsPage() {
 							onChange={setAttendance}
 							value={attendance}
 						/>
+						<Button
+							className="ml-auto md:col-span-2"
+							disabled={!canSaveMembership}
+							onClick={() =>
+								membershipMutation.mutate({
+									attendancePoints: Number(attendance),
+									signupPoints: Number(signup),
+								})
+							}
+						>
+							{membershipMutation.isPending
+								? "저장 중"
+								: "회원가입·출석 설정 저장"}
+						</Button>
 					</AccordionContent>
 				</AccordionItem>
 				<AccordionItem
@@ -224,56 +305,75 @@ export default function ModeratorPointSettingsPage() {
 								value={recommendedRotationHours}
 							/>
 						</div>
+						<Button
+							className="ml-auto md:col-span-2"
+							disabled={!canSavePointJobs}
+							onClick={() =>
+								pointJobsMutation.mutate({
+									reviewViewPoints: Number(reviewView),
+									reviewWritePoints: Number(reviewWrite),
+									premiumPointJobRewardPoints: parsePoints(premiumPointReward),
+									premiumPointJobRotationHours: Number(premiumRotationHours),
+									recommendedPointJobRewardPoints: parsePoints(
+										recommendedPointReward
+									),
+									recommendedPointJobRotationHours: Number(
+										recommendedRotationHours
+									),
+									specialPointJobRewardPoints: parsePoints(specialPointReward),
+									specialPointJobRotationHours: Number(specialRotationHours),
+								})
+							}
+						>
+							{pointJobsMutation.isPending
+								? "저장 중"
+								: "공고 포인트 설정 저장"}
+						</Button>
+					</AccordionContent>
+				</AccordionItem>
+				<AccordionItem
+					className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+					value="job-payment-points"
+				>
+					<AccordionTrigger className="bg-card px-4 py-4 font-bold hover:bg-muted/50">
+						공고 결제 포인트 사용
+					</AccordionTrigger>
+					<AccordionContent className="grid gap-4 px-4 pt-4 pb-4 md:grid-cols-2">
+						<PointField
+							hint="비우거나 0으로 저장하면 공고 결제 포인트 사용을 중단합니다."
+							id="job-min-points"
+							label="공고 시 최소 사용 포인트"
+							nullable
+							onChange={setMinimum}
+							placeholder="사용 안 함"
+							value={minimum}
+						/>
+						<PointField
+							hint="비우면 결제 예정 금액까지 사용할 수 있습니다."
+							id="job-max-points"
+							label="공고 시 최대 사용 포인트"
+							nullable
+							onChange={setMaximum}
+							placeholder="결제 예정 금액까지"
+							value={maximum}
+						/>
+						<Button
+							className="ml-auto md:col-span-2"
+							disabled={!canSaveJobPayment}
+							onClick={() =>
+								jobPaymentMutation.mutate({
+									jobPaymentMaxPoints: parsedMaximum,
+									jobPaymentMinPoints: parsedMinimum,
+								})
+							}
+						>
+							{jobPaymentMutation.isPending ? "저장 중" : "공고 결제 설정 저장"}
+						</Button>
 					</AccordionContent>
 				</AccordionItem>
 			</Accordion>
-			<section className="rounded-xl border p-4">
-				<h2 className="mb-4 font-bold text-lg">공고 결제 포인트 사용</h2>
-				<div className="grid gap-4 md:grid-cols-2">
-					<PointField
-						hint="비우거나 0으로 저장하면 공고 결제 포인트 사용을 중단합니다."
-						id="job-min-points"
-						label="공고 시 최소 사용 포인트"
-						nullable
-						onChange={setMinimum}
-						placeholder="사용 안 함"
-						value={minimum}
-					/>
-					<PointField
-						hint="비우면 결제 예정 금액까지 사용할 수 있습니다."
-						id="job-max-points"
-						label="공고 시 최대 사용 포인트"
-						nullable
-						onChange={setMaximum}
-						placeholder="결제 예정 금액까지"
-						value={maximum}
-					/>
-				</div>
-			</section>
-			<Button
-				className="mt-4 ml-auto flex"
-				disabled={!canSaveGlobal}
-				onClick={() =>
-					globalMutation.mutate({
-						attendancePoints: Number(attendance),
-						jobPaymentMaxPoints: parsePoints(maximum),
-						jobPaymentMinPoints: parsePoints(minimum),
-						signupPoints: Number(signup),
-						reviewViewPoints: Number(reviewView),
-						reviewWritePoints: Number(reviewWrite),
-						premiumPointJobRewardPoints: parsePoints(premiumPointReward),
-						premiumPointJobRotationHours: Number(premiumRotationHours),
-						recommendedPointJobRewardPoints: parsePoints(
-							recommendedPointReward
-						),
-						recommendedPointJobRotationHours: Number(recommendedRotationHours),
-						specialPointJobRewardPoints: parsePoints(specialPointReward),
-						specialPointJobRotationHours: Number(specialRotationHours),
-					})
-				}
-			>
-				{globalMutation.isPending ? "저장 중" : "저장"}
-			</Button>
+			<CommentBonusCard />
+			<CommentMilestoneSection />
 		</main>
 	);
 }

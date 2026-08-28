@@ -29,9 +29,11 @@ import {
 	BookOpenIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
-	ClipboardListIcon,
 	ClockIcon,
 	DollarCircle,
+	FileTextIcon,
+	FlagIcon,
+	InboxIcon,
 	LockIcon,
 	Message,
 	SettingsIcon,
@@ -40,6 +42,7 @@ import {
 
 export const MY_PAGE_HUB_HREF = "/seeker/me" as Route;
 export const ATTENDANCE_HREF = "/seeker/attendance" as Route;
+export const MESSAGES_HREF = "/seeker/me/messages" as Route;
 
 // 출석 라우터는 구직자·업주만 허용한다(서버 게이트) — 법률자문·운영자에게는 진입점 자체를
 // 감춘다. 그대로 두면 눌러서 에러 화면을 보게 된다. 역할 로딩 중(null)에도 감춘 뒤 나타난다.
@@ -60,12 +63,12 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 	{ href: MY_PAGE_HUB_HREF, icon: <UserIcon />, label: "내 정보" },
 	{
 		href: "/seeker/me/reports" as Route,
-		icon: <ClipboardListIcon />,
+		icon: <FlagIcon />,
 		label: "내 신고 내역",
 	},
 	{
 		href: "/seeker/me/content" as Route,
-		icon: <ClipboardListIcon />,
+		icon: <FileTextIcon />,
 		label: "글 관리",
 	},
 	{
@@ -83,6 +86,7 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 		icon: <DollarCircle />,
 		label: "포인트 내역",
 	},
+	{ href: MESSAGES_HREF, icon: <InboxIcon />, label: "쪽지함" },
 	{
 		href: "/seeker/me/settings" as Route,
 		icon: <SettingsIcon />,
@@ -102,6 +106,8 @@ const HIDDEN_MY_PAGE_HREFS: Record<string, string[]> = {
 		"/seeker/me/reports",
 		"/seeker/me/interviews",
 		"/seeker/me/blocks",
+		// 운영자는 쪽지 발송자라 수신함이 의미 없다(발송·이력은 /moderator/messages).
+		"/seeker/me/messages",
 		"/manual",
 		"/support",
 	],
@@ -175,6 +181,13 @@ function ProfileCard() {
 function MyPageNav() {
 	const pathname = usePathname();
 	const { role } = useBambiAuth();
+	// 쪽지함 안읽음 배지 — 알림 벨과 별개 카운트다. 항목이 보이는 역할만 조회한다.
+	const showMessages = isMyPageItemVisible(MESSAGES_HREF, role);
+	const unreadQuery = useQuery({
+		...orpc.bambi.directMessages.unreadCount.queryOptions(),
+		enabled: showMessages,
+	});
+	const unreadCount = unreadQuery.data?.unreadCount ?? 0;
 	const items = NAV_ITEMS.filter((item) =>
 		isMyPageItemVisible(item.href, role)
 	);
@@ -198,6 +211,11 @@ function MyPageNav() {
 					>
 						<span className="inline-flex size-5">{item.icon}</span>
 						<span className="min-w-0 flex-1 truncate">{item.label}</span>
+						{item.href === MESSAGES_HREF && unreadCount > 0 ? (
+							<Badge tone="primary">
+								{unreadCount > 99 ? "99+" : unreadCount}
+							</Badge>
+						) : null}
 						<span className="inline-flex size-4 text-muted-foreground md:hidden">
 							<ChevronRightIcon />
 						</span>

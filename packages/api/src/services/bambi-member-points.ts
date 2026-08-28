@@ -1,18 +1,18 @@
 import { db } from "@bambi-app/db";
 import {
+	bambiCommentMilestone,
+	bambiCommentMilestoneAward,
 	bambiMemberGrade,
 	bambiPointTransaction,
 	bambiProfile,
 	bambiSiteSettings,
 	communityBoard,
 } from "@bambi-app/db/schema/bambi";
-import { and, asc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { lockMemberPoints } from "./bambi-point-ledger";
+import { SITE_SETTINGS_ROW_ID } from "./bambi-point-settings";
 import { resolveGradeIconUrl } from "./bambi-storage";
-
-// site_settings 단일 행 고정 키(site-settings.ts SETTINGS_ROW_ID와 같은 값).
-const SITE_SETTINGS_ROW_ID = "default";
 
 export interface MemberGrade {
 	color: string | null;
@@ -32,7 +32,14 @@ export interface GradeBadge {
 export const POINT_REASONS = {
 	post: { award: "community_post", revoke: "community_post_revoke" },
 	comment: { award: "community_comment", revoke: "community_comment_revoke" },
+	commentBonus: {
+		award: "community_comment_bonus",
+		revoke: "community_comment_bonus_revoke",
+	},
 } as const;
+
+// 댓글 수 마일스톤 보너스 원장 reason. 회수 없음(단조 누적)이라 award 하나만 둔다.
+export const COMMENT_MILESTONE_REASON = "community_comment_milestone";
 
 // 포인트몰 구매·환불 reason. 등급 계산에서 제외한다 — 구매(−)·환불(+)이 등급에 중립이어야
 // 하고, 글/댓글 회수(*_revoke, 음수)는 기존대로 등급에서 빠진다("양수만 합산"이면 회수가
@@ -42,10 +49,56 @@ export const POINT_SHOP_REASONS = {
 	refund: "point_shop_refund",
 } as const;
 
-const GRADE_EXCLUDED_REASONS = [
+const JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX = "공고 취소 포인트 환급";
+const JOB_PAYMENT_POINT_REASON_PREFIXES = {
+	refund: `${JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX}: `,
+	refundForfeited: `${JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX} 완료(상한 소멸): `,
+	use: "공고 등록 포인트 사용: ",
+} as const;
+
+export const JOB_PAYMENT_POINT_REASONS = {
+	refund: (jobPostId: string): string =>
+		`${JOB_PAYMENT_POINT_REASON_PREFIXES.refund}${jobPostId}`,
+	refundForfeited: (jobPostId: string): string =>
+		`${JOB_PAYMENT_POINT_REASON_PREFIXES.refundForfeited}${jobPostId}`,
+	use: (jobPostId: string): string =>
+		`${JOB_PAYMENT_POINT_REASON_PREFIXES.use}${jobPostId}`,
+} as const;
+
+export const JOB_PAYMENT_POINT_REASON_PATTERNS = {
+	refund: `${JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX}%`,
+	use: `${JOB_PAYMENT_POINT_REASON_PREFIXES.use}%`,
+} as const;
+
+export const isJobPaymentPointRefundReason = (reason: string): boolean =>
+	reason.startsWith(JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX);
+
+export const isJobPaymentPointUseReason = (reason: string): boolean =>
+	reason.startsWith(JOB_PAYMENT_POINT_REASON_PREFIXES.use);
+
+const GRADE_EXCLUDED_EXACT_REASONS = [
 	POINT_SHOP_REASONS.purchase,
 	POINT_SHOP_REASONS.refund,
-];
+] as const;
+
+const GRADE_EXCLUDED_REASON_PREFIXES = Object.values(
+	JOB_PAYMENT_POINT_REASON_PREFIXES
+);
+
+export function isGradeExcludedPointReason(reason: string): boolean {
+	return (
+		GRADE_EXCLUDED_EXACT_REASONS.some((excluded) => excluded === reason) ||
+		GRADE_EXCLUDED_REASON_PREFIXES.some((prefix) => reason.startsWith(prefix))
+	);
+}
+
+// 잔액과 달리 등급은 소비에 중립이다. 포인트몰은 고정 reason, 공고 결제는 기존 원장과의
+// 호환을 위해 공고 ID가 뒤에 붙는 접두사로 제외한다. 본인 요약과 여러 회원 배지가 같은 SQL을
+// 재사용해야 화면별 등급이 갈리지 않는다.
+export const gradeBasisPointsSql = sql<number>`coalesce(sum(${bambiPointTransaction.amount}) filter (where ${bambiPointTransaction.reason} not in (${sql.join(
+	GRADE_EXCLUDED_EXACT_REASONS.map((reason) => sql`${reason}`),
+	sql`, `
+)}) and ${bambiPointTransaction.reason} not like ${`${JOB_PAYMENT_POINT_REASON_PREFIXES.use}%`} and ${bambiPointTransaction.reason} not like ${`${JOB_PAYMENT_POINT_REASON_PREFIXES.refund}%`} and ${bambiPointTransaction.reason} not like ${`${JOB_PAYMENT_POINT_REASON_PREFIXES.refundForfeited}%`}), 0)::int`;
 
 // 순수: 현재 적립 스냅샷과 목표 적립액으로 원장 델타·새 스냅샷을 계산한다.
 // 목표는 caller가 (회원 && 게시판 포인트)일 때만 양수로, 그 외엔 0으로 넘긴다.
@@ -71,6 +124,30 @@ export function resolveCommentAward(
 		return 0;
 	}
 	return boardCommentPoints;
+}
+
+// 순수: 댓글 랜덤 보너스 당첨액. 비활성·기본 적립 0(꽝인 게스트/셀프)·확률 0 이하면 0. random()*100이
+// chancePercent 미만이면 당첨 → min~max 균등 정수, 그 외 꽝(0). random 주입으로 결정적 테스트가 된다.
+// min>max·음수는 방어한다(min=max(0,min), max=max(min,max)) — 운영자 오입력에도 음수·역구간이 안 나온다.
+export function rollCommentBonus(
+	settings: {
+		enabled: boolean;
+		chancePercent: number;
+		minPoints: number;
+		maxPoints: number;
+	},
+	baseAward: number,
+	random: () => number = Math.random
+): number {
+	if (baseAward <= 0 || !settings.enabled || settings.chancePercent <= 0) {
+		return 0;
+	}
+	if (random() * 100 >= settings.chancePercent) {
+		return 0;
+	}
+	const min = Math.max(0, settings.minPoints);
+	const max = Math.max(min, settings.maxPoints);
+	return min + Math.floor(random() * (max - min + 1));
 }
 
 // 순수: 적립 델타를 회원 누적 상한 여유분까지만 반영한다. cap null(무제한)이거나 회수(delta<=0)면
@@ -185,6 +262,61 @@ export async function reconcileContentPoints(
 	return args.currentAwarded + appliedDelta;
 }
 
+// DB: 전역 선착 마일스톤. 사이트 전체 통산 댓글 수가 이번 댓글로 정확히 어느 회차와 일치하면,
+// 그 댓글을 단 회원이 보너스를 가져간다. milestone_id UNIQUE + onConflictDoNothing이 마일스톤당
+// 1회·경합 이중지급을 막는다. award 행에 당첨 댓글(commentId)을 기록해 배지 렌더의 근거로 쓴다.
+//
+// 정확 일치(== )만 지급한다 — 지나간 회차는 소급 지급하지 않는다(전역 모델에서 catch-up은 배포
+// 직후 미지급분을 한 회원이 싹쓸이하는 사고가 된다). 이미 지나간 회차 행은 영원히 미달성으로 남는다.
+// ponytail: count 경합으로 두 댓글이 같은 순번을 읽거나 서로의 삽입 사이에 끼면 그 회차를 아무도
+// 못 받고 넘어갈 수 있다 — 전역 정확 일치의 알려진 한계. 정합이 필요하면 순번을 원장으로 직렬화.
+export async function awardCommentMilestones(
+	tx: TxHandle,
+	userId: string,
+	totalCommentCount: number,
+	commentId: string
+): Promise<Array<{ commentCount: number; bonusPoints: number }>> {
+	// comment_count는 UNIQUE라 정확 일치는 최대 한 행이다.
+	const [milestone] = await tx
+		.select({
+			id: bambiCommentMilestone.id,
+			commentCount: bambiCommentMilestone.commentCount,
+			bonusPoints: bambiCommentMilestone.bonusPoints,
+		})
+		.from(bambiCommentMilestone)
+		.where(eq(bambiCommentMilestone.commentCount, totalCommentCount))
+		.limit(1);
+	if (!milestone) {
+		return [];
+	}
+	// award 행이 실제로 생긴 경우에만 지급한다 — 동시 실행이 같은 마일스톤을 노려도 unique
+	// 충돌로 두 번째는 스킵돼 중복 지급이 없다(출석 적립과 같은 가드).
+	const inserted = await tx
+		.insert(bambiCommentMilestoneAward)
+		.values({ userId, milestoneId: milestone.id, commentId })
+		.onConflictDoNothing()
+		.returning({ id: bambiCommentMilestoneAward.id });
+	if (inserted.length === 0) {
+		return [];
+	}
+	await lockMemberPoints(tx, userId);
+	const cap = await getMemberPointsCap();
+	const balance = await getMemberBalanceTx(tx, userId);
+	const appliedDelta =
+		cap === null
+			? milestone.bonusPoints
+			: applyPointsCap(milestone.bonusPoints, balance, cap);
+	if (appliedDelta > 0) {
+		await tx.insert(bambiPointTransaction).values({
+			amount: appliedDelta,
+			balanceAfter: balance + appliedDelta,
+			reason: COMMENT_MILESTONE_REASON,
+			userId,
+		});
+	}
+	return [{ commentCount: milestone.commentCount, bonusPoints: appliedDelta }];
+}
+
 // DB: 게시판의 글/댓글 적립 금액. 없으면 0/0. 설정 읽기라 트랜잭션 밖 db로 충분하다.
 export async function getBoardContentPoints(
 	board: string
@@ -211,6 +343,31 @@ export async function getMemberPointsCap(): Promise<number | null> {
 		.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 		.limit(1);
 	return row?.cap ?? null;
+}
+
+// DB: 댓글 랜덤 보너스 설정(단일 행). 미조회 시 스키마 기본값과 같은 안전값으로 폴백한다.
+export async function getCommentBonusSettings(): Promise<{
+	enabled: boolean;
+	chancePercent: number;
+	minPoints: number;
+	maxPoints: number;
+}> {
+	const [row] = await db
+		.select({
+			enabled: bambiSiteSettings.commentBonusEnabled,
+			chancePercent: bambiSiteSettings.commentBonusChancePercent,
+			minPoints: bambiSiteSettings.commentBonusMinPoints,
+			maxPoints: bambiSiteSettings.commentBonusMaxPoints,
+		})
+		.from(bambiSiteSettings)
+		.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
+		.limit(1);
+	return {
+		enabled: row?.enabled ?? false,
+		chancePercent: row?.chancePercent ?? 0,
+		minPoints: row?.minPoints ?? 0,
+		maxPoints: row?.maxPoints ?? 0,
+	};
 }
 
 // DB: 여러 회원의 포인트 잔액(순합계). 결과에 없는 userId는 0으로 취급한다.
@@ -249,15 +406,10 @@ export async function getGradeBasisPoints(
 	const rows = await db
 		.select({
 			userId: bambiPointTransaction.userId,
-			basis: sql<number>`coalesce(sum(${bambiPointTransaction.amount}), 0)::int`,
+			basis: gradeBasisPointsSql,
 		})
 		.from(bambiPointTransaction)
-		.where(
-			and(
-				inArray(bambiPointTransaction.userId, unique),
-				notInArray(bambiPointTransaction.reason, GRADE_EXCLUDED_REASONS)
-			)
-		)
+		.where(inArray(bambiPointTransaction.userId, unique))
 		.groupBy(bambiPointTransaction.userId);
 	for (const row of rows) {
 		map.set(row.userId, row.basis);
