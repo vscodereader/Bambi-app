@@ -66,13 +66,14 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 
 	const community = mineQuery.data?.community;
 	const value: BambiAuthValue = {
-		user: session.data?.user
-			? {
-					id: session.data.user.id,
-					email: session.data.user.email,
-					name: session.data.user.name,
-				}
-			: null,
+		user:
+			mounted && session.data?.user
+				? {
+						id: session.data.user.id,
+						email: session.data.user.email,
+						name: session.data.user.name,
+					}
+				: null,
 		role: (mineQuery.data?.bambiProfile?.role ?? null) as BambiRole,
 		accountStatus: (mineQuery.data?.bambiProfile?.status ??
 			null) as BambiAccountStatus,
@@ -95,7 +96,12 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 		isAuthenticated,
 		isGuest,
 		guestGender,
-		isPending: session.isPending || (isAuthenticated && mineQuery.isLoading),
+		// 마운트 전에는 서버와 같은 "아직 모른다"(pending) 상태로 고정한다 — 위
+		// isAuthenticated와 같은 이유다. 세션 캐시가 있는 브라우저는 첫 렌더부터
+		// isPending이 false가 되는데, 서버는 true로 그리므로 이 값으로 태그가 갈리는
+		// 화면(/employer/new 내비의 span↔a)에서 hydration 불일치가 났다.
+		isPending:
+			!mounted || session.isPending || (isAuthenticated && mineQuery.isLoading),
 	};
 
 	return (

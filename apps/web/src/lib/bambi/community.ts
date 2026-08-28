@@ -236,12 +236,23 @@ export const communityWritePath = (slug: string): string =>
 export const communityEditPath = (slug: string, postId: string): string =>
 	`/seeker/community/${slug}/${postId}/edit`;
 
-const pad2 = (value: number): string =>
-	value < 10 ? `0${value}` : String(value);
+// 타임존을 한국(Asia/Seoul)으로 고정한다 — getFullYear/getMonth/getDate 같은 로컬
+// 시각 메서드는 서버(UTC 컨테이너)와 클라이언트(사용자 타임존)에서 자정 언저리 날짜가
+// 갈려 서버가 렌더한 댓글을 그대로 하이드레이트하는 공개 상세(public-post-interactions)
+// 등에서 하이드레이션 불일치(#418)를 낸다. 독자는 모두 한국 사용자라 KST 고정이
+// 표시상으로도 맞다.
+const communityDateFormat = new Intl.DateTimeFormat("ko-KR", {
+	day: "2-digit",
+	month: "2-digit",
+	timeZone: "Asia/Seoul",
+	year: "numeric",
+});
 
 export const formatCommunityDate = (value: Date | string): string => {
-	const date = new Date(value);
-	return `${date.getFullYear()}.${pad2(date.getMonth() + 1)}.${pad2(date.getDate())}`;
+	const parts = communityDateFormat.formatToParts(new Date(value));
+	const get = (type: Intl.DateTimeFormatPartTypes) =>
+		parts.find((part) => part.type === type)?.value ?? "";
+	return `${get("year")}.${get("month")}.${get("day")}`;
 };
 
 // 새 글 "N" 배지 기준 — 작성 후 이틀(48시간). 목록과 미리보기가 같은 기준으로 배지를
