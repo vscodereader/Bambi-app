@@ -68,4 +68,8 @@ describe("employer ad guide screen", () => {
 		expect(source).toContain("상세이미지 디자인 제작 +");
 		expect(source).toContain("formatAdPrice(product.detailDesignPrice)");
 	});
+
+	it("renders cumulative ad-day tier icons at size 8", () => {
+		expect(source).toContain('className={cn("size-8", tier.colorClass)}');
+	});
 });

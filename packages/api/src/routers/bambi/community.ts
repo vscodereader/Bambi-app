@@ -754,11 +754,13 @@ const selectBoardPosts = (
 		limit,
 		offset = 0,
 		filters = [],
+		sortByLikes = false,
 		windowStart,
 	}: {
 		limit: number;
 		offset?: number;
 		filters?: SQL[];
+		sortByLikes?: boolean;
 		windowStart: Date;
 	}
 ) =>
@@ -766,7 +768,15 @@ const selectBoardPosts = (
 		.select(postSummarySelection)
 		.from(communityPost)
 		.where(and(...buildBoardFilters(board, windowStart), ...filters))
-		.orderBy(...buildBoardOrder(board))
+		.orderBy(
+			...(sortByLikes
+				? [
+						desc(communityPost.likeCount),
+						desc(communityPost.createdAt),
+						desc(communityPost.id),
+					]
+				: buildBoardOrder(board))
+		)
 		.limit(limit)
 		.offset(offset);
 
@@ -1742,26 +1752,35 @@ export const communityRouter = {
 		}),
 
 	// 비로그인 공개 목록(SEO). 공개 보드(PUBLIC_COMMUNITY_BOARDS)의 published 글만,
-	// 필터·검색·내 글 없이 최신순으로 내려준다. 비밀글은 마스킹이 아니라 아예 뺀다 —
+	// 필터·검색·내 글 없이 기본 최신순으로 내려준다. `/board` 허브만 popular=true로
+	// 좋아요·작성일·ID 내림차순을 요청한다. 비밀글은 마스킹이 아니라 아예 뺀다 —
 	// 열 수 없는 글의 링크를 크롤러에게 심어 봐야 404 뿐이다. 수집(crawled) 글도 섞지
 	// 않는다: 남의 사이트에서 긁어 온 본문을 우리 도메인에 색인시키면 중복 콘텐츠다.
 	listPublicPosts: publicProcedure
 		.input(
 			z.object({
 				board: publicBoardSchema,
+				excludeIds: z.array(z.string().uuid()).max(PAGE_SIZE).default([]),
 				page: z.number().int().min(1).default(1),
+				popular: z.boolean().default(false),
 			})
 		)
 		.handler(async ({ input }) => {
 			const windowStart = bestWindowStart();
 			const offset = (input.page - 1) * PAGE_SIZE;
-			const filters = [eq(communityPost.isLocked, false)];
+			const filters = [
+				eq(communityPost.isLocked, false),
+				...(input.excludeIds.length > 0
+					? [notInArray(communityPost.id, input.excludeIds)]
+					: []),
+			];
 
 			const [items, [total]] = await Promise.all([
 				selectBoardPosts(input.board, {
 					filters,
 					limit: PAGE_SIZE,
 					offset,
+					sortByLikes: input.popular,
 					windowStart,
 				}),
 				db

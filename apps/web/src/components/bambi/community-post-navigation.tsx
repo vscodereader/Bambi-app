@@ -5,6 +5,7 @@ import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
+import { SEEKER_LOGIN_PATH } from "@/lib/bambi/auth-paths";
 import {
 	COMMUNITY_ROOT_PATH,
 	communityBoardPath,
@@ -57,10 +58,13 @@ function NeighborRow({
 		<div className="grid min-h-14 grid-cols-[4rem_minmax(0,1fr)] items-center gap-3 border-border border-b px-4 last:border-b-0">
 			<span className="font-bold text-muted-foreground text-sm">{label}</span>
 			<Link
-				className="truncate font-medium text-sm hover:text-primary hover:underline"
-				href={itemHref(item, publicView) as Route}
+				aria-label={publicView ? `로그인하고 ${label} 보기` : undefined}
+				className="min-w-0 font-medium text-sm hover:text-primary hover:underline"
+				href={(publicView ? SEEKER_LOGIN_PATH : itemHref(item, false)) as Route}
 			>
-				{item.title}
+				<span className={publicView ? "block truncate blur-sm" : "truncate"}>
+					{item.title}
+				</span>
 			</Link>
 		</div>
 	);
