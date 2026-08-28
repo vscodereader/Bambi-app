@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "turbo run dev --filter=!native",
-    "dev:mobile": "turbo run dev --filter=web",
+    "dev:mobile": "turbo run dev --filter=!web",
     "build": "turbo build",
     "check-types": "turbo check-types",
     "dev:native": "turbo -F native dev",
