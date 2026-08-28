@@ -19,6 +19,10 @@ const hitSource = fs.readFileSync(
 	path.join(srcPath("components"), "bambi", "public-job-hit.tsx"),
 	"utf8"
 );
+const hitRibbonSource = fs.readFileSync(
+	path.join(srcPath("components"), "bambi", "hit-ribbon.tsx"),
+	"utf8"
+);
 const landingCopySource = fs.readFileSync(
 	path.join(srcPath("lib"), "bambi", "job-landing.ts"),
 	"utf8"
@@ -107,5 +111,7 @@ describe("public jobs index design", () => {
 		expect(landingSource).toContain("md:grid-cols-3");
 		expect(landingSource).toContain("has-[[data-hit-ribbon]]:border-primary");
 		expect(landingSource).toContain("<PublicJobHitStatusBadges");
+		expect(hitRibbonSource).toContain("text-xs");
+		expect(hitRibbonSource).not.toContain("text-[");
 	});
 });

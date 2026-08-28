@@ -5,7 +5,7 @@ export function HitRibbon({ className }: { className?: string }) {
 	return (
 		<span
 			className={cn(
-				"pointer-events-none absolute top-4 -right-6 z-10 w-24 rotate-45 py-0.5 text-center font-extrabold text-[10px] leading-none tracking-wider",
+				"pointer-events-none absolute top-4 -right-6 z-10 w-24 rotate-45 py-0.5 text-center font-extrabold text-xs leading-none tracking-wider",
 				className
 			)}
 			data-hit-ribbon=""
