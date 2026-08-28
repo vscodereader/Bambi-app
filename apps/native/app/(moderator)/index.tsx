@@ -12,6 +12,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { LogoutButton } from "@/src/components/logout-button";
 import { jobStatusLabels } from "@/src/lib/bambi-native";
 import { orpc } from "@/src/lib/orpc";
 
@@ -44,7 +45,7 @@ export default function ModeratorQueueScreen() {
 		<BambiScreen>
 			<BambiHeader
 				action={
-					<View className="flex-row gap-2">
+					<View className="flex-row flex-wrap justify-end gap-2">
 						<Link asChild href={"/(moderator)/reports" as Href}>
 							<Button size="sm" variant="secondary">
 								<Button.Label>신고</Button.Label>
@@ -55,6 +56,7 @@ export default function ModeratorQueueScreen() {
 								<Button.Label>사용자</Button.Label>
 							</Button>
 						</Link>
+						<LogoutButton />
 					</View>
 				}
 				description="검수 대기 공고를 승인, 숨김, 반려 처리합니다."

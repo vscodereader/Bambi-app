@@ -4,7 +4,9 @@ import {
 	emptyNativeJobForm,
 	getConfirmedScheduleId,
 	getNativeHomeRoute,
+	isEmailLoginId,
 	validateNativeJobForm,
+	validateNativeLoginInput,
 } from "./bambi-native";
 
 describe("bambi native helpers", () => {
@@ -56,5 +58,25 @@ describe("bambi native helpers", () => {
 				{ id: "schedule-2", status: "confirmed" },
 			])
 		).toBe("schedule-2");
+	});
+
+	it("splits login ids by @ like the web form", () => {
+		expect(isEmailLoginId("seeker@bambi.dev")).toBe(true);
+		expect(isEmailLoginId("seeker_01")).toBe(false);
+	});
+
+	it("validates login input per field", () => {
+		expect(validateNativeLoginInput("  ", "a".repeat(12))).toEqual({
+			loginId: "아이디 또는 이메일을 입력해 주세요.",
+		});
+		expect(validateNativeLoginInput("seeker_01", "short")).toEqual({
+			password: "비밀번호는 8자 이상이어야 해요.",
+		});
+		expect(validateNativeLoginInput("seeker_01", "a".repeat(129))).toEqual({
+			password: "비밀번호는 128자까지 입력할 수 있어요.",
+		});
+		expect(
+			validateNativeLoginInput("seeker@bambi.dev", "a".repeat(12))
+		).toEqual({});
 	});
 });

@@ -13,6 +13,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { LogoutButton } from "@/src/components/logout-button";
 import { orpc } from "@/src/lib/orpc";
 
 interface JobItem {
@@ -76,11 +77,14 @@ export default function SeekerHomeScreen() {
 		<BambiScreen>
 			<BambiHeader
 				action={
-					<Link asChild href={"/(seeker)/chats" as Href}>
-						<Button size="sm" variant="secondary">
-							<Button.Label>채팅</Button.Label>
-						</Button>
-					</Link>
+					<View className="flex-row flex-wrap justify-end gap-2">
+						<Link asChild href={"/(seeker)/chats" as Href}>
+							<Button size="sm" variant="secondary">
+								<Button.Label>채팅</Button.Label>
+							</Button>
+						</Link>
+						<LogoutButton />
+					</View>
 				}
 				description="스페셜, 추천, 일반 공고를 모바일에서 빠르게 확인합니다."
 				title="공고 탐색"

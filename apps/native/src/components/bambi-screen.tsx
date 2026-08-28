@@ -2,13 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { type Href, Link } from "expo-router";
 import { Button, Spinner, Surface, useThemeColor } from "heroui-native";
 import type { PropsWithChildren, ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, type ScrollViewProps, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 
 interface ScreenProps {
 	children: ReactNode;
 	footer?: ReactNode;
+	scrollViewProps?: Omit<ScrollViewProps, "contentContainerStyle">;
 }
 
 interface StateCardProps {
@@ -28,9 +29,13 @@ interface PillProps {
 	tone?: "danger" | "neutral" | "success" | "warning";
 }
 
-export function BambiScreen({ children, footer }: ScreenProps) {
+export function BambiScreen({
+	children,
+	footer,
+	scrollViewProps,
+}: ScreenProps) {
 	return (
-		<Container>
+		<Container scrollViewProps={scrollViewProps}>
 			<View className="gap-4 p-4">
 				{children}
 				{footer ? <View className="pt-2">{footer}</View> : null}
