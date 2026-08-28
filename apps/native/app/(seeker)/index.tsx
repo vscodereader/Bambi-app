@@ -20,7 +20,8 @@ interface JobItem {
 	id: string;
 	industryCategory: string;
 	payAmount: null | number;
-	payUnit: string;
+	// 크롤 공고가 섞여 내려오는 목록이라 단위가 비어 있을 수 있다.
+	payUnit: null | string;
 	region: string;
 	title: string;
 	workSchedule: null | string;

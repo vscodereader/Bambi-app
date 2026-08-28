@@ -166,10 +166,18 @@ export function CardLink({
 }
 
 // 급여 단위가 "협의"인 공고는 금액이 없다.
-export const formatPay = (amount: null | number, unit: string): string =>
-	amount === null
-		? "급여 협의"
-		: `${amount.toLocaleString("ko-KR")}원 / ${unit}`;
+export const formatPay = (
+	amount: null | number,
+	unit: null | string
+): string => {
+	if (amount === null) {
+		return "급여 협의";
+	}
+
+	const money = `${amount.toLocaleString("ko-KR")}원`;
+
+	return unit ? `${money} / ${unit}` : money;
+};
 
 export const formatDateTime = (value: Date | string): string =>
 	new Intl.DateTimeFormat("ko-KR", {

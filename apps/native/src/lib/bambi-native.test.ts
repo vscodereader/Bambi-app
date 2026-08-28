@@ -23,7 +23,7 @@ describe("bambi native helpers", () => {
 			organizationId: "org-1",
 			payAmount: "180000",
 			payUnit: "일급",
-			region: "서울",
+			regionCode: "1168000000",
 			title: "강남 라운지 스태프",
 			workSchedule: "20:00-02:00",
 		});
@@ -35,7 +35,7 @@ describe("bambi native helpers", () => {
 				organizationId: "org-1",
 				payAmount: 180_000,
 				payUnit: "일급",
-				region: "서울",
+				regionCode: "1168000000",
 				title: "강남 라운지 스태프",
 				workSchedule: "20:00-02:00",
 			},

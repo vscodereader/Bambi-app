@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Button, Input, Surface, TextField } from "heroui-native";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -9,9 +10,9 @@ import {
 	type NativeJobFormErrors,
 	type NativeJobPostInput,
 	payUnitOptions,
-	regionOptions,
 	validateNativeJobForm,
 } from "@/src/lib/bambi-native";
+import { orpc } from "@/src/lib/orpc";
 
 interface PostingScope {
 	organizationDisplayName: string;
@@ -29,12 +30,22 @@ interface NativeJobFormProps {
 	submitLabel: string;
 }
 
+interface Choice<TValue extends string> {
+	label: string;
+	value: TValue;
+}
+
 interface ChoiceGroupProps<TValue extends string> {
 	label: string;
 	onChange: (value: TValue) => void;
-	options: readonly TValue[];
+	options: readonly Choice<TValue>[];
 	value: TValue;
 }
+
+// 라벨과 값이 같은 고정 목록(업종·급여 단위)용. 지역만 서버 마스터라 코드≠라벨이다.
+const toChoices = <TValue extends string>(
+	values: readonly TValue[]
+): Choice<TValue>[] => values.map((value) => ({ label: value, value }));
 
 const getPostingScopeValue = (scope: PostingScope): string =>
 	JSON.stringify([scope.organizationId, scope.teamId]);
@@ -65,7 +76,7 @@ function ChoiceGroup<TValue extends string>({
 			</Text>
 			<View className="flex-row flex-wrap gap-2">
 				{options.map((option) => {
-					const isSelected = option === value;
+					const isSelected = option.value === value;
 
 					return (
 						<Pressable
@@ -74,8 +85,8 @@ function ChoiceGroup<TValue extends string>({
 									? "border-accent bg-accent"
 									: "border-border bg-background"
 							}`}
-							key={option}
-							onPress={() => onChange(option)}
+							key={option.value}
+							onPress={() => onChange(option.value)}
 						>
 							<Text
 								className={
@@ -84,7 +95,7 @@ function ChoiceGroup<TValue extends string>({
 										: "font-semibold text-foreground text-sm"
 								}
 							>
-								{option}
+								{option.label}
 							</Text>
 						</Pressable>
 					);
@@ -126,6 +137,16 @@ export function NativeJobFormScreen({
 	);
 	const [errors, setErrors] = useState<NativeJobFormErrors>({});
 	const [formMessage, setFormMessage] = useState<null | string>(null);
+	// 지역은 서버 마스터가 유일한 출처다 — 코드를 그대로 제출해야 저장 직전 정합 검사를 통과한다.
+	const regionsQuery = useQuery(orpc.bambi.regions.list.queryOptions());
+	const regionChoices = useMemo(
+		() =>
+			(regionsQuery.data ?? []).map((node) => ({
+				label: node.label,
+				value: node.code,
+			})),
+		[regionsQuery.data]
+	);
 	const postingScopeOptions = useMemo(
 		() =>
 			postingScopes.map((scope) => ({
@@ -230,18 +251,18 @@ export function NativeJobFormScreen({
 				<ChoiceGroup
 					label="업종"
 					onChange={(industryCategory) => updateForm({ industryCategory })}
-					options={industryOptions}
+					options={toChoices(industryOptions)}
 					value={form.industryCategory}
 				/>
 				<FieldError errors={errors} field="industryCategory" />
 
 				<ChoiceGroup
 					label="지역"
-					onChange={(region) => updateForm({ region })}
-					options={regionOptions}
-					value={form.region}
+					onChange={(regionCode) => updateForm({ regionCode })}
+					options={regionChoices}
+					value={form.regionCode}
 				/>
-				<FieldError errors={errors} field="region" />
+				<FieldError errors={errors} field="regionCode" />
 
 				<View className="flex-row gap-3">
 					<View className="flex-1">
@@ -259,7 +280,7 @@ export function NativeJobFormScreen({
 						<ChoiceGroup
 							label="단위"
 							onChange={(payUnit) => updateForm({ payUnit })}
-							options={payUnitOptions}
+							options={toChoices(payUnitOptions)}
 							value={form.payUnit}
 						/>
 						<FieldError errors={errors} field="payUnit" />

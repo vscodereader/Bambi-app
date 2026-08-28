@@ -1,6 +1,7 @@
 const TITLE_MIN_LENGTH = 2;
 const TITLE_MAX_LENGTH = 80;
-const OPTION_MAX_LENGTH = 80;
+// 서버 jobPostInput이 지역 마스터의 법정동코드(10자리)만 받는다.
+const REGION_CODE_LENGTH = 10;
 const PAY_UNIT_MAX_LENGTH = 30;
 const WORK_SCHEDULE_MAX_LENGTH = 200;
 const DESCRIPTION_MIN_LENGTH = 10;
@@ -22,7 +23,7 @@ export interface NativeJobForm {
 	organizationId: string;
 	payAmount: string;
 	payUnit: string;
-	region: string;
+	regionCode: string;
 	teamId: string;
 	title: string;
 	workSchedule: string;
@@ -36,7 +37,7 @@ export interface NativeJobPostInput {
 	organizationId: string;
 	payAmount: number;
 	payUnit: string;
-	region: string;
+	regionCode: string;
 	teamId?: string;
 	title: string;
 	workSchedule: string;
@@ -78,16 +79,6 @@ export const industryOptions = [
 
 export type NativeIndustryOption = (typeof industryOptions)[number];
 
-export const regionOptions = [
-	"서울",
-	"경기",
-	"인천",
-	"부산",
-	"대구",
-	"대전",
-	"광주",
-	"기타",
-] as const;
 export const payUnitOptions = ["시급", "일급", "주급", "월급"] as const;
 
 export const jobStatusLabels = {
@@ -113,7 +104,8 @@ export const emptyNativeJobForm: NativeJobForm = {
 	organizationId: "",
 	payAmount: "",
 	payUnit: payUnitOptions[0] ?? "",
-	region: regionOptions[0] ?? "",
+	// 지역은 서버 마스터(bambi.regions.list)에서 고르므로 기본값을 둘 수 없다.
+	regionCode: "",
 	teamId: "",
 	title: "",
 	workSchedule: "",
@@ -151,7 +143,7 @@ export const validateNativeJobForm = (
 	const teamId = trim(form.teamId);
 	const title = trim(form.title);
 	const industryCategory = trim(form.industryCategory);
-	const region = trim(form.region);
+	const regionCode = trim(form.regionCode);
 	const payAmountText = trim(form.payAmount);
 	const payAmount = Number(payAmountText);
 	const payUnit = trim(form.payUnit);
@@ -181,8 +173,8 @@ export const validateNativeJobForm = (
 		errors.industryCategory = "업종을 선택해 주세요.";
 	}
 
-	if (!(region.length > 0 && region.length <= OPTION_MAX_LENGTH)) {
-		errors.region = "지역을 선택해 주세요.";
+	if (regionCode.length !== REGION_CODE_LENGTH) {
+		errors.regionCode = "지역을 선택해 주세요.";
 	}
 
 	if (!(Number.isInteger(payAmount) && payAmount > 0)) {
@@ -234,7 +226,7 @@ export const validateNativeJobForm = (
 			organizationId,
 			payAmount,
 			payUnit,
-			region,
+			regionCode,
 			teamId: teamId || undefined,
 			title,
 			workSchedule,
