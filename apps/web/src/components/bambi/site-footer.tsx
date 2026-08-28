@@ -110,14 +110,19 @@ export function SiteFooter({
 		initialData,
 	});
 
+	// 서버 셸이 내려준 initialData를 직접 폴백으로 둔다 — useQuery의 initialData만
+	// 믿으면 SSR 렌더에서 그 값이 반영되지 않는 경로가 있어(/about에서 재현) HTML엔
+	// TODO_ 자리표시자가, 하이드레이션 후엔 실값이 그려져 불일치가 났다.
+	const settings = data ?? initialData;
+
 	// DB에 값이 있으면 그 값, 없으면 코드 상수로 폴백.
-	const intro = data?.footerIntro ?? BAMBI_COMPANY.footerIntro;
-	const operator = data?.operator ?? BAMBI_COMPANY.operator;
-	const ceo = data?.ceo ?? BAMBI_COMPANY.ceo;
-	const bizRegNo = data?.bizRegNo ?? BAMBI_COMPANY.bizRegNo;
-	const address = data?.address ?? BAMBI_COMPANY.address;
-	const email = data?.email ?? BAMBI_COMPANY.email;
-	const tel = data?.tel ?? BAMBI_COMPANY.tel;
+	const intro = settings?.footerIntro ?? BAMBI_COMPANY.footerIntro;
+	const operator = settings?.operator ?? BAMBI_COMPANY.operator;
+	const ceo = settings?.ceo ?? BAMBI_COMPANY.ceo;
+	const bizRegNo = settings?.bizRegNo ?? BAMBI_COMPANY.bizRegNo;
+	const address = settings?.address ?? BAMBI_COMPANY.address;
+	const email = settings?.email ?? BAMBI_COMPANY.email;
+	const tel = settings?.tel ?? BAMBI_COMPANY.tel;
 
 	return (
 		<footer
