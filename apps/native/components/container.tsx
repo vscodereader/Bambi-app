@@ -1,11 +1,7 @@
 import { cn } from "heroui-native";
 import type { PropsWithChildren } from "react";
-import {
-	ScrollView,
-	type ScrollViewProps,
-	View,
-	type ViewProps,
-} from "react-native";
+import { type ScrollViewProps, View, type ViewProps } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import Animated, { type AnimatedProps } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -43,14 +39,24 @@ export function Container({
 			{...props}
 		>
 			{isScrollable ? (
-				<ScrollView
+				// KeyboardProvider가 붙은 순간부터 iOS·Android 모두 키보드가 떠도 스크롤
+				// 프레임 높이는 그대로다(edge-to-edge라 IME 인셋이 RN 뷰에 안 실린다).
+				// 그래서 flexGrow로 잡은 안쪽 래퍼가 "키보드 없을 때 화면 높이"로 중앙을
+				// 계산해, CTA가 키보드 밑으로 밀린다.
+				// mode는 기본값 "insets"를 쓰지 않는다 — contentInset만 늘리는 방식이라
+				// 스크롤 여백은 생겨도 래퍼 높이가 그대로여서 중앙 정렬은 못 고친다.
+				// "layout"이라야 children 뒤에 스페이서를 붙여 flexGrow 여유를 먹고,
+				// 래퍼 높이가 (프레임 − 키보드)로 줄어 가시 영역 기준으로 재정렬된다.
+				// 라이브러리는 성능상 "insets"를 권하지만 여기 목적은 레이아웃 재분배다.
+				<KeyboardAwareScrollView
 					contentContainerStyle={{ flexGrow: 1 }}
 					contentInsetAdjustmentBehavior="automatic"
 					keyboardShouldPersistTaps="handled"
+					mode="layout"
 					{...scrollViewProps}
 				>
 					{children}
-				</ScrollView>
+				</KeyboardAwareScrollView>
 			) : (
 				<View className="flex-1">{children}</View>
 			)}

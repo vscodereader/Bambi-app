@@ -179,11 +179,10 @@ export default function LoginScreen() {
 		// 위쪽만 줄 때는 중앙이 어긋나고 위아래 대칭으로 줄 때는 블록이 인셋 두 배만큼
 		// 길어져 오버플로가 악화되지만, 뷰포트를 줄이면 중앙 정렬은 그대로 성립하면서
 		// 내용이 길어져도 최상단이 상태바 밑으로 들어가지 않는다.
-		<BambiScreen
-			hasTopInset
-			isCentered
-			scrollViewProps={{ automaticallyAdjustKeyboardInsets: true }}
-		>
+		// 키보드 회피는 Container의 KeyboardAwareScrollView가 전담한다.
+		// automaticallyAdjustKeyboardInsets를 같이 켜면 RN contentInset과 라이브러리
+		// 스페이서가 겹쳐 키보드 높이만큼 두 번 빠진다.
+		<BambiScreen hasTopInset isCentered>
 			<BambiHeader
 				description="아이디 또는 이메일과 비밀번호로 로그인합니다."
 				leading={<BambiLogo />}
