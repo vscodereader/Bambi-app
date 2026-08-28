@@ -174,13 +174,13 @@ export default function LoginScreen() {
 	return (
 		<BambiScreen scrollViewProps={{ automaticallyAdjustKeyboardInsets: true }}>
 			{/* 내비게이션 헤더를 숨겨(app/_layout.tsx) 상단 인셋을 화면이 직접 진다.
-			    Container는 paddingBottom만 적용하므로 여기서 보완하지 않으면
-			    제목이 상태바 아래로 파고든다. */}
-			<View style={{ paddingTop: insets.top }} />
-			<BambiHeader
-				description="아이디 또는 이메일과 비밀번호로 로그인합니다."
-				title="밤비알바 로그인"
-			/>
+			    형제 스페이서로 두면 부모의 gap-4를 한 번 더 먹으므로 헤더를 감싼다. */}
+			<View style={{ paddingTop: insets.top }}>
+				<BambiHeader
+					description="아이디 또는 이메일과 비밀번호로 로그인합니다."
+					title="밤비알바 로그인"
+				/>
+			</View>
 			<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 				<TextField isInvalid={Boolean(errors.loginId)}>
 					<Label>
@@ -252,11 +252,20 @@ export default function LoginScreen() {
 					{status === "idle" ? null : <Spinner color="default" size="sm" />}
 					<Button.Label>{ctaLabels[status]}</Button.Label>
 				</Button>
-				<Text className="text-muted text-xs leading-5" selectable>
-					본 정보내용은 청소년 유해매체물로서 정보통신망 이용촉진 및 정보보호
-					등에 관한 법률 및 청소년 보호법의 규정에 의하여 만 19세 미만의
-					청소년이 이용할 수 없습니다.
-				</Text>
+				{/* 청소년유해매체물 고지. 웹 AdultNotice와 같은 표현을 쓴다 — 색은 muted
+				    계열로만 둔다(코럴을 쓰면 주 액션인 로그인 CTA와 위계가 뒤집힌다).
+				    role="alert"를 달지 않는다: 상시 노출되는 법정 고지를 매 렌더마다
+				    스크린리더가 경보로 읽어버린다. */}
+				<View className="flex-row items-start gap-3">
+					<View className="h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-muted">
+						<Text className="font-extrabold text-muted text-sm">19</Text>
+					</View>
+					<Text className="flex-1 text-muted text-xs leading-5" selectable>
+						본 정보내용은 청소년 유해매체물로서 정보통신망 이용촉진 및 정보보호
+						등에 관한 법률 및 청소년 보호법의 규정에 의하여 만 19세 미만의
+						청소년이 이용할 수 없습니다.
+					</Text>
+				</View>
 			</Surface>
 		</BambiScreen>
 	);
