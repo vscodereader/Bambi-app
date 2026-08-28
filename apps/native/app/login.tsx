@@ -18,7 +18,6 @@ import {
 	Pressable,
 	Text,
 	type TextInput,
-	View,
 } from "react-native";
 import { authClient } from "@/lib/auth-client";
 import {
@@ -46,12 +45,6 @@ const ctaLabels: Record<LoginStatus, string> = {
 const handoffTimeoutMs = 8000;
 
 // 개발 시드 계정의 "아이디"만 둔다. 비밀번호는 어떤 형태로도 소스에 두지 않는다.
-const devLoginIds = [
-	{ email: "admin@bambi.dev", label: "관리자" },
-	{ email: "owner@bambi.dev", label: "구인자" },
-	{ email: "seeker@bambi.dev", label: "구직자" },
-] as const;
-
 export default function LoginScreen() {
 	const [loginId, setLoginId] = useState("");
 	const [password, setPassword] = useState("");
@@ -259,31 +252,6 @@ export default function LoginScreen() {
 					청소년이 이용할 수 없습니다.
 				</Text>
 			</Surface>
-			{/* biome-ignore lint/correctness/noUndeclaredVariables: __DEV__는 React Native 런타임 전역(expo 타입 선언 있음). biome.json에 globals 등록 전까지 여기서 억제한다. */}
-			{__DEV__ ? (
-				<View className="gap-2">
-					<Text className="text-muted text-xs" selectable>
-						개발 빌드 전용 · 테스트 계정 아이디 채우기
-					</Text>
-					<View className="flex-row flex-wrap gap-2">
-						{devLoginIds.map((account) => (
-							<Button
-								accessibilityLabel={`${account.label} 테스트 계정 아이디 채우기`}
-								key={account.email}
-								onPress={() => {
-									setLoginId(account.email);
-									setErrors({});
-									setNotice(null);
-								}}
-								size="md"
-								variant="secondary"
-							>
-								<Button.Label>{account.label}</Button.Label>
-							</Button>
-						))}
-					</View>
-				</View>
-			) : null}
 		</BambiScreen>
 	);
 }
