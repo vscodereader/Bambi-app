@@ -8,7 +8,7 @@ import {
 	bambiSiteSettings,
 	communityBoard,
 } from "@bambi-app/db/schema/bambi";
-import { and, asc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { lockMemberPoints } from "./bambi-point-ledger";
 import { resolveGradeIconUrl } from "./bambi-storage";
@@ -51,10 +51,44 @@ export const POINT_SHOP_REASONS = {
 	refund: "point_shop_refund",
 } as const;
 
-const GRADE_EXCLUDED_REASONS = [
+const JOB_PAYMENT_POINT_REASON_PREFIXES = {
+	refund: "공고 취소 포인트 환급: ",
+	refundForfeited: "공고 취소 포인트 환급 완료(상한 소멸): ",
+	use: "공고 등록 포인트 사용: ",
+} as const;
+
+export const JOB_PAYMENT_POINT_REASONS = {
+	refund: (jobPostId: string): string =>
+		`${JOB_PAYMENT_POINT_REASON_PREFIXES.refund}${jobPostId}`,
+	refundForfeited: (jobPostId: string): string =>
+		`${JOB_PAYMENT_POINT_REASON_PREFIXES.refundForfeited}${jobPostId}`,
+	use: (jobPostId: string): string =>
+		`${JOB_PAYMENT_POINT_REASON_PREFIXES.use}${jobPostId}`,
+} as const;
+
+const GRADE_EXCLUDED_EXACT_REASONS = [
 	POINT_SHOP_REASONS.purchase,
 	POINT_SHOP_REASONS.refund,
-];
+] as const;
+
+const GRADE_EXCLUDED_REASON_PREFIXES = Object.values(
+	JOB_PAYMENT_POINT_REASON_PREFIXES
+);
+
+export function isGradeExcludedPointReason(reason: string): boolean {
+	return (
+		GRADE_EXCLUDED_EXACT_REASONS.some((excluded) => excluded === reason) ||
+		GRADE_EXCLUDED_REASON_PREFIXES.some((prefix) => reason.startsWith(prefix))
+	);
+}
+
+// 잔액과 달리 등급은 소비에 중립이다. 포인트몰은 고정 reason, 공고 결제는 기존 원장과의
+// 호환을 위해 공고 ID가 뒤에 붙는 접두사로 제외한다. 본인 요약과 여러 회원 배지가 같은 SQL을
+// 재사용해야 화면별 등급이 갈리지 않는다.
+export const gradeBasisPointsSql = sql<number>`coalesce(sum(${bambiPointTransaction.amount}) filter (where ${bambiPointTransaction.reason} not in (${sql.join(
+	GRADE_EXCLUDED_EXACT_REASONS.map((reason) => sql`${reason}`),
+	sql`, `
+)}) and ${bambiPointTransaction.reason} not like ${`${JOB_PAYMENT_POINT_REASON_PREFIXES.use}%`} and ${bambiPointTransaction.reason} not like ${`${JOB_PAYMENT_POINT_REASON_PREFIXES.refund}%`} and ${bambiPointTransaction.reason} not like ${`${JOB_PAYMENT_POINT_REASON_PREFIXES.refundForfeited}%`}), 0)::int`;
 
 // 순수: 현재 적립 스냅샷과 목표 적립액으로 원장 델타·새 스냅샷을 계산한다.
 // 목표는 caller가 (회원 && 게시판 포인트)일 때만 양수로, 그 외엔 0으로 넘긴다.
@@ -362,15 +396,10 @@ export async function getGradeBasisPoints(
 	const rows = await db
 		.select({
 			userId: bambiPointTransaction.userId,
-			basis: sql<number>`coalesce(sum(${bambiPointTransaction.amount}), 0)::int`,
+			basis: gradeBasisPointsSql,
 		})
 		.from(bambiPointTransaction)
-		.where(
-			and(
-				inArray(bambiPointTransaction.userId, unique),
-				notInArray(bambiPointTransaction.reason, GRADE_EXCLUDED_REASONS)
-			)
-		)
+		.where(inArray(bambiPointTransaction.userId, unique))
 		.groupBy(bambiPointTransaction.userId);
 	for (const row of rows) {
 		map.set(row.userId, row.basis);

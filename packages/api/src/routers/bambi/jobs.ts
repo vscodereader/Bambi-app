@@ -129,6 +129,7 @@ import {
 	resolveCappedPointRefund,
 	resolveJobPointUseLimit,
 } from "../../services/bambi-job-payment-points";
+import { JOB_PAYMENT_POINT_REASONS } from "../../services/bambi-member-points";
 import { notifyBambiNotification } from "../../services/bambi-notifications";
 import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
 import {
@@ -2445,7 +2446,7 @@ export const jobsRouter = {
 							amount: -requestedPoints,
 							description: pointDescription,
 							externalKey: `job_payment_use:${created.id}`,
-							reason: `공고 등록 포인트 사용: ${created.id}`,
+							reason: JOB_PAYMENT_POINT_REASONS.use(created.id),
 							userId: actor.userId,
 						});
 					} catch (error) {
@@ -2699,7 +2700,7 @@ export const jobsRouter = {
 							amount: refundAmount,
 							description: buildJobPointRefundDescription(debit.description),
 							externalKey: `job_payment_refund:${locked.id}`,
-							reason: `공고 취소 포인트 환급: ${locked.id}`,
+							reason: JOB_PAYMENT_POINT_REASONS.refund(locked.id),
 							userId: locked.pointsUsedByUserId,
 						});
 					} else {
@@ -2708,7 +2709,7 @@ export const jobsRouter = {
 							balanceAfter: balance,
 							description: buildJobPointRefundDescription(debit.description),
 							externalKey: `job_payment_refund:${locked.id}`,
-							reason: `공고 취소 포인트 환급 완료(상한 소멸): ${locked.id}`,
+							reason: JOB_PAYMENT_POINT_REASONS.refundForfeited(locked.id),
 							userId: locked.pointsUsedByUserId,
 						});
 					}

@@ -32,9 +32,9 @@ import {
 	type SessionLike,
 } from "../../services/bambi-authz";
 import {
+	gradeBasisPointsSql,
 	loadGradeBadges,
 	nextGrade,
-	POINT_SHOP_REASONS,
 	resolveGrade,
 } from "../../services/bambi-member-points";
 import { notifyBambiNotification } from "../../services/bambi-notifications";
@@ -51,9 +51,6 @@ const ATTENDANCE_ROLES = new Set<string>(["job_seeker", "employer"]);
 
 // 잔액은 원장 합산이다(잔액 컬럼 없음). 행이 없으면 0.
 const pointBalanceSql = sql<number>`coalesce(sum(${bambiPointTransaction.amount}), 0)::int`;
-
-// 등급 기준 합계 — 포인트몰 구매·환불 제외(bambi-member-points GRADE_EXCLUDED_REASONS와 동일 규칙).
-const gradeBasisSql = sql<number>`coalesce(sum(${bambiPointTransaction.amount}) filter (where ${bambiPointTransaction.reason} not in (${POINT_SHOP_REASONS.purchase}, ${POINT_SHOP_REASONS.refund})), 0)::int`;
 
 const getMineInput = z.object({
 	// YYYY-MM. 생략하면 서버 KST 기준 이번 달.
@@ -348,7 +345,10 @@ export const attendanceRouter = {
 			// 등급표는 잔액과 병렬로 읽는다 — 서로 의존하지 않는 조회다.
 			const [[balance], grades] = await Promise.all([
 				db
-					.select({ gradeBasis: gradeBasisSql, pointBalance: pointBalanceSql })
+					.select({
+						gradeBasis: gradeBasisPointsSql,
+						pointBalance: pointBalanceSql,
+					})
 					.from(bambiPointTransaction)
 					.where(eq(bambiPointTransaction.userId, profile.userId)),
 				db

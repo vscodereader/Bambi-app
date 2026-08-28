@@ -7,6 +7,7 @@ dotenv.config({ path: "../../apps/server/.env" });
 const {
 	applyPointsCap,
 	assertGradeDeletable,
+	isGradeExcludedPointReason,
 	isPointsCapAllowed,
 	nextGrade,
 	reconcilePoints,
@@ -14,6 +15,28 @@ const {
 	resolveGrade,
 	rollCommentBonus,
 } = await import("@/services/bambi-member-points");
+
+describe("isGradeExcludedPointReason", () => {
+	it.each([
+		"point_shop_purchase",
+		"point_shop_refund",
+		"공고 등록 포인트 사용: job-1",
+		"공고 취소 포인트 환급: job-1",
+		"공고 취소 포인트 환급 완료(상한 소멸): job-1",
+	])("소비와 대응 환급은 등급 기준에서 제외한다: %s", (reason) => {
+		expect(isGradeExcludedPointReason(reason)).toBe(true);
+	});
+
+	it.each([
+		"attendance",
+		"signup_bonus",
+		"community_post",
+		"community_post_revoke",
+		"공고 등록 포인트 사용",
+	])("적립·회수와 접두사가 불완전한 거래는 등급 기준에 포함한다: %s", (reason) => {
+		expect(isGradeExcludedPointReason(reason)).toBe(false);
+	});
+});
 
 // 순차 random 스텁: rollCommentBonus는 최대 두 번(확률 판정→금액) 부른다. 값이 떨어지면 마지막 값을 반복.
 function seq(...values: number[]): () => number {
