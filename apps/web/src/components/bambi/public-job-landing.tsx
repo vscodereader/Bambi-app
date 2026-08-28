@@ -490,7 +490,7 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 				<div className="flex justify-center md:justify-start">
 					<Button
 						nativeButton={false}
-						render={<Link href={SIGNUP_HREF}>회원가입하고 채팅으로 문의</Link>}
+						render={<Link href={SIGNUP_HREF}>회원가입하기</Link>}
 						variant="outline"
 					/>
 				</div>

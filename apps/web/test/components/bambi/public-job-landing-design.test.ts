@@ -19,6 +19,10 @@ const hitSource = fs.readFileSync(
 	path.join(srcPath("components"), "bambi", "public-job-hit.tsx"),
 	"utf8"
 );
+const landingCopySource = fs.readFileSync(
+	path.join(srcPath("lib"), "bambi", "job-landing.ts"),
+	"utf8"
+);
 
 describe("public jobs index design", () => {
 	it("applies the soft header to every public jobs landing", () => {
@@ -43,15 +47,15 @@ describe("public jobs index design", () => {
 
 	it("keeps the existing signup action and listing after the header", () => {
 		const headerIndex = landingSource.indexOf("<header");
-		const signupIndex = landingSource.indexOf(
-			"회원가입하고 채팅으로 문의",
-			headerIndex
-		);
+		const signupIndex = landingSource.indexOf("회원가입하기", headerIndex);
 		const listingIndex = landingSource.indexOf("모집 중인 공고", signupIndex);
 
 		expect(headerIndex).toBeGreaterThan(-1);
 		expect(signupIndex).toBeGreaterThan(headerIndex);
 		expect(listingIndex).toBeGreaterThan(signupIndex);
+		expect(landingCopySource).not.toContain(
+			"급여·근무 시간·세부 지역은 공고 카드에서 바로 보이고"
+		);
 	});
 
 	it("renders public job cards in the requested information order", () => {
