@@ -1,4 +1,4 @@
-import { AntDesign, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { type Href, Redirect } from "expo-router";
 import {
 	Alert,
@@ -263,19 +263,6 @@ export default function LoginScreen() {
 						<Spinner color={accentForegroundColor} size="sm" />
 					)}
 					<Button.Label>{ctaLabels[status]}</Button.Label>
-					{/* 진행 중에는 스피너와 배타적으로 둔다 — 화살표는 "누르면 넘어간다"는
-					    예고인데 이미 넘어가는 중에 띄우면 뜻이 겹치고, 스피너+"로그인 중"+
-					    화살표가 한 줄에 몰려 라벨 자리도 좁아진다.
-					    장식이라 스크린리더에서 감춘다(iOS·Android가 각각 다른 prop을 본다). */}
-					{status === "idle" ? (
-						<AntDesign
-							accessibilityElementsHidden
-							color={accentForegroundColor}
-							importantForAccessibility="no-hide-descendants"
-							name="right"
-							size={18}
-						/>
-					) : null}
 				</Button>
 				{/* 청소년유해매체물 고지. 웹 AdultNotice와 같은 표현을 쓴다 — 색은 muted
 				    계열로만 둔다(코럴을 쓰면 주 액션인 로그인 CTA와 위계가 뒤집힌다).
