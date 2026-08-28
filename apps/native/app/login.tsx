@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { AntDesign, Ionicons } from "@expo/vector-icons";
 import { type Href, Redirect } from "expo-router";
 import {
 	Alert,
@@ -20,8 +20,8 @@ import {
 	type TextInput,
 	View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { authClient } from "@/lib/auth-client";
+import { BambiLogo } from "@/src/components/bambi-logo";
 import {
 	BambiHeader,
 	BambiScreen,
@@ -47,7 +47,6 @@ const ctaLabels: Record<LoginStatus, string> = {
 const handoffTimeoutMs = 8000;
 
 export default function LoginScreen() {
-	const insets = useSafeAreaInsets();
 	const [loginId, setLoginId] = useState("");
 	const [password, setPassword] = useState("");
 	const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -60,7 +59,10 @@ export default function LoginScreen() {
 	const passwordRef = useRef<TextInput>(null);
 	const handoffTimerRef = useRef<null | ReturnType<typeof setTimeout>>(null);
 	const session = authClient.useSession();
-	const mutedColor = useThemeColor("muted");
+	const [accentForegroundColor, mutedColor] = useThemeColor([
+		"accent-foreground",
+		"muted",
+	]);
 
 	useEffect(
 		() => () => {
@@ -172,15 +174,21 @@ export default function LoginScreen() {
 	}
 
 	return (
-		<BambiScreen scrollViewProps={{ automaticallyAdjustKeyboardInsets: true }}>
-			{/* 내비게이션 헤더를 숨겨(app/_layout.tsx) 상단 인셋을 화면이 직접 진다.
-			    형제 스페이서로 두면 부모의 gap-4를 한 번 더 먹으므로 헤더를 감싼다. */}
-			<View style={{ paddingTop: insets.top }}>
-				<BambiHeader
-					description="아이디 또는 이메일과 비밀번호로 로그인합니다."
-					title="밤비알바 로그인"
-				/>
-			</View>
+		// 이 화면만 headerShown: false(app/_layout.tsx)라 상단 인셋을 직접 져야 한다.
+		// 인셋은 콘텐츠 블록이 아니라 스크롤 뷰포트에 얹는다(hasTopInset) — 콘텐츠에 주면
+		// 위쪽만 줄 때는 중앙이 어긋나고 위아래 대칭으로 줄 때는 블록이 인셋 두 배만큼
+		// 길어져 오버플로가 악화되지만, 뷰포트를 줄이면 중앙 정렬은 그대로 성립하면서
+		// 내용이 길어져도 최상단이 상태바 밑으로 들어가지 않는다.
+		<BambiScreen
+			hasTopInset
+			isCentered
+			scrollViewProps={{ automaticallyAdjustKeyboardInsets: true }}
+		>
+			<BambiHeader
+				description="아이디 또는 이메일과 비밀번호로 로그인합니다."
+				leading={<BambiLogo />}
+				title="밤비알바 로그인"
+			/>
 			<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 				<TextField isInvalid={Boolean(errors.loginId)}>
 					<Label>
@@ -249,8 +257,25 @@ export default function LoginScreen() {
 					</Alert>
 				) : null}
 				<Button isDisabled={status !== "idle"} onPress={handleSubmit} size="lg">
-					{status === "idle" ? null : <Spinner color="default" size="sm" />}
+					{/* color="default"는 "기본색"이 아니라 --accent 토큰이라, 코랄 CTA 위에
+					    코랄 스피너가 얹혀 보이지 않는다. 화살표와 같은 전경색을 넘긴다. */}
+					{status === "idle" ? null : (
+						<Spinner color={accentForegroundColor} size="sm" />
+					)}
 					<Button.Label>{ctaLabels[status]}</Button.Label>
+					{/* 진행 중에는 스피너와 배타적으로 둔다 — 화살표는 "누르면 넘어간다"는
+					    예고인데 이미 넘어가는 중에 띄우면 뜻이 겹치고, 스피너+"로그인 중"+
+					    화살표가 한 줄에 몰려 라벨 자리도 좁아진다.
+					    장식이라 스크린리더에서 감춘다(iOS·Android가 각각 다른 prop을 본다). */}
+					{status === "idle" ? (
+						<AntDesign
+							accessibilityElementsHidden
+							color={accentForegroundColor}
+							importantForAccessibility="no-hide-descendants"
+							name="right"
+							size={18}
+						/>
+					) : null}
 				</Button>
 				{/* 청소년유해매체물 고지. 웹 AdultNotice와 같은 표현을 쓴다 — 색은 muted
 				    계열로만 둔다(코럴을 쓰면 주 액션인 로그인 CTA와 위계가 뒤집힌다).
