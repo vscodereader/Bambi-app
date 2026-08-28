@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, Link } from "expo-router";
-import { Button, Spinner, Surface, useThemeColor } from "heroui-native";
+import { Button, cn, Spinner, Surface, useThemeColor } from "heroui-native";
 import type { PropsWithChildren, ReactNode } from "react";
 import { Pressable, type ScrollViewProps, Text, View } from "react-native";
 
@@ -9,6 +9,8 @@ import { Container } from "@/components/container";
 interface ScreenProps {
 	children: ReactNode;
 	footer?: ReactNode;
+	hasTopInset?: boolean;
+	isCentered?: boolean;
 	scrollViewProps?: Omit<ScrollViewProps, "contentContainerStyle">;
 }
 
@@ -21,6 +23,7 @@ interface StateCardProps {
 interface HeaderProps {
 	action?: ReactNode;
 	description?: string;
+	leading?: ReactNode;
 	title: string;
 }
 
@@ -32,11 +35,17 @@ interface PillProps {
 export function BambiScreen({
 	children,
 	footer,
+	hasTopInset,
+	isCentered = false,
 	scrollViewProps,
 }: ScreenProps) {
 	return (
-		<Container scrollViewProps={scrollViewProps}>
-			<View className="gap-4 p-4">
+		<Container hasTopInset={hasTopInset} scrollViewProps={scrollViewProps}>
+			{/* flex-1이 아니라 grow인 것이 핵심이다 — flex-1은 flexBasis:0%+flexShrink:1까지
+			    붙어서, 내용이 뷰포트보다 길면 이 래퍼가 한 화면 높이로 눌리고 넘치는 부분이
+			    잘린 채 스크롤도 되지 않는다. grow는 flexGrow:1만 얹으므로 짧으면 남는 공간을
+			    먹어 중앙 정렬이 살고, 길면 높이가 내용을 따라가 그대로 스크롤된다. */}
+			<View className={cn("gap-4 p-4", isCentered && "grow justify-center")}>
 				{children}
 				{footer ? <View className="pt-2">{footer}</View> : null}
 			</View>
@@ -44,10 +53,22 @@ export function BambiScreen({
 	);
 }
 
-export function BambiHeader({ action, description, title }: HeaderProps) {
+export function BambiHeader({
+	action,
+	description,
+	leading,
+	title,
+}: HeaderProps) {
 	return (
 		<View className="gap-3 py-2">
 			<View className="flex-row items-start justify-between gap-3">
+				{/* 행 정렬은 items-start를 그대로 둔다. text-3xl의 첫 줄 박스 높이(36)가 로고
+				    타일(h-9 = 36)과 같아 위를 맞추면 두 박스가 그대로 포개지고, description이
+				    붙어 제목 열이 두세 줄로 길어져도 타일이 제목 첫 줄 옆에 남는다.
+				    items-center로 바꾸면 타일이 "제목+설명" 블록 한가운데로 내려가 제목과 어긋난다.
+				    leading에 오는 장식 로고는 호출부에서 스스로 스크린리더에서 빠지므로,
+				    실제로 읽히는 순서는 제목 → 설명 → action이다. */}
+				{leading ? <View>{leading}</View> : null}
 				<View className="flex-1">
 					<Text className="font-bold text-3xl text-foreground" selectable>
 						{title}
