@@ -125,6 +125,7 @@ import {
 	JOB_PAY_AMOUNT_MAX_MESSAGE,
 } from "../../services/bambi-job-pay";
 import {
+	JOB_PAYMENT_POINT_EXTERNAL_KEYS,
 	JOB_PAYMENT_POINTS_EXCEED_EDITED_TOTAL,
 	resolveCappedPointRefund,
 	resolveJobPointUseLimit,
@@ -138,6 +139,7 @@ import {
 	getPointBalanceTx,
 	lockMemberPoints,
 } from "../../services/bambi-point-ledger";
+import { SITE_SETTINGS_ROW_ID } from "../../services/bambi-point-settings";
 import {
 	getUpdatedJobPostStatus,
 	type JobPostStatus,
@@ -749,7 +751,7 @@ export const resolveJobPostExposure = async (input: {
 		const [settings] = await db
 			.select({ bankAccounts: bambiSiteSettings.bankAccounts })
 			.from(bambiSiteSettings)
-			.where(eq(bambiSiteSettings.id, "default"))
+			.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 			.limit(1);
 
 		if (!settings?.bankAccounts.length) {
@@ -1549,7 +1551,7 @@ export const jobsRouter = {
 					specialCapacity: bambiSiteSettings.specialCapacity,
 				})
 				.from(bambiSiteSettings)
-				.where(eq(bambiSiteSettings.id, "default"))
+				.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 				.limit(1),
 		]);
 		const jobPostTotal = jobPostTotalRow?.value ?? 0;
@@ -1882,7 +1884,7 @@ export const jobsRouter = {
 				minutes: bambiSiteSettings.adBannerRotationMinutes,
 			})
 			.from(bambiSiteSettings)
-			.where(eq(bambiSiteSettings.id, "default"))
+			.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 			.limit(1);
 		const rotationMs =
 			(settingsRow?.minutes ?? DEFAULT_AD_ROTATION_MINUTES) * 60 * 1000;
@@ -2417,7 +2419,7 @@ export const jobsRouter = {
 							min: bambiSiteSettings.jobPaymentMinPoints,
 						})
 						.from(bambiSiteSettings)
-						.where(eq(bambiSiteSettings.id, "default"))
+						.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 						.limit(1);
 					const minimum = settings?.min ?? 0;
 					if (minimum <= 0 || requestedPoints < minimum) {
@@ -2445,7 +2447,7 @@ export const jobsRouter = {
 						await adjustMemberPoints(tx, {
 							amount: -requestedPoints,
 							description: pointDescription,
-							externalKey: `job_payment_use:${created.id}`,
+							externalKey: JOB_PAYMENT_POINT_EXTERNAL_KEYS.use(created.id),
 							reason: JOB_PAYMENT_POINT_REASONS.use(created.id),
 							userId: actor.userId,
 						});
@@ -2587,7 +2589,7 @@ export const jobsRouter = {
 				const [capRow] = await tx
 					.select({ cap: bambiSiteSettings.maxMemberPoints })
 					.from(bambiSiteSettings)
-					.where(eq(bambiSiteSettings.id, "default"))
+					.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 					.limit(1);
 				const balance = await getPointBalanceTx(
 					tx,
@@ -2661,7 +2663,7 @@ export const jobsRouter = {
 						.where(
 							eq(
 								bambiPointTransaction.externalKey,
-								`job_payment_use:${locked.id}`
+								JOB_PAYMENT_POINT_EXTERNAL_KEYS.use(locked.id)
 							)
 						)
 						.limit(1);
@@ -2674,7 +2676,7 @@ export const jobsRouter = {
 					const [capRow] = await tx
 						.select({ cap: bambiSiteSettings.maxMemberPoints })
 						.from(bambiSiteSettings)
-						.where(eq(bambiSiteSettings.id, "default"))
+						.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 						.limit(1);
 					const balance = await getPointBalanceTx(
 						tx,
@@ -2699,7 +2701,7 @@ export const jobsRouter = {
 						await awardMemberPoints(tx, {
 							amount: refundAmount,
 							description: buildJobPointRefundDescription(debit.description),
-							externalKey: `job_payment_refund:${locked.id}`,
+							externalKey: JOB_PAYMENT_POINT_EXTERNAL_KEYS.refund(locked.id),
 							reason: JOB_PAYMENT_POINT_REASONS.refund(locked.id),
 							userId: locked.pointsUsedByUserId,
 						});
@@ -2708,7 +2710,7 @@ export const jobsRouter = {
 							amount: 0,
 							balanceAfter: balance,
 							description: buildJobPointRefundDescription(debit.description),
-							externalKey: `job_payment_refund:${locked.id}`,
+							externalKey: JOB_PAYMENT_POINT_EXTERNAL_KEYS.refund(locked.id),
 							reason: JOB_PAYMENT_POINT_REASONS.refundForfeited(locked.id),
 							userId: locked.pointsUsedByUserId,
 						});

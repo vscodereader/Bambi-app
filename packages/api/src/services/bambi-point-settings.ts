@@ -6,6 +6,7 @@ export const DEFAULT_SIGNUP_POINTS = 1000;
 export const DEFAULT_ATTENDANCE_POINTS = 10;
 export const DEFAULT_REVIEW_VIEW_POINTS = 10;
 export const DEFAULT_REVIEW_WRITE_POINTS = 0;
+export const POINT_SETTING_VALUE_MAX = 100_000_000;
 export const SITE_SETTINGS_ROW_ID = "default";
 
 export async function getPointSettings() {

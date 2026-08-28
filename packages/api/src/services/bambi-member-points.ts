@@ -11,10 +11,8 @@ import {
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { lockMemberPoints } from "./bambi-point-ledger";
+import { SITE_SETTINGS_ROW_ID } from "./bambi-point-settings";
 import { resolveGradeIconUrl } from "./bambi-storage";
-
-// site_settings 단일 행 고정 키(site-settings.ts SETTINGS_ROW_ID와 같은 값).
-const SITE_SETTINGS_ROW_ID = "default";
 
 export interface MemberGrade {
 	color: string | null;
@@ -56,6 +54,7 @@ const JOB_PAYMENT_POINT_REASON_PREFIXES = {
 	refundForfeited: "공고 취소 포인트 환급 완료(상한 소멸): ",
 	use: "공고 등록 포인트 사용: ",
 } as const;
+const JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX = "공고 취소 포인트 환급";
 
 export const JOB_PAYMENT_POINT_REASONS = {
 	refund: (jobPostId: string): string =>
@@ -65,6 +64,17 @@ export const JOB_PAYMENT_POINT_REASONS = {
 	use: (jobPostId: string): string =>
 		`${JOB_PAYMENT_POINT_REASON_PREFIXES.use}${jobPostId}`,
 } as const;
+
+export const JOB_PAYMENT_POINT_REASON_PATTERNS = {
+	refund: `${JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX}%`,
+	use: `${JOB_PAYMENT_POINT_REASON_PREFIXES.use}%`,
+} as const;
+
+export const isJobPaymentPointRefundReason = (reason: string): boolean =>
+	reason.startsWith(JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX);
+
+export const isJobPaymentPointUseReason = (reason: string): boolean =>
+	reason.startsWith(JOB_PAYMENT_POINT_REASON_PREFIXES.use);
 
 const GRADE_EXCLUDED_EXACT_REASONS = [
 	POINT_SHOP_REASONS.purchase,

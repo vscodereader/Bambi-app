@@ -9,7 +9,9 @@ const {
 	assertGradeDeletable,
 	isGradeExcludedPointReason,
 	isPointsCapAllowed,
+	JOB_PAYMENT_POINT_REASONS,
 	nextGrade,
+	POINT_SHOP_REASONS,
 	reconcilePoints,
 	resolveCommentAward,
 	resolveGrade,
@@ -18,11 +20,11 @@ const {
 
 describe("isGradeExcludedPointReason", () => {
 	it.each([
-		"point_shop_purchase",
-		"point_shop_refund",
-		"공고 등록 포인트 사용: job-1",
-		"공고 취소 포인트 환급: job-1",
-		"공고 취소 포인트 환급 완료(상한 소멸): job-1",
+		POINT_SHOP_REASONS.purchase,
+		POINT_SHOP_REASONS.refund,
+		JOB_PAYMENT_POINT_REASONS.use("job-1"),
+		JOB_PAYMENT_POINT_REASONS.refund("job-1"),
+		JOB_PAYMENT_POINT_REASONS.refundForfeited("job-1"),
 	])("소비와 대응 환급은 등급 기준에서 제외한다: %s", (reason) => {
 		expect(isGradeExcludedPointReason(reason)).toBe(true);
 	});
