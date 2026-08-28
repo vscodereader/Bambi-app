@@ -67,8 +67,8 @@ export default function LoginScreen() {
 	const passwordRef = useRef<TextInput>(null);
 	const handoffTimerRef = useRef<null | ReturnType<typeof setTimeout>>(null);
 	const session = authClient.useSession();
-	const [accentForegroundColor, accentSoftForegroundColor, mutedColor] =
-		useThemeColor(["accent-foreground", "accent-soft-foreground", "muted"]);
+	const [accentForegroundColor, defaultForegroundColor, mutedColor] =
+		useThemeColor(["accent-foreground", "default-foreground", "muted"]);
 
 	useEffect(
 		() => () => {
@@ -311,7 +311,28 @@ export default function LoginScreen() {
 				    위계는 로그인(primary) > 비회원 인증(secondary) > 회원가입(ghost) —
 				    tertiary는 secondary와 배경이 같은 bg-default라 두 버튼이 같은 무게로
 				    보였다. 웹처럼 텍스트 링크가 되는 ghost(bg-transparent)가 진짜 3단계다.
-				    좁은 화면에서 안내 문구와 버튼이 한 줄에 못 들어가면 접히게 둔다. */}
+				    아이콘·라벨 색은 secondary 기본값(accent-soft-foreground, 어두운 코랄)
+				    대신 default-foreground로 덮는다 — 코랄은 주 액션인 로그인 CTA의 색이라
+				    바로 밑에서 같은 색을 쓰면 위계가 흐려진다. bg-default 위 전경 토큰이라
+				    라이트에서 검정(#111827), 다크에서는 반대로 밝아져 대비가 유지된다.
+				    accessibilityLabel이 없으면 TalkBack이 Ionicons의 사설영역 글리프
+				    코드포인트까지 라벨에 합쳐 읽는다(비밀번호 보기 토글과 같은 이유). */}
+				<Button
+					accessibilityLabel="비회원으로 인증하기"
+					onPress={() => notifyWebOnly("비회원 인증")}
+					size="lg"
+					variant="secondary"
+				>
+					<Ionicons
+						color={defaultForegroundColor}
+						name="call-outline"
+						size={20}
+					/>
+					<Button.Label className="text-default-foreground">
+						비회원으로 인증하기
+					</Button.Label>
+				</Button>
+				{/* 좁은 화면에서 안내 문구와 버튼이 한 줄에 못 들어가면 접히게 둔다. */}
 				<View className="flex-row flex-wrap items-center justify-center gap-1">
 					<Text className="text-muted text-sm">밤비알바가 처음이신가요?</Text>
 					<Button
@@ -322,23 +343,6 @@ export default function LoginScreen() {
 						<Button.Label>회원가입</Button.Label>
 					</Button>
 				</View>
-				{/* 아이콘 색은 secondary 라벨과 같은 accent-soft-foreground를 쓴다 — muted를
-				    넘기면 한 버튼 안에서 아이콘과 글자가 다른 색이 된다.
-				    accessibilityLabel이 없으면 TalkBack이 Ionicons의 사설영역 글리프
-				    코드포인트까지 라벨에 합쳐 읽는다(비밀번호 보기 토글과 같은 이유). */}
-				<Button
-					accessibilityLabel="비회원으로 인증하기"
-					onPress={() => notifyWebOnly("비회원 인증")}
-					size="lg"
-					variant="secondary"
-				>
-					<Ionicons
-						color={accentSoftForegroundColor}
-						name="call-outline"
-						size={20}
-					/>
-					<Button.Label>비회원으로 인증하기</Button.Label>
-				</Button>
 				{/* 청소년유해매체물 고지. 웹 AdultNotice와 같은 표현을 쓴다 — 색은 muted
 				    계열로만 둔다(코럴을 쓰면 주 액션인 로그인 CTA와 위계가 뒤집힌다).
 				    role="alert"를 달지 않는다: 상시 노출되는 법정 고지를 매 렌더마다
