@@ -107,7 +107,7 @@ export function JobPostBlockEditor({
 			) : null}
 			{blocks.length === 0 ? (
 				<p className="border border-dashed p-3 text-muted-foreground text-sm">
-					블록을 추가하면 기본 상세 설명 대신 블록 내용이 공개됩니다.
+					블록을 추가하면 기본 상세 설명 뒤에 함께 공개됩니다.
 				</p>
 			) : (
 				<div className="space-y-3">

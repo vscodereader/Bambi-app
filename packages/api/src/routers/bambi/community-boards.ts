@@ -3,6 +3,7 @@ import {
 	bambiSiteSettings,
 	communityBoard,
 	communityBoardHomeLayout,
+	communityBoardLayoutSurface,
 	communityPost,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
@@ -43,6 +44,7 @@ export const COMMUNITY_BOARD_ICONS = [
 	"Megaphone",
 	"Sparkles",
 	"Coffee",
+	"Moon",
 	"Music",
 	"Heart",
 	"Star",
@@ -89,8 +91,11 @@ const updateBoardInput = boardKeyInput
 	);
 
 const setBoardActiveInput = boardKeyInput.extend({ isActive: z.boolean() });
+const layoutSurfaceSchema = z.enum(communityBoardLayoutSurface.enumValues);
+const getHomeLayoutInput = z.object({ surface: layoutSurfaceSchema });
 const updateHomeLayoutInput = z.object({
 	rows: z.array(z.array(z.string().trim().min(1).max(40)).min(1)).max(30),
+	surface: layoutSurfaceSchema,
 });
 
 // 베스트글(가상 게시판) 전용. null은 아이콘 해제(기존 코럴 액센트 바로 복귀)다.
@@ -101,18 +106,14 @@ const updateBestBoardIconInput = z.object({ icon: boardIconSchema.nullable() });
 const SETTINGS_ROW_ID = "default";
 
 const BOARD_NOT_FOUND = "게시판을 찾을 수 없습니다.";
-const NOTICE_BOARD_KEY = "notice";
 const BEST_BOARD_KEY = "best";
+const NOTICE_BOARD_KEY = "notice";
 
-export const assertHomeLayoutFixedSlots = (rows: string[][]): void => {
-	if (
-		rows.length < 2 ||
-		rows[0]?.length !== 1 ||
-		rows[0]?.[0] !== NOTICE_BOARD_KEY ||
-		rows[1]?.[0] !== BEST_BOARD_KEY
-	) {
+export const assertLayoutBoardsUnique = (rows: string[][]): void => {
+	const keys = rows.flat();
+	if (new Set(keys).size !== keys.length) {
 		throw new ORPCError("BAD_REQUEST", {
-			message: "1행은 공지사항 전용이고 2행 1열은 베스트글로 고정해야 합니다.",
+			message: "같은 게시판을 한 배치에 두 번 넣을 수 없습니다.",
 		});
 	}
 };
@@ -153,26 +154,24 @@ export const communityBoardsRouter = {
 		db.select().from(communityBoard).orderBy(asc(communityBoard.sortOrder))
 	),
 
-	getHomeLayout: adminProcedure.handler(async () =>
-		db
-			.select()
-			.from(communityBoardHomeLayout)
-			.orderBy(
-				asc(communityBoardHomeLayout.rowIndex),
-				asc(communityBoardHomeLayout.position)
-			)
-	),
+	getHomeLayout: adminProcedure
+		.input(getHomeLayoutInput)
+		.handler(async ({ input }) =>
+			db
+				.select()
+				.from(communityBoardHomeLayout)
+				.where(eq(communityBoardHomeLayout.surface, input.surface))
+				.orderBy(
+					asc(communityBoardHomeLayout.rowIndex),
+					asc(communityBoardHomeLayout.position)
+				)
+		),
 
 	updateHomeLayout: adminProcedure
 		.input(updateHomeLayoutInput)
 		.handler(async ({ input }) => {
-			assertHomeLayoutFixedSlots(input.rows);
+			assertLayoutBoardsUnique(input.rows);
 			const keys = input.rows.flat();
-			if (new Set(keys).size !== keys.length) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: "같은 게시판을 홈 배치에 두 번 넣을 수 없습니다.",
-				});
-			}
 			const validRows = await db
 				.select({ key: communityBoard.key })
 				.from(communityBoard);
@@ -186,15 +185,22 @@ export const communityBoardsRouter = {
 				});
 			}
 			await db.transaction(async (tx) => {
-				await tx.delete(communityBoardHomeLayout);
+				await tx
+					.delete(communityBoardHomeLayout)
+					.where(eq(communityBoardHomeLayout.surface, input.surface));
 				const values = input.rows.flatMap((row, rowIndex) =>
-					row.map((boardKey, position) => ({ boardKey, position, rowIndex }))
+					row.map((boardKey, position) => ({
+						boardKey,
+						position,
+						rowIndex,
+						surface: input.surface,
+					}))
 				);
 				if (values.length > 0) {
 					await tx.insert(communityBoardHomeLayout).values(values);
 				}
 			});
-			return { rows: input.rows };
+			return { rows: input.rows, surface: input.surface };
 		}),
 
 	create: adminProcedure.input(createBoardInput).handler(async ({ input }) => {

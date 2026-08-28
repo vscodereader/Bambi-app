@@ -13,7 +13,7 @@ export default function ModeratorQueueDetailPage() {
 	const item = queue.find((q) => q.id === id);
 	// 이미지는 상세에서만 필요하다. 큐 목록(최대 50건)에 미디어 조인을 붙이지 않으려고
 	// 여기서 공고 한 건만 따로 읽는다(getJobPostForAdmin은 미디어 세트를 그대로 내려준다).
-	const mediaQuery = useQuery({
+	const jobPostQuery = useQuery({
 		...orpc.bambi.moderation.getJobPostForAdmin.queryOptions({
 			input: { jobPostId: id },
 		}),
@@ -44,11 +44,21 @@ export default function ModeratorQueueDetailPage() {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<QueueDetail
-				isMediaLoading={mediaQuery.isPending}
+				content={
+					jobPostQuery.data
+						? {
+								description: jobPostQuery.data.description,
+								descriptionBlocks: jobPostQuery.data.descriptionBlocks,
+							}
+						: undefined
+				}
+				isContentError={jobPostQuery.isError}
+				isContentLoading={jobPostQuery.isPending}
+				isMediaLoading={jobPostQuery.isPending}
 				item={item}
 				media={{
-					cover: mediaQuery.data?.media.cover ?? null,
-					detail: mediaQuery.data?.media.detail ?? [],
+					cover: jobPostQuery.data?.media.cover ?? null,
+					detail: jobPostQuery.data?.media.detail ?? [],
 				}}
 				onBack={() => router.push("/moderator")}
 				onResolve={(qid, action, reason) => {

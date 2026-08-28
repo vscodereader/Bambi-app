@@ -573,3 +573,28 @@ describe("notificationHref", () => {
 		);
 	});
 });
+
+describe("direct_message", () => {
+	const item = view({
+		metadata: { title: "8월 정산 안내" },
+		targetType: "direct_message",
+	});
+
+	it("제목은 쪽지 도착 문구다", () => {
+		expect(notificationTitle(item)).toBe("운영자 쪽지가 도착했어요");
+	});
+
+	it("본문은 쪽지 제목이다", () => {
+		expect(notificationBody(item)).toBe("8월 정산 안내");
+	});
+
+	it("본문 제목이 없으면 본문을 생략한다", () => {
+		expect(
+			notificationBody(view({ metadata: {}, targetType: "direct_message" }))
+		).toBeNull();
+	});
+
+	it("착지는 쪽지함이다", () => {
+		expect(notificationHref(item)).toBe("/seeker/me/messages");
+	});
+});

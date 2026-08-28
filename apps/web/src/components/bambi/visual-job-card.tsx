@@ -27,6 +27,7 @@ import { useAdPeriodTiers } from "@/lib/bambi/use-ad-period-tiers";
 import { usePromotionImpression } from "@/lib/bambi/use-promotion-impression";
 import { AdPeriodTierIcon } from "./ad-period-tier-icon";
 import { Badge } from "./ds";
+import { HitRibbon } from "./hit-ribbon";
 import { MapPinIcon } from "./icons";
 import { JobCoverImage } from "./job-cover-image";
 import { PointJobSticker, usePointJobReward } from "./point-job-sticker";
@@ -253,20 +254,7 @@ export function VisualJobCard({
 			ref={impressionRef}
 		>
 			{pointRewardVisible ? <PointJobSticker /> : null}
-			{showHitRibbon ? (
-				// 카드 우측 상단을 대각선으로 가로지르는 얇은 코너 리본. article의 overflow-hidden이
-				// 양끝을 삼각 코너로 잘라주고, 코너에 대칭 배치해 HIT를 중앙에 둔다.
-				// pointer-events-none으로 아래 카드 클릭을 가리지 않는다.
-				<span
-					className={cn(
-						"pointer-events-none absolute top-4 -right-6 z-10 w-24 rotate-45 py-0.5 text-center font-extrabold text-[10px] leading-none tracking-wider",
-						hitRibbonClassName
-					)}
-				>
-					<span aria-hidden="true">HIT</span>
-					<span className="sr-only">인기 공고</span>
-				</span>
-			) : null}
+			{showHitRibbon ? <HitRibbon className={hitRibbonClassName} /> : null}
 			<button
 				aria-label={`${job.title} · ${job.company} · ${job.location}${job.type ? ` · ${job.type}` : ""} · ${job.pay}${toneAriaLabel[tone] ? ` · ${toneAriaLabel[tone]}` : ""}`}
 				className="flex flex-1 cursor-pointer flex-col gap-2 rounded-md border-none bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral-400 focus-visible:ring-offset-2"

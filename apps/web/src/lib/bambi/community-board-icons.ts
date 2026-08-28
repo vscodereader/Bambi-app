@@ -12,6 +12,7 @@ import {
 	MegaphoneIcon,
 	MessageCircleIcon,
 	MessageSquareLockIcon,
+	MoonIcon,
 	MusicIcon,
 	NewspaperIcon,
 	ScaleIcon,
@@ -20,6 +21,7 @@ import {
 	StarIcon,
 	UsersIcon,
 } from "lucide-react";
+import type { CommunityBoardKey } from "./community";
 
 export const COMMUNITY_BOARD_ICONS = {
 	Briefcase: { icon: BriefcaseIcon, label: "서류가방" },
@@ -28,6 +30,7 @@ export const COMMUNITY_BOARD_ICONS = {
 	Heart: { icon: HeartIcon, label: "하트" },
 	Megaphone: { icon: MegaphoneIcon, label: "확성기" },
 	MessageCircle: { icon: MessageCircleIcon, label: "말풍선" },
+	Moon: { icon: MoonIcon, label: "달" },
 	Music: { icon: MusicIcon, label: "음표" },
 	Newspaper: { icon: NewspaperIcon, label: "신문" },
 	Scale: { icon: ScaleIcon, label: "저울" },
@@ -39,6 +42,16 @@ export const COMMUNITY_BOARD_ICONS = {
 
 // 운영자 화면의 선택지 타입. 서버 enum의 부분집합이라 그대로 입력으로 보낼 수 있다.
 export type CommunityBoardIconName = keyof typeof COMMUNITY_BOARD_ICONS;
+
+// 코드에 고정된 기본 게시판의 대표 아이콘. 운영자 지정 아이콘이 없는 공개 허브처럼
+// DB 메타를 받지 않는 화면도 같은 아이콘 레지스트리를 재사용할 수 있게 한 곳에 둔다.
+const BUILTIN_COMMUNITY_BOARD_ICON_NAMES: Partial<
+	Record<CommunityBoardKey, CommunityBoardIconName>
+> = {
+	free: "MessageCircle",
+	notice: "Megaphone",
+	work_talk: "Moon",
+};
 
 // 저장된 이름으로 아이콘 찾기. DB 값은 임의 문자열이라 넓은 Record로 한 번만 좁힌다 —
 // 없거나 모르는 이름이면 undefined이고, 호출부는 기존 모양을 그대로 그린다.
@@ -53,3 +66,8 @@ export const communityBoardIcon = (
 				>
 			)[name]?.icon
 		: undefined;
+
+export const builtinCommunityBoardIcon = (
+	boardKey: CommunityBoardKey
+): LucideIcon | undefined =>
+	communityBoardIcon(BUILTIN_COMMUNITY_BOARD_ICON_NAMES[boardKey]);

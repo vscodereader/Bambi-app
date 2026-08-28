@@ -46,11 +46,13 @@ const updatePostImagesInput = z
 	})
 	.strict();
 
-// 목록에 내려보내는 컬럼. 연락처·담당자명·카톡아이디·사업자명·주소는 **의도적으로 빠져 있다** —
+// 목록에 내려보내는 컬럼. 담당자명·카톡아이디·사업자명·주소는 **의도적으로 빠져 있다** —
 // 원본에 연락처를 올린 담당자는 그 사이트 이용자에게 연락받는 데 동의했을 뿐 다른 서비스에서의
 // 재공개에 동의한 적이 없다. 리드가 필요한 화면은 getLead로 한 건씩 열람하고, 그 호출만
 // 감사 로그에 남길 수 있다. 목록에 섞어두면 화면 한 번 여는 것만으로 수천 건이 흘러나간다.
+// 전화번호만은 운영자 결정으로 예외다(exportLeads와 같은 축) — 운영자 목록·CSV에 공개한다.
 const LIST_COLUMNS = {
+	contactPhone: crawledJobPost.contactPhone,
 	detailFetchedAt: crawledJobPost.detailFetchedAt,
 	district: crawledJobPost.district,
 	firstSeenAt: crawledJobPost.firstSeenAt,
@@ -206,6 +208,23 @@ export const crawlerRouter = {
 
 			return row ?? null;
 		}),
+
+	// 영업 리드 일괄 내보내기(운영자 CSV 추출 → 외부 전달용). LIST_COLUMNS가 연락처를 뺀
+	// 원칙의 명시적 예외다 — 운영자 결정으로 열되, 목록에 섞지 않고 별도 프로시저로 격리해
+	// 일괄 열람이 호출 단위(1회 = 전체)로 로그에 남게 한다. 상태 무관 전체를 내린다.
+	exportLeads: adminProcedure.handler(() =>
+		db
+			.select({
+				contactPhone: crawledJobPost.contactPhone,
+				district: crawledJobPost.district,
+				industryCategory: crawledJobPost.industryCategory,
+				industryRaw: crawledJobPost.industryRaw,
+				region: crawledJobPost.region,
+				shopName: crawledJobPost.shopName,
+			})
+			.from(crawledJobPost)
+			.orderBy(desc(crawledJobPost.lastSeenAt), desc(crawledJobPost.id))
+	),
 
 	getPostImagesForEdit: adminProcedure
 		.input(imageEditIdInput)

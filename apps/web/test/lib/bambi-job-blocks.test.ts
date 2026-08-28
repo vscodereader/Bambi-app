@@ -68,7 +68,7 @@ describe("bambi job block form helpers", () => {
 		});
 	});
 
-	it("normalizes block text into the submitted description", () => {
+	it("normalizes block text in the submitted blocks", () => {
 		const descriptionBlocks: JobDescriptionBlockFormValue[] = [
 			{ id: "heading", text: " 주요 업무 ", type: "heading" },
 			{
@@ -81,7 +81,7 @@ describe("bambi job block form helpers", () => {
 
 		expect(result).toMatchObject({
 			input: {
-				description: "주요 업무\n\n고객 응대와 예약 관리",
+				description: "기본 상세 설명입니다.",
 				descriptionBlocks: [
 					{ id: "heading", text: "주요 업무", type: "heading" },
 					{

@@ -45,6 +45,7 @@ export const communityAuthorName = (
 // 작성인 유형(author_role) 표시 라벨. enum 원값을 그대로 렌더하지 않으며, 목록에 없는
 // 값(job_seeker·admin·미래 값)은 중립 폴백("회원")으로 표시한다.
 const COMMUNITY_AUTHOR_ROLE_LABELS: Record<string, string> = {
+	admin: "관리자",
 	employer: "업소 회원",
 	guest: "비회원",
 	legal_advisor: "법률자문",
@@ -54,6 +55,38 @@ export const communityAuthorRoleLabel = (
 	role: string | null | undefined
 ): string =>
 	COMMUNITY_AUTHOR_ROLE_LABELS[role ?? ""] ?? COMMUNITY_AUTHOR_FALLBACK;
+
+// Tiptap 문서 JSON에서 표시용 평문을 뽑는다(목록 1줄 미리보기용). JSON이 아니면 옛
+// 평문 본문이므로 원문을 그대로 돌려준다(하위호환). 블록은 공백으로 이어 붙인다 —
+// 미리보기는 어차피 한 줄로 잘리므로 문단 구분은 필요 없다.
+export const communityBodyToText = (body: string): string => {
+	let doc: unknown;
+	try {
+		doc = JSON.parse(body);
+	} catch {
+		return body;
+	}
+	if (
+		!doc ||
+		typeof doc !== "object" ||
+		(doc as { type?: unknown }).type !== "doc"
+	) {
+		return body;
+	}
+	const parts: string[] = [];
+	const walk = (node: { content?: unknown[]; text?: unknown }) => {
+		if (typeof node.text === "string") {
+			parts.push(node.text);
+		}
+		if (Array.isArray(node.content)) {
+			for (const child of node.content) {
+				walk(child as { content?: unknown[]; text?: unknown });
+			}
+		}
+	};
+	walk(doc as { content?: unknown[] });
+	return parts.join(" ");
+};
 
 export const COMMUNITY_BOARDS: BuiltinBoardMeta[] = [
 	{
@@ -171,6 +204,13 @@ export const getBoardByKey = (key: CommunityBoardKey): BuiltinBoardMeta => {
 
 export const COMMUNITY_ROOT_PATH = "/seeker/community";
 
+// DB enum(main|community)에 대응하는 Web 배치 surface 단일 소스. 운영자 저장·메인·수다방
+// 조회가 문자열을 각자 반복하지 않도록 이 상수만 사용한다.
+export const COMMUNITY_LAYOUT_SURFACE = {
+	community: "community",
+	main: "main",
+} as const;
+
 export const communityBoardPath = (slug: string): string =>
 	`${COMMUNITY_ROOT_PATH}/${slug}`;
 
@@ -197,12 +237,23 @@ export const communityWritePath = (slug: string): string =>
 export const communityEditPath = (slug: string, postId: string): string =>
 	`/seeker/community/${slug}/${postId}/edit`;
 
-const pad2 = (value: number): string =>
-	value < 10 ? `0${value}` : String(value);
+// 타임존을 한국(Asia/Seoul)으로 고정한다 — getFullYear/getMonth/getDate 같은 로컬
+// 시각 메서드는 서버(UTC 컨테이너)와 클라이언트(사용자 타임존)에서 자정 언저리 날짜가
+// 갈려 서버가 렌더한 댓글을 그대로 하이드레이트하는 공개 상세(public-post-interactions)
+// 등에서 하이드레이션 불일치(#418)를 낸다. 독자는 모두 한국 사용자라 KST 고정이
+// 표시상으로도 맞다.
+const communityDateFormat = new Intl.DateTimeFormat("ko-KR", {
+	day: "2-digit",
+	month: "2-digit",
+	timeZone: "Asia/Seoul",
+	year: "numeric",
+});
 
 export const formatCommunityDate = (value: Date | string): string => {
-	const date = new Date(value);
-	return `${date.getFullYear()}.${pad2(date.getMonth() + 1)}.${pad2(date.getDate())}`;
+	const parts = communityDateFormat.formatToParts(new Date(value));
+	const get = (type: Intl.DateTimeFormatPartTypes) =>
+		parts.find((part) => part.type === type)?.value ?? "";
+	return `${get("year")}.${get("month")}.${get("day")}`;
 };
 
 // 새 글 "N" 배지 기준 — 작성 후 이틀(48시간). 목록과 미리보기가 같은 기준으로 배지를

@@ -404,7 +404,7 @@ function AdPeriodGradeGuide() {
 					{tiers.map((tier) => (
 						<li className="flex items-center gap-2 text-sm" key={tier.label}>
 							<AdPeriodTierIcon
-								className={tier.colorClass}
+								className={cn("size-8", tier.colorClass)}
 								icon={tier.icon}
 								iconImageUrl={tier.iconImageUrl}
 							/>

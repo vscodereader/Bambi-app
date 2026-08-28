@@ -10,10 +10,15 @@ import {
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PremiumAdBannerSection } from "@/components/bambi/premium-ad-banner-section";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
+import { COMMUNITY_LAYOUT_SURFACE } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
 export function CommunityHomeScreen() {
-	const overviewQuery = useQuery(orpc.bambi.community.overview.queryOptions());
+	const overviewQuery = useQuery(
+		orpc.bambi.community.overview.queryOptions({
+			input: { surface: COMMUNITY_LAYOUT_SURFACE.community },
+		})
+	);
 	const adBanners = useAdBannerJobs();
 	// 법률자문 계정은 legal 게시판만 이용한다(서버 격리 가드와 동일) — 카드는 다 보여주되
 	// 다른 게시판 링크를 누르면 토스트로 안내한다.

@@ -168,8 +168,17 @@ export const bambiSiteJsonLd = {
 			"@id": ORGANIZATION_ID,
 			name: BAMBI_COMPANY.serviceName,
 			url: BAMBI_COMPANY.url,
+			// 회사소개 페이지 — 이 조직을 주 대상으로 서술하는 페이지라 mainEntityOfPage로 잇는다.
+			mainEntityOfPage: `${BAMBI_COMPANY.url}/about`,
 			logo: `${BAMBI_COMPANY.url}${SITE_LOGO_PATH}`,
 			description: SITE_DESCRIPTION,
+			// 직업정보제공사업 신고번호. 사업 신고 단위로 발급된 실측값이라 구조화 데이터에
+			// 싣는다(TODO_ 자리표시자인 사업자등록번호 등과 달리 안전).
+			identifier: {
+				"@type": "PropertyValue",
+				name: "직업정보제공사업 신고번호",
+				value: BAMBI_COMPANY.jobInfoProviderNo,
+			},
 			email: BAMBI_COMPANY.email,
 			contactPoint: {
 				"@type": "ContactPoint",
@@ -248,6 +257,33 @@ export const collectionPageJsonLd = ({
 				url: `${BAMBI_COMPANY.url}${itemPath}`,
 			})),
 		},
+	};
+};
+
+// 가이드 콘텐츠(/jobs/guide/*)의 Article. 화면 본문(h1 + 섹션)과 같은 headline·description을
+// 실어 크롤러가 문서를 기사 단위로 인식하게 한다. isPartOf/publisher로 WebSite·Organization
+// 노드에 잇는다. FAQPage/HowTo JSON-LD는 정책상 넣지 않는다(화면 h2/h3 + p 구조만으로 읽힌다).
+export const articleJsonLd = ({
+	description,
+	headline,
+	path,
+}: {
+	description: string;
+	headline: string;
+	// 사이트 루트 기준 경로("/jobs/guide/ten-pro-alba") — 절대 URL은 여기서 붙인다.
+	path: string;
+}) => {
+	const url = `${BAMBI_COMPANY.url}${path}`;
+
+	return {
+		"@context": "https://schema.org",
+		"@type": "Article",
+		headline,
+		description,
+		inLanguage: "ko-KR",
+		mainEntityOfPage: { "@type": "WebPage", "@id": url },
+		isPartOf: { "@id": WEBSITE_ID },
+		publisher: { "@id": ORGANIZATION_ID },
 	};
 };
 

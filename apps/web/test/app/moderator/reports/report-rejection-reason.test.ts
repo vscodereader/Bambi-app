@@ -41,7 +41,9 @@ describe("신고 처리 사유 입력", () => {
 	it("커뮤니티 대상 조치 성공 후 신고를 자동 완료한다", () => {
 		expect(moderatorSource).toContain("{report.note}");
 		expect(moderatorSource).toContain("reason.trim().length >= 2");
-		expect(moderatorSource).toContain("item.communityKind ? null");
+		expect(moderatorSource).toContain(
+			"showActAction={!(item.communityKind || isChatReport)}"
+		);
 		expect(contextSource).toContain(
 			'const resolved = await resolveReport(report.id, "act", reason);'
 		);

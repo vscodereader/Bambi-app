@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
+import { guidePath, guideSlugs } from "@/lib/bambi/guide";
 import { buildJobLandingSitemapEntries } from "@/lib/bambi/job-landing-sitemap";
 import {
 	PUBLIC_BOARD_INDEX_PATH,
@@ -21,11 +22,22 @@ const POSTS_PER_BOARD = 200;
 // 로그인·게스트 게이트 없이 크롤러가 실제로 도달할 수 있는 공개 경로만 싣는다
 // (resolve-gate의 PUBLIC_PREFIXES 중 색인 가치가 있는 것). /seeker는 비로그인이면
 // 인증 오버레이가 뜨는 진입점이라 색인 대상이고, 그 뒤 상세 경로는 넣지 않는다.
-const STATIC_PATHS: readonly string[] = ["/seeker", "/terms", "/privacy"];
+const STATIC_PATHS: readonly string[] = [
+	"/seeker",
+	"/about",
+	"/terms",
+	"/privacy",
+];
 
 const boardPaths = (): string[] => [
 	PUBLIC_BOARD_INDEX_PATH,
 	...PUBLIC_BOARDS.map((board) => publicBoardPath(board.slug)),
+];
+
+// 가이드 허브 + 5편. 정적 콘텐츠라 lastmod 없이 정적 항목으로 싣는다.
+const guidePaths = (): string[] => [
+	"/jobs/guide",
+	...guideSlugs().map(guidePath),
 ];
 
 // 공개 목록 프로시저를 그대로 재사용한다(사이트맵 전용 조회를 새로 만들지 않는다).
@@ -59,9 +71,11 @@ const loadBoardPostEntries = async (
 };
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-	const staticEntries = [...STATIC_PATHS, ...boardPaths()].map((path) => ({
-		url: `${BAMBI_COMPANY.url}${path}`,
-	}));
+	const staticEntries = [...STATIC_PATHS, ...boardPaths(), ...guidePaths()].map(
+		(path) => ({
+			url: `${BAMBI_COMPANY.url}${path}`,
+		})
+	);
 
 	let landingEntries: MetadataRoute.Sitemap;
 

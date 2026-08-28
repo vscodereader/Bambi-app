@@ -8,10 +8,10 @@ const source = readFileSync(
 );
 
 describe("community board navigation", () => {
-	it("페이지 링크는 기본 push 이동을 사용하고 필터·클램프만 replace한다", () => {
-		expect(source).not.toContain("router.replace(pageHref(nextPage))");
+	it("페이지 이동은 PageControls의 replace로, 필터·클램프도 replace로 처리한다", () => {
+		// 페이지 이동은 <Link> push가 아니라 PageControls onPageChange에서 replace한다.
+		expect(source).toContain("router.replace(pageHref(nextPage))");
 		expect(source).not.toContain("router.push(pageHref(nextPage))");
-		expect(source.match(/render=\{<Link href=\{pageHref\(/g)).toHaveLength(3);
 		// 필터·검색·범위 초과 클램프는 replace(검색 유지를 위해 query 인자가 붙는다).
 		expect(source).toContain("router.replace(buildHref(next, 1, query))");
 		expect(source).toContain(

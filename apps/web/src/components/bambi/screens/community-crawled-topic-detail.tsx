@@ -30,6 +30,7 @@ import {
 	CommentForm,
 	CommentList,
 } from "@/components/bambi/community-post-detail-parts";
+import { CommunityPostNavigation } from "@/components/bambi/community-post-navigation";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	communityBoardPath,
@@ -382,6 +383,12 @@ export function CommunityCrawledTopicDetailScreen({
 			</p>
 			<Separator />
 			<TopicComments topic={topic} topicId={topicId} />
+			<CommunityPostNavigation
+				boardKey={CRAWLED_BOARD.key}
+				boardSlug={CRAWLED_BOARD.slug}
+				currentId={topicId}
+				source="crawled"
+			/>
 		</div>
 	);
 }

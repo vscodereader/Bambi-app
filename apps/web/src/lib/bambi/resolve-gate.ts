@@ -1,3 +1,5 @@
+import { SEEKER_LOGIN_PATH } from "./auth-paths";
+
 export interface GateInput {
 	hasSession: boolean;
 	// 수다방에 들어올 수 있는 게스트(서명·만료 유효 + gid + 여성). 읽기 게이트(isGuest)보다
@@ -81,7 +83,7 @@ const isCommunity = (pathname: string): boolean =>
 	pathname === COMMUNITY_ROOT || pathname.startsWith(`${COMMUNITY_ROOT}/`);
 // 그냥 들어온 비로그인 방문자에게는 로그인 폼을 먼저 보인다. 재방문자가 다수라
 // 로그인이 기본이고, 가입은 카드 안의 전환 링크로 한 번에 갈 수 있다.
-const LOGIN_REDIRECT = "/seeker?auth=login";
+const LOGIN_REDIRECT = SEEKER_LOGIN_PATH;
 // 게스트가 허용되지 않은 경로로 진입할 때. 이 경우엔 계정이 없는 게 확정이라
 // 가입 쪽을 열고, guestBlocked 신호로 "회원가입 후에 볼 수 있어요" 토스트를 띄운다.
 const GUEST_BLOCKED_REDIRECT = "/seeker?auth=signup&guestBlocked=1";
@@ -109,6 +111,11 @@ export const resolveGate = ({
 	}
 	// 세션 없는 방문자(anon·guest)에게 공통으로 열리는 유일한 화면.
 	if (pathname === SEEKER_ROOT) {
+		return next;
+	}
+	// 수다방 홈의 게시판 미리보기는 로그인 여부와 관계없이 공개한다. 게시판 목록·상세·
+	// 쓰기는 아래 기존 게이트와 API 권한 검사를 그대로 통과해야 한다.
+	if (pathname === COMMUNITY_ROOT) {
 		return next;
 	}
 	// 비공개 최상위 라우트 밑이 아니면 게이트 대상이 아니다 — next로 흘려 404를 낸다.

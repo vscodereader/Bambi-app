@@ -11,6 +11,7 @@ import {
 } from "@/lib/bambi/seo";
 
 const ABSOLUTE_HTTPS = /^https:\/\//;
+const ABOUT_PATH_SUFFIX = /\/about$/;
 const nodes = bambiSiteJsonLd["@graph"];
 const nodeOf = (type: string) => nodes.find((node) => node["@type"] === type);
 
@@ -113,6 +114,26 @@ describe("bambiSiteJsonLd", () => {
 
 	it("TODO_ 자리표시자를 포함하지 않는다", () => {
 		expect(JSON.stringify(bambiSiteJsonLd)).not.toContain("TODO_");
+	});
+
+	// E-E-A-T 보강: 직업정보제공사업 신고번호(실측값)와 회사소개 페이지를 잇는다.
+	it("Organization에 신고번호 identifier와 회사소개 mainEntityOfPage를 싣는다", () => {
+		const organization = nodeOf("Organization");
+		expect(
+			organization && "identifier" in organization
+				? organization.identifier
+				: null
+		).toEqual({
+			"@type": "PropertyValue",
+			name: "직업정보제공사업 신고번호",
+			value: "J1803020260010",
+		});
+		const mainEntityOfPage =
+			organization && "mainEntityOfPage" in organization
+				? organization.mainEntityOfPage
+				: null;
+		expect(mainEntityOfPage).toMatch(ABSOLUTE_HTTPS);
+		expect(mainEntityOfPage).toMatch(ABOUT_PATH_SUFFIX);
 	});
 });
 

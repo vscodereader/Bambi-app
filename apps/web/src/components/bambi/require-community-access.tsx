@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { isSecretBoardKey } from "@/lib/bambi/community";
+import { COMMUNITY_ROOT_PATH, isSecretBoardKey } from "@/lib/bambi/community";
 import { useBoardBySlug } from "@/lib/bambi/use-community-boards";
 import { useBambiAuth } from "./auth-client-provider";
 import { RequireAuth } from "./require-auth";
@@ -22,6 +22,7 @@ export function RequireCommunityAccess({ children }: { children: ReactNode }) {
 	// hydration 불일치가 난다(RequireAuth의 pending 스켈레톤 등). 마운트 후에만
 	// 게이트를 렌더해 서버·첫 클라이언트 렌더를 null로 일치시켜 이를 피한다.
 	const [mounted, setMounted] = useState(false);
+	const pathname = usePathname();
 	const { isGuest } = useBambiAuth();
 	useEffect(() => {
 		setMounted(true);
@@ -29,6 +30,9 @@ export function RequireCommunityAccess({ children }: { children: ReactNode }) {
 
 	if (!mounted) {
 		return null;
+	}
+	if (pathname === COMMUNITY_ROOT_PATH) {
+		return <>{children}</>;
 	}
 
 	const gate = <CommunityGate>{children}</CommunityGate>;
