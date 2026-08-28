@@ -42,6 +42,7 @@ import {
 	adjustMemberPoints,
 	awardMemberPoints,
 } from "../../services/bambi-point-ledger";
+import { SITE_SETTINGS_ROW_ID } from "../../services/bambi-point-settings";
 import { acquirePointShopUserLock } from "../../services/bambi-point-shop";
 import { resolveGradeIconUrl } from "../../services/bambi-storage";
 
@@ -297,7 +298,7 @@ export const attendanceRouter = {
 			const [settings] = await tx
 				.select({ points: bambiSiteSettings.attendancePoints })
 				.from(bambiSiteSettings)
-				.where(eq(bambiSiteSettings.id, "default"))
+				.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 				.limit(1);
 			const configuredPoints = settings?.points ?? 10;
 			const award =
@@ -378,7 +379,7 @@ export const attendanceRouter = {
 						await db
 							.select({ points: bambiSiteSettings.attendancePoints })
 							.from(bambiSiteSettings)
-							.where(eq(bambiSiteSettings.id, "default"))
+							.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 							.limit(1)
 					)[0]?.points ?? 10,
 				checkedInToday: attendedDatesDesc[0] === today,

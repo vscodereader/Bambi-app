@@ -49,12 +49,12 @@ export const POINT_SHOP_REASONS = {
 	refund: "point_shop_refund",
 } as const;
 
+const JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX = "공고 취소 포인트 환급";
 const JOB_PAYMENT_POINT_REASON_PREFIXES = {
-	refund: "공고 취소 포인트 환급: ",
-	refundForfeited: "공고 취소 포인트 환급 완료(상한 소멸): ",
+	refund: `${JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX}: `,
+	refundForfeited: `${JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX} 완료(상한 소멸): `,
 	use: "공고 등록 포인트 사용: ",
 } as const;
-const JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX = "공고 취소 포인트 환급";
 
 export const JOB_PAYMENT_POINT_REASONS = {
 	refund: (jobPostId: string): string =>

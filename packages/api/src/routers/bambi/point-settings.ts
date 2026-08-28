@@ -44,11 +44,10 @@ import {
 } from "../../services/bambi-point-job-rewards";
 import {
 	getPointSettings,
-	POINT_SETTING_VALUE_MAX,
 	SITE_SETTINGS_ROW_ID,
 } from "../../services/bambi-point-settings";
 
-const nonnegativePoints = z.number().int().min(0).max(POINT_SETTING_VALUE_MAX);
+const nonnegativePoints = z.number().int().nonnegative();
 const rotationHours = z.number().int().positive();
 const saveMembershipInput = z.object({
 	attendancePoints: nonnegativePoints,
