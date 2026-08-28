@@ -15,6 +15,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import {
 	AccessibilityInfo,
+	Alert as NativeAlert,
 	Pressable,
 	Text,
 	type TextInput,
@@ -46,6 +47,13 @@ const ctaLabels: Record<LoginStatus, string> = {
 // 200 응답 뒤 /get-session 왕복이 끝나지 않는 경우(배포 cookiePrefix 불일치 등) 탈출용.
 const handoffTimeoutMs = 8000;
 
+// 미구현 진입점 안내는 OS 알럿으로 띄운다 — 인라인 Alert 슬롯은 비밀번호 필드와
+// CTA 사이에 있어서, 그 아래 버튼(회원가입·비회원 인증)을 누르면 안내가 화면 밖
+// 위쪽에 꽂히고 버튼만 아래로 밀린다. 안내 문구가 이 버튼들의 전부라 못 읽으면
+// 고장으로 보인다. logout-button.tsx와 같은 Alert.alert 패턴.
+const notifyWebOnly = (title: string) =>
+	NativeAlert.alert(title, "앱에서는 준비 중이에요. 웹에서 이용해 주세요.");
+
 export default function LoginScreen() {
 	const [loginId, setLoginId] = useState("");
 	const [password, setPassword] = useState("");
@@ -59,10 +67,8 @@ export default function LoginScreen() {
 	const passwordRef = useRef<TextInput>(null);
 	const handoffTimerRef = useRef<null | ReturnType<typeof setTimeout>>(null);
 	const session = authClient.useSession();
-	const [accentForegroundColor, mutedColor] = useThemeColor([
-		"accent-foreground",
-		"muted",
-	]);
+	const [accentForegroundColor, accentSoftForegroundColor, mutedColor] =
+		useThemeColor(["accent-foreground", "accent-soft-foreground", "muted"]);
 
 	useEffect(
 		() => () => {
@@ -190,9 +196,31 @@ export default function LoginScreen() {
 			/>
 			<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 				<TextField isInvalid={Boolean(errors.loginId)}>
-					<Label>
-						<Label.Text>아이디</Label.Text>
-					</Label>
+					{/* ponytail: 아이디 찾기·비밀번호 재설정은 웹에서 포트원(KCP) 본인인증
+					    창으로만 도는 흐름이라 네이티브 대응 라우트가 없다. 링크를 감추면
+					    사용자가 복구 수단 자체를 모르므로, 자리는 두고 안내만 띄운다.
+					    네이티브 복구 흐름이 생기면 notifyWebOnly를 router.push로 바꾼다.
+					    링크 색은 --link(#2969ff)를 일부러 안 쓴다 — surface-secondary 위에서
+					    4.41:1이라 본문 크기 AA(4.5:1)에 미달한다. 웹과 같은 muted 계열에
+					    hover가 없는 네이티브용으로 상시 underline을 얹어 탭 가능함을 알린다.
+					    Pressable에 shrink를 준 이유는 폰트 배율을 키우면 라벨+링크가 256dp를
+					    넘는데 Surface가 overflow-hidden이라 꼬리가 잘리기 때문. flex-1은
+					    남는 폭까지 먹어 링크가 오른쪽 끝에 붙지 않으므로 쓰지 않는다. */}
+					<View className="flex-row items-center justify-between">
+						<Label>
+							<Label.Text>아이디</Label.Text>
+						</Label>
+						<Pressable
+							accessibilityRole="button"
+							className="shrink active:opacity-75"
+							hitSlop={12}
+							onPress={() => notifyWebOnly("아이디 찾기")}
+						>
+							<Text className="font-semibold text-muted text-xs underline">
+								아이디 찾기
+							</Text>
+						</Pressable>
+					</View>
 					<Input
 						accessibilityLabel="아이디"
 						autoCapitalize="none"
@@ -210,9 +238,21 @@ export default function LoginScreen() {
 					<FieldError>{errors.loginId}</FieldError>
 				</TextField>
 				<TextField isInvalid={Boolean(errors.password)}>
-					<Label>
-						<Label.Text>비밀번호</Label.Text>
-					</Label>
+					<View className="flex-row items-center justify-between">
+						<Label>
+							<Label.Text>비밀번호</Label.Text>
+						</Label>
+						<Pressable
+							accessibilityRole="button"
+							className="shrink active:opacity-75"
+							hitSlop={12}
+							onPress={() => notifyWebOnly("비밀번호 재설정")}
+						>
+							<Text className="font-semibold text-muted text-xs underline">
+								비밀번호를 잊으셨나요?
+							</Text>
+						</Pressable>
+					</View>
 					<InputGroup>
 						<InputGroup.Input
 							accessibilityLabel="비밀번호"
@@ -262,6 +302,42 @@ export default function LoginScreen() {
 						<Spinner color={accentForegroundColor} size="sm" />
 					)}
 					<Button.Label>{ctaLabels[status]}</Button.Label>
+				</Button>
+				{/* ponytail: 네이티브엔 회원가입 라우트도, 비회원 인증(웹은 포트원 KCP 팝업으로
+				    게스트 쿠키를 발급받는다) 배선도 아직 없다. 진입점을 감추면 사용자가 경로
+				    자체를 모르므로 자리는 두고 안내만 띄운다. 라우트가 생기면 notifyWebOnly를
+				    router.push로 바꾼다. 안내를 인라인 Alert이 아니라 OS 알럿으로 띄우는 이유는
+				    notifyWebOnly 주석 참고 — 이 두 버튼은 Alert 슬롯보다 아래에 있다.
+				    위계는 로그인(primary) > 비회원 인증(secondary) > 회원가입(ghost) —
+				    tertiary는 secondary와 배경이 같은 bg-default라 두 버튼이 같은 무게로
+				    보였다. 웹처럼 텍스트 링크가 되는 ghost(bg-transparent)가 진짜 3단계다.
+				    좁은 화면에서 안내 문구와 버튼이 한 줄에 못 들어가면 접히게 둔다. */}
+				<View className="flex-row flex-wrap items-center justify-center gap-1">
+					<Text className="text-muted text-sm">밤비알바가 처음이신가요?</Text>
+					<Button
+						onPress={() => notifyWebOnly("회원가입")}
+						size="sm"
+						variant="ghost"
+					>
+						<Button.Label>회원가입</Button.Label>
+					</Button>
+				</View>
+				{/* 아이콘 색은 secondary 라벨과 같은 accent-soft-foreground를 쓴다 — muted를
+				    넘기면 한 버튼 안에서 아이콘과 글자가 다른 색이 된다.
+				    accessibilityLabel이 없으면 TalkBack이 Ionicons의 사설영역 글리프
+				    코드포인트까지 라벨에 합쳐 읽는다(비밀번호 보기 토글과 같은 이유). */}
+				<Button
+					accessibilityLabel="비회원으로 인증하기"
+					onPress={() => notifyWebOnly("비회원 인증")}
+					size="lg"
+					variant="secondary"
+				>
+					<Ionicons
+						color={accentSoftForegroundColor}
+						name="call-outline"
+						size={20}
+					/>
+					<Button.Label>비회원으로 인증하기</Button.Label>
 				</Button>
 				{/* 청소년유해매체물 고지. 웹 AdultNotice와 같은 표현을 쓴다 — 색은 muted
 				    계열로만 둔다(코럴을 쓰면 주 액션인 로그인 CTA와 위계가 뒤집힌다).
