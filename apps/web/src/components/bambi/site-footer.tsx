@@ -226,7 +226,10 @@ export function SiteFooter({
 							{email}
 						</a>
 					</p>
-					<p className="pt-2 text-muted-foreground/80">
+					{/* 연도는 서버(UTC)와 클라이언트(사용자 타임존)가 연말 경계에서 갈릴 수
+					    있어 하이드레이션 불일치(#418)를 낸다. 실제로 갈리는 건 1년에 몇
+					    시간뿐이라 값을 서버에서 내리기보다 이 노드만 경고를 억제한다. */}
+					<p className="pt-2 text-muted-foreground/80" suppressHydrationWarning>
 						© {new Date().getFullYear()} {operator}. All rights reserved.
 					</p>
 				</div>
