@@ -18,7 +18,9 @@ import {
 	Pressable,
 	Text,
 	type TextInput,
+	View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { authClient } from "@/lib/auth-client";
 import {
 	BambiHeader,
@@ -44,8 +46,8 @@ const ctaLabels: Record<LoginStatus, string> = {
 // 200 응답 뒤 /get-session 왕복이 끝나지 않는 경우(배포 cookiePrefix 불일치 등) 탈출용.
 const handoffTimeoutMs = 8000;
 
-// 개발 시드 계정의 "아이디"만 둔다. 비밀번호는 어떤 형태로도 소스에 두지 않는다.
 export default function LoginScreen() {
+	const insets = useSafeAreaInsets();
 	const [loginId, setLoginId] = useState("");
 	const [password, setPassword] = useState("");
 	const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -171,6 +173,10 @@ export default function LoginScreen() {
 
 	return (
 		<BambiScreen scrollViewProps={{ automaticallyAdjustKeyboardInsets: true }}>
+			{/* 내비게이션 헤더를 숨겨(app/_layout.tsx) 상단 인셋을 화면이 직접 진다.
+			    Container는 paddingBottom만 적용하므로 여기서 보완하지 않으면
+			    제목이 상태바 아래로 파고든다. */}
+			<View style={{ paddingTop: insets.top }} />
 			<BambiHeader
 				description="아이디 또는 이메일과 비밀번호로 로그인합니다."
 				title="밤비알바 로그인"
