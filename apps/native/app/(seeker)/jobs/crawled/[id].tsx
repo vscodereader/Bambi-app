@@ -1,15 +1,15 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { DEFAULT_MINIMUM_WAGE } from "@bambi-app/api/services/bambi-policy";
+import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
-import { Surface } from "heroui-native";
+import { Surface, useThemeColor } from "heroui-native";
+import type { ComponentProps, ReactNode } from "react";
 import { Text, View } from "react-native";
 
 import {
-	BambiHeader,
 	BambiScreen,
 	ErrorState,
-	formatPay,
 	LoadingState,
 	Pill,
 } from "@/src/components/bambi-screen";
@@ -38,19 +38,50 @@ function formatMinimumWageLabel(settings?: MinimumWageSettings | null): string {
 }
 
 // 급여는 금액이 파싱된 경우에만 단위와 조립하고, 아니면 원문("일 15만원"·"면접 후 협의")을
-// 그대로 보여준다 — 웹 seeker-crawled-job-detail의 formatCrawledPay와 같은 규칙.
+// 그대로 보여준다. 웹 정보 타일과 같은 "월급 12,000,000원"(단위 앞) 순서.
 function formatCrawledPay(job: CrawledJob): string {
 	if (job.payAmount !== null) {
-		return formatPay(job.payAmount, job.payUnit);
+		const money = `${job.payAmount.toLocaleString("ko-KR")}원`;
+		return job.payUnit ? `${job.payUnit} ${money}` : money;
 	}
 
 	return job.payRaw ?? "급여 협의";
 }
 
-// 수집 공고 상세. 우리 공고 상세(jobs/[id])와 같은 구성(BambiHeader + Surface + Pill + 급여 +
-// 설명)을 재사용하되, 채팅 CTA 하단 고정 바는 두지 않는다 — 수집 공고는 조직·채팅 상대가
-// 없다. 대신 웹 크롤 상세와 같은 자기방어 안내를 스크롤 끝에 남긴다. 검수·인증 배지도 달지
-// 않는다(우리가 확인한 적 없는 공고라 거짓 신호가 된다 — 웹과 동일 판단).
+// 웹 수집 상세의 InfoTile 이식 — 원형 테두리 아이콘 + 작은 라벨/굵은 값/보조 줄.
+function InfoTile({
+	icon,
+	label,
+	sub,
+	value,
+}: {
+	icon: ComponentProps<typeof Ionicons>["name"];
+	label: string;
+	sub?: ReactNode;
+	value: string;
+}) {
+	const foreground = useThemeColor("foreground");
+
+	return (
+		<View className="flex-row items-center gap-3">
+			<View className="size-11 shrink-0 items-center justify-center rounded-full border border-border bg-surface">
+				<Ionicons color={foreground} name={icon} size={20} />
+			</View>
+			<View className="flex-1 gap-0.5">
+				<Text className="text-muted text-xs">{label}</Text>
+				<Text className="font-bold text-base text-foreground" selectable>
+					{value}
+				</Text>
+				{sub}
+			</View>
+		</View>
+	);
+}
+
+// 수집 공고 상세. 제목 + 배지/정보 타일 Surface + 상세 이미지 + 후기 구성이되, 채팅 CTA
+// 하단 고정 바는 두지 않는다 — 수집 공고는 조직·채팅 상대가 없다. 대신 웹 크롤 상세와 같은
+// 자기방어 안내를 스크롤 끝에 남긴다. 검수·인증 배지도 달지 않는다(우리가 확인한 적 없는
+// 공고라 거짓 신호가 된다 — 웹과 동일 판단).
 export default function SeekerCrawledJobDetailScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const jobQuery = useQuery(
@@ -76,9 +107,11 @@ export default function SeekerCrawledJobDetailScreen() {
 
 	return (
 		<BambiScreen>
-			<BambiHeader
-				title={job.shopName ? `${job.shopName} ${job.title}` : job.title}
-			/>
+			{/* BambiHeader 대신 제목만 그린다 — BambiHeader의 py-2가 얹히면 제목-정보 섹션
+			    간격이 섹션끼리 간격(BambiScreen gap-4)보다 넓어진다. */}
+			<Text className="font-bold text-3xl text-foreground" selectable>
+				{job.shopName ? `${job.shopName} ${job.title}` : job.title}
+			</Text>
 			<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 				{/* 지역 · 세부지역 · 고용형태 배지(값이 있을 때만) — 웹의 region/district/고용형태 축. */}
 				<View className="flex-row flex-wrap gap-2">
@@ -86,33 +119,46 @@ export default function SeekerCrawledJobDetailScreen() {
 					{job.district ? <Pill>{job.district}</Pill> : null}
 					{employmentType ? <Pill tone="accent">{employmentType}</Pill> : null}
 				</View>
-				{/* 급여 오른쪽에 비교 기준(최저시급)을 약한 위계로 붙인다 — 웹과 동일. */}
-				<View className="flex-row flex-wrap items-baseline gap-x-2 gap-y-1">
-					<Text className="font-bold text-foreground text-xl" selectable>
-						{formatCrawledPay(job)}
-					</Text>
-					<Text className="text-muted text-sm" selectable>
-						{minimumWageLabel}
-					</Text>
-				</View>
-				{/* 후기 축은 웹 요약 타일과 같은 형식으로 표기한다. 수집 공고는 job_post 행이 없어
-				    후기 값이 언제나 0개다(웹도 하드코딩 "0개 · 신규").
-				    ponytail: 실제 집계가 필요해지면 그때 후기 개수 프로시저를 붙인다. */}
-				<Text className="text-muted text-sm" selectable>
-					후기 0개 · 신규
-				</Text>
+				{/* 웹 수집 상세와 같은 정보 타일 스택(급여/근무시간/구인자 연락처/후기). */}
+				<InfoTile
+					icon="cash-outline"
+					label="급여"
+					sub={
+						<Text className="text-muted text-sm" selectable>
+							{minimumWageLabel}
+						</Text>
+					}
+					value={formatCrawledPay(job)}
+				/>
 				{job.workSchedule ? (
-					<Text className="text-muted text-sm leading-5" selectable>
-						근무시간: {job.workSchedule}
-					</Text>
+					<InfoTile
+						icon="time-outline"
+						label="근무시간"
+						value={job.workSchedule}
+					/>
 				) : null}
 				{/* 원본 사이트에서도 구직자에게 공개돼 있던 번호다(웹 크롤 상세와 동일 취급).
 				    채팅 상대가 없어 이 번호가 유일한 연락 경로라 상세에 노출한다. */}
 				{job.contactPhone ? (
-					<Text className="text-foreground leading-6" selectable>
-						연락처: {job.contactPhone}
-					</Text>
+					<InfoTile
+						icon="call-outline"
+						label="구인자 연락처"
+						sub={
+							<Text
+								className="text-accent-soft-foreground text-sm leading-5 dark:text-accent"
+								selectable
+							>
+								('밤비알바 보고 연락드렸다고 하시면 정확한 상담 받으실 수
+								있어요.')
+							</Text>
+						}
+						value={job.contactPhone}
+					/>
 				) : null}
+				{/* 후기 값은 웹과 동일하게 정적 표기다. 수집 공고는 job_post 행이 없어 언제나
+				    0개다(웹도 하드코딩 "0개 · 신규").
+				    ponytail: 실제 집계가 필요해지면 그때 후기 개수 프로시저를 붙인다. */}
+				<InfoTile icon="star-outline" label="후기" value="0개 · 신규" />
 				{job.body ? (
 					<Text className="text-foreground leading-6" selectable>
 						{job.body}
