@@ -5,7 +5,7 @@ import {
 	bambiIdentityVerificationLog,
 	bambiProfile,
 } from "@bambi-app/db/schema/bambi";
-import { and, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, sql } from "drizzle-orm";
 
 const GUEST_IDENTITY_RETENTION_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -35,31 +35,17 @@ export const linkGuestIdentityLog = async (
 const memberIdentity = async (userId: string) => {
 	const [profile] = await db
 		.select({
-			birthDate: bambiProfile.birthDate,
+			gender: bambiProfile.gender,
+			isPhoneVerified: bambiProfile.isPhoneVerified,
 			phoneNumber: bambiProfile.phoneNumber,
 		})
 		.from(bambiProfile)
 		.where(eq(bambiProfile.userId, userId))
 		.limit(1);
-	if (!(profile?.birthDate && profile.phoneNumber)) {
+	if (!(profile?.isPhoneVerified && profile.gender && profile.phoneNumber)) {
 		return null;
 	}
-	const [row] = await db
-		.select({
-			gender: bambiIdentityVerificationLog.gender,
-			phoneNumber: bambiIdentityVerificationLog.phoneNumber,
-		})
-		.from(bambiIdentityVerificationLog)
-		.where(
-			and(
-				eq(bambiIdentityVerificationLog.birthDate, profile.birthDate),
-				eq(bambiIdentityVerificationLog.phoneNumber, profile.phoneNumber),
-				completeIdentityWhere()
-			)
-		)
-		.orderBy(desc(bambiIdentityVerificationLog.updatedAt))
-		.limit(1);
-	return row ?? null;
+	return { gender: profile.gender, phoneNumber: profile.phoneNumber };
 };
 
 const guestIdentity = async (guestId: string, freshOnly: boolean) => {

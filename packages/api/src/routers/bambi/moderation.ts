@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { PASSWORD_MIN_LENGTH } from "@bambi-app/auth/password-policy";
 import { db } from "@bambi-app/db";
 import {
 	invitation,
@@ -102,6 +103,11 @@ import {
 	getChatAttachmentObjectUrl,
 	isOwnedJobPostMediaKey,
 } from "../../services/bambi-storage";
+import { createTestAccount } from "../../services/bambi-test-account";
+import {
+	TEST_ACCOUNT_GENDERS,
+	TEST_ACCOUNT_ROLES,
+} from "../../services/bambi-test-account-policy";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
 import {
 	normalizeAllExpiredWarningRestrictions,
@@ -195,6 +201,16 @@ const listUsersInput = z.object({
 	status: accountStatusSchema.optional(),
 	// 운영자 콘솔은 전체 계정 관리가 목적이라 상한을 넉넉히 둔다(기본도 전체 조회).
 	limit: z.number().int().min(1).max(1000).default(1000),
+});
+
+const createTestAccountInput = z.object({
+	birthDate: z.string().min(1),
+	gender: z.enum(TEST_ACCOUNT_GENDERS),
+	loginId: z.string().min(1),
+	nickname: z.string().min(1),
+	password: z.string().min(PASSWORD_MIN_LENGTH),
+	phoneNumber: z.string().min(1),
+	role: z.enum(TEST_ACCOUNT_ROLES),
 });
 
 const listUserModerationActionsInput = z.object({
@@ -607,8 +623,6 @@ const emitChatReportAvailabilityChanged = async (
 
 	const [room] = await db
 		.select({
-			authorGender: communityPost.authorGender,
-			authorGuestId: communityPost.authorGuestId,
 			employerUserId: chatRoom.employerUserId,
 			jobSeekerUserId: chatRoom.jobSeekerUserId,
 		})
@@ -1780,6 +1794,12 @@ const listListingQueueSection = async (type: "recommended" | "special") => {
 };
 
 export const moderationRouter = {
+	createTestAccount: adminProcedure
+		.input(createTestAccountInput)
+		.handler(({ context, input }) =>
+			createTestAccount(context.session.user.id, input)
+		),
+
 	createReport: protectedProcedure
 		.input(createReportInput)
 		.handler(async ({ context, input }) => {
