@@ -1,7 +1,18 @@
 import {
+	ALLOWED_JOB_AD_BANNER_MIME_TYPES,
+	ALLOWED_JOB_POST_IMAGE_MIME_TYPES,
+	JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH,
+	JOB_POST_IMAGE_MAX_BYTES,
+} from "@bambi-app/api/services/bambi-job-media-policy";
+import {
 	JOB_PAY_AMOUNT_MAX,
 	JOB_PAY_AMOUNT_MAX_MESSAGE,
 } from "@bambi-app/api/services/bambi-job-pay";
+import {
+	LOCAL_EDITOR_MEDIA_PATH,
+	LOCAL_JOB_MEDIA_PATH,
+	LOCAL_PRIVATE_MEDIA_PATH,
+} from "@bambi-app/api/services/bambi-storage-policy";
 import {
 	type AdBannerLayout,
 	isAdBannerImageRequired,
@@ -29,13 +40,10 @@ const INTERVIEW_NOTES_MAX_LENGTH = 500;
 export const DESCRIPTION_BLOCK_MAX_COUNT = 12;
 const DESCRIPTION_BLOCK_TEXT_MAX_LENGTH = 800;
 const DETAIL_IMAGE_MAX_COUNT = 5;
-export const IMAGE_ALT_TEXT_MAX_LENGTH = 120;
-// 공고·커뮤니티·채팅 이미지 공통 상한(세 파일 동기화): bambi-job-media-policy.ts,
-// apps/web/src/lib/bambi-job-form.ts, bambi-media-policy.ts.
-const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
-const ALLOWED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
-// 서버 정책(ALLOWED_JOB_AD_BANNER_MIME_TYPES)과 같은 목록. 광고 배너만 움직이는 GIF를 받는다.
-const ALLOWED_AD_BANNER_MIME_TYPES = [...ALLOWED_IMAGE_MIME_TYPES, "image/gif"];
+export const IMAGE_ALT_TEXT_MAX_LENGTH = JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH;
+const IMAGE_MAX_BYTES = JOB_POST_IMAGE_MAX_BYTES;
+const ALLOWED_IMAGE_MIME_TYPES = [...ALLOWED_JOB_POST_IMAGE_MIME_TYPES];
+const ALLOWED_AD_BANNER_MIME_TYPES = [...ALLOWED_JOB_AD_BANNER_MIME_TYPES];
 
 export const jobPostMediaUsages = [
 	"cover",
@@ -376,8 +384,17 @@ export const toPlainJobDescription = (
 const isAllowedUploadUrl = (uploadUrl: string): boolean =>
 	uploadUrl.startsWith("https://") ||
 	(process.env.NODE_ENV !== "production" &&
-		(uploadUrl.startsWith("/bambi/local-chat-attachments?") ||
-			uploadUrl.startsWith("/bambi/local-grade-icons?")));
+		(uploadUrl.startsWith(`${LOCAL_PRIVATE_MEDIA_PATH}?`) ||
+			uploadUrl.startsWith(`${LOCAL_EDITOR_MEDIA_PATH}?`) ||
+			uploadUrl.startsWith("/bambi/local-grade-icons?") ||
+			uploadUrl.startsWith(`${LOCAL_JOB_MEDIA_PATH}?`)));
+
+export const uploadedEditorMediaUrl = (
+	uploadIntent: JobPostMediaUploadIntent
+): string | null =>
+	uploadIntent.uploadUrl.startsWith(`${LOCAL_EDITOR_MEDIA_PATH}?`)
+		? uploadIntent.uploadUrl
+		: null;
 
 // 서명 URL로 브라우저가 GCS에 직접 PUT 한다. Content-Type은 서명에 묶여 있어
 // 인텐트에서 선언한 값과 정확히 일치해야 GCS가 받아준다.

@@ -1,6 +1,7 @@
 "use client";
 
 import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
+import { PASSWORD_MIN_LENGTH } from "@bambi-app/auth/password-policy";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
@@ -67,9 +68,12 @@ const getValidationError = (
 	isSignUp: boolean
 ): Notice | null => {
 	if (!isSignUp) {
-		if (values.username.trim().length === 0 || values.password.length < 8) {
+		if (
+			values.username.trim().length === 0 ||
+			values.password.length < PASSWORD_MIN_LENGTH
+		) {
 			return {
-				text: "아이디(이메일)와 8자 이상 비밀번호를 확인해 주세요.",
+				text: `아이디(이메일)와 ${PASSWORD_MIN_LENGTH}자 이상 비밀번호를 확인해 주세요.`,
 				tone: "error",
 			};
 		}
@@ -84,9 +88,12 @@ const getValidationError = (
 	if (loginIdError) {
 		return { text: loginIdError, tone: "error" };
 	}
-	if (!values.email.includes("@") || values.password.length < 8) {
+	if (
+		!values.email.includes("@") ||
+		values.password.length < PASSWORD_MIN_LENGTH
+	) {
 		return {
-			text: "이메일과 8자 이상 비밀번호를 확인해 주세요.",
+			text: `이메일과 ${PASSWORD_MIN_LENGTH}자 이상 비밀번호를 확인해 주세요.`,
 			tone: "error",
 		};
 	}

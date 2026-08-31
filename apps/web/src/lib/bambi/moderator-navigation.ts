@@ -16,6 +16,7 @@ export const MODERATOR_NAV_ITEMS: NavEntry[] = [
 		label: "회원 관리",
 		items: [
 			{ href: "/moderator/users", label: "사용자" },
+			{ href: "/moderator/users/create" as Route, label: "계정 생성" },
 			{ href: "/moderator/messages" as Route, label: "쪽지" },
 			{ href: "/moderator/chats" as Route, label: "채팅" },
 			{ href: "/moderator/interviews" as Route, label: "면접 일정" },

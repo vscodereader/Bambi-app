@@ -1,5 +1,7 @@
 "use client";
 
+import { COMMUNITY_PASSWORD_MIN_LENGTH } from "@bambi-app/api/services/bambi-community-post-policy";
+
 // 글 상세 화면의 리프 서브컴포넌트 모음. 본문 뷰어·헤더·추천/신고/수정/삭제 액션·
 // 잠긴 글 게이트·댓글 목록/작성 폼을 각자 낮은 복잡도로 분리한다.
 
@@ -79,7 +81,6 @@ import {
 import { formatPhone } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
-const PASSWORD_MIN = 4;
 const DETAILS_MAX = 1000;
 
 // 비회원(guest)도 글·댓글을 남길 수 있어 작성자 role 스냅샷에 포함된다. 화면 표시는
@@ -998,7 +999,7 @@ export function LockedGate({
 			</div>
 			<div className="flex justify-end">
 				<Button
-					disabled={password.length < PASSWORD_MIN}
+					disabled={password.length < COMMUNITY_PASSWORD_MIN_LENGTH}
 					onClick={() => onSubmit(password)}
 					type="button"
 				>

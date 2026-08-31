@@ -1,3 +1,5 @@
+import { TEST_ACCOUNT_AUDIT_ACTION } from "@bambi-app/api/services/bambi-test-account-policy";
+
 // 밤비 — 운영자 콘솔에서 노출되는 상태·역할·위험 신호 enum의 한글 표시 라벨.
 // report-labels.ts의 targetTypeLabel과 동일 패턴을 따른다: Record<string, string> +
 // string 입력 + 알 수 없는 값에도 안전한 중립 폴백(enum 원값 노출 금지). 서버가 TS 유니온
@@ -44,6 +46,7 @@ export function accountStatusLabel(status: string): string {
 // 감사 로그 액션 코드(admin_moderation_action.action). 사용자 대상 제재는 `set_status:*`
 // 형태라 원값이 화면에 새지 않게 조치 이름으로 치환한다.
 const MODERATION_ACTION_LABELS: Record<string, string> = {
+	[TEST_ACCOUNT_AUDIT_ACTION]: "가계정 생성",
 	"set_status:active": "정상 복구",
 	"set_status:warned": "경고",
 	"set_status:suspended": "이용 정지",

@@ -1,3 +1,8 @@
+import {
+	buildLocalMediaUrl,
+	isJobPostMediaStorageKey,
+	LOCAL_JOB_MEDIA_PATH,
+} from "@bambi-app/api/services/bambi-storage-policy";
 import { env } from "@bambi-app/env/web";
 
 import { NEGOTIABLE_PAY_TEXT } from "../bambi-options";
@@ -91,6 +96,12 @@ const TRAILING_SLASH_PATTERN = /\/$/;
 // 프로덕션 빌드는 packages/env/src/web.ts가 base URL 누락 시 빌드를 실패시키므로,
 // 이 폴백은 개발에서만 도달한다(배포된 화면에 샘플이 뜨는 일은 없다).
 export const jobMediaPublicUrl = (storageKey: string): string => {
+	if (
+		process.env.NODE_ENV !== "production" &&
+		isJobPostMediaStorageKey(storageKey)
+	) {
+		return buildLocalMediaUrl(LOCAL_JOB_MEDIA_PATH, storageKey);
+	}
 	const publicBaseUrl = env.NEXT_PUBLIC_GCS_PUBLIC_BASE_URL;
 
 	if (!publicBaseUrl) {
