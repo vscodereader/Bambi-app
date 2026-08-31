@@ -10,8 +10,12 @@ const BULLET_ITEM_SEPARATOR = /\n+/;
 const TRAILING_SLASH_RE = /\/$/;
 
 // getById media.detail 행에서 이 섹션이 실제로 읽는 필드만 좁힌다(웹 detailImages와 같은 축).
+// sliceGroupId/sliceIndex는 서버가 긴 원본을 잘라 저장한 조각 메타(비조각은 null). 서버
+// 타입 반영 전에도 통과하도록 optional로 두면 구조적 타이핑으로 필드가 생기면 흐른다.
 interface JobDetailMedia {
 	height: null | number;
+	sliceGroupId?: null | string;
+	sliceIndex?: null | number;
 	storageKey: string;
 	width: null | number;
 }
@@ -97,14 +101,15 @@ export function JobDescriptionSection({
 	// storageKey를 공개 버킷 URL로 조립(웹 jobMediaPublicUrl과 같은 축). base가 없거나(개발)
 	// 크기 메타가 없는 행은 aspectRatio를 못 잡으므로 뺀다.
 	const base = gcsPublicBaseUrl?.replace(TRAILING_SLASH_RE, "");
-	const imageAssets = base
+	const imageRows = base
 		? detail.flatMap((media) =>
 				media.width && media.height
 					? [
 							{
 								height: media.height,
-								id: media.storageKey,
+								sliceGroupId: media.sliceGroupId ?? null,
 								src: `${base}/${media.storageKey}`,
+								storageKey: media.storageKey,
 								width: media.width,
 							},
 						]
@@ -112,8 +117,19 @@ export function JobDescriptionSection({
 			)
 		: [];
 	const imageDocument = {
-		assets: imageAssets,
-		items: imageAssets.map((asset) => ({ assetId: asset.id, id: asset.id })),
+		assets: imageRows.map((row) => ({
+			height: row.height,
+			id: row.storageKey,
+			src: row.src,
+			width: row.width,
+		})),
+		// storageKey는 행마다 고유하므로 asset id 겸 조각 id로 쓴다. sliceGroupId를 실어
+		// 렌더러가 같은 원본 조각을 이음새 없이 묶게 한다(비조각은 null → 단독 그룹).
+		items: imageRows.map((row) => ({
+			assetId: row.storageKey,
+			id: row.storageKey,
+			sliceGroupId: row.sliceGroupId,
+		})),
 	};
 
 	return (

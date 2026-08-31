@@ -9,6 +9,7 @@ import {
 	formatAdPeriod,
 	getConfirmedScheduleId,
 	getNativeHomeRoute,
+	groupDetailImageSlices,
 	isEmailLoginId,
 	NATIVE_AD_PERIOD_TIERS,
 	type NativeAdPeriodTier,
@@ -296,6 +297,71 @@ describe("bambi native helpers", () => {
 	it("keeps the constant tiers ordered by ascending days", () => {
 		const days = NATIVE_AD_PERIOD_TIERS.map((tier) => tier.minDays);
 		expect(days).toEqual([...days].sort((a, b) => a - b));
+	});
+
+	it("keeps non-slice images as single-piece groups (crawled 동작 불변)", () => {
+		const groups = groupDetailImageSlices([
+			{ assetId: "a", id: "a" },
+			{ assetId: "b", id: "b", sliceGroupId: null },
+		]);
+
+		expect(groups).toEqual([
+			{
+				key: "a",
+				pieces: [
+					{ assetId: "a", id: "a", isGroupEnd: true, isGroupStart: true },
+				],
+			},
+			{
+				key: "b",
+				pieces: [
+					{ assetId: "b", id: "b", isGroupEnd: true, isGroupStart: true },
+				],
+			},
+		]);
+	});
+
+	it("merges consecutive slices sharing a group and flags the ends", () => {
+		const groups = groupDetailImageSlices([
+			{ assetId: "s0", id: "s0", sliceGroupId: "g1" },
+			{ assetId: "s1", id: "s1", sliceGroupId: "g1" },
+			{ assetId: "s2", id: "s2", sliceGroupId: "g1" },
+			{ assetId: "plain", id: "plain", sliceGroupId: null },
+		]);
+
+		expect(groups).toEqual([
+			{
+				key: "s0",
+				pieces: [
+					{ assetId: "s0", id: "s0", isGroupEnd: false, isGroupStart: true },
+					{ assetId: "s1", id: "s1", isGroupEnd: false, isGroupStart: false },
+					{ assetId: "s2", id: "s2", isGroupEnd: true, isGroupStart: false },
+				],
+			},
+			{
+				key: "plain",
+				pieces: [
+					{
+						assetId: "plain",
+						id: "plain",
+						isGroupEnd: true,
+						isGroupStart: true,
+					},
+				],
+			},
+		]);
+	});
+
+	it("splits neighbouring different groups instead of merging them", () => {
+		const groups = groupDetailImageSlices([
+			{ assetId: "a0", id: "a0", sliceGroupId: "gA" },
+			{ assetId: "a1", id: "a1", sliceGroupId: "gA" },
+			{ assetId: "b0", id: "b0", sliceGroupId: "gB" },
+		]);
+
+		expect(
+			groups.map((group) => group.pieces.map((piece) => piece.id))
+		).toEqual([["a0", "a1"], ["b0"]]);
 	});
 
 	it("reads a job row as one screen reader sentence", () => {

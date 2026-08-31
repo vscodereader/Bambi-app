@@ -1047,6 +1047,13 @@ export const jobPostMedia = pgTable(
 		// 기존 행에는 값이 없으므로 nullable이다.
 		width: integer("width"),
 		height: integer("height"),
+		// 세로로 긴 상세 이미지는 업로드 시 브라우저가 가로 전폭·세로 조각들로 잘라 여러 행으로
+		// 저장한다(Android RN Image의 GPU 텍스처 한계로 4096px 초과 비트맵이 다운샘플돼 뭉개지는
+		// 문제 회피). 같은 원본에서 나온 조각들은 sliceGroupId를 공유하고 sliceIndex(0부터)로
+		// 순서를 갖는다. 슬라이싱하지 않은 이미지(짧은 상세·썸네일·배너)는 둘 다 null이다.
+		// 뷰어는 sliceGroupId로 묶어 간격 0으로 이어 그린다.
+		sliceGroupId: text("slice_group_id"),
+		sliceIndex: integer("slice_index"),
 		storageKey: text("storage_key").notNull(),
 		altText: text("alt_text").default("").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -8,6 +8,10 @@ import {
 } from "./bambi/ad-banner-layout";
 import type { JobBoostOptionTypeKey } from "./bambi/boost-options";
 import {
+	groupDetailMediaBySlice,
+	sliceDetailImageFile,
+} from "./bambi/detail-image-slicing";
+import {
 	isAllowedJobAdBannerAspect,
 	isAllowedJobAdBannerSize,
 	JOB_AD_BANNER_SPECS,
@@ -91,6 +95,19 @@ export interface JobDescriptionBlockFormValue {
 	type: JobDescriptionBlockType;
 }
 
+// 세로로 긴 상세 이미지를 잘라 만든 조각 하나. 새로 자른 조각은 file만, 이미 업로드된
+// 조각(프리필·업로드 후)은 storageKey를 갖는다.
+export interface JobFormMediaSlice {
+	byteSize: number;
+	file?: File;
+	fileName: string;
+	height: number;
+	mimeType: string;
+	sliceIndex: number;
+	storageKey?: string;
+	width: number;
+}
+
 export interface JobFormMediaItem {
 	altText: string;
 	byteSize: number;
@@ -99,6 +116,10 @@ export interface JobFormMediaItem {
 	height?: number;
 	mimeType: string;
 	previewUrl?: string;
+	// 조각 그룹을 대표하는 항목이면(세로로 긴 상세 이미지) sliceGroupId·slices를 갖는다.
+	// 폼·업로더는 그룹을 항상 한 항목(원본 1장)으로 다루고, 제출 시 slices가 여러 행으로 펼쳐진다.
+	sliceGroupId?: string;
+	slices?: JobFormMediaSlice[];
 	storageKey?: string;
 	width?: number;
 }
@@ -136,6 +157,9 @@ export interface JobPostMediaApiInput {
 	fileName: string;
 	height?: number;
 	mimeType: string;
+	// 상세 조각만 싣는다. 같은 원본에서 나온 조각들이 공유하는 id와 그룹 내 순서(0부터).
+	sliceGroupId?: string;
+	sliceIndex?: number;
 	storageKey: string;
 	width?: number;
 }
@@ -289,6 +313,63 @@ export const emptyJobFormMedia: JobFormMedia = {
 	detail: [],
 };
 
+// 서버 상세 미디어 행(getById/getEditableById의 media.detail).
+export interface ServerDetailMediaRow {
+	altText?: null | string;
+	byteSize: number;
+	fileName: string;
+	height?: null | number;
+	mimeType: string;
+	sliceGroupId?: null | string;
+	sliceIndex?: null | number;
+	storageKey: string;
+	width?: null | number;
+}
+
+// 서버 상세 행을 폼 항목으로 되돌린다. 조각 그룹은 한 항목(원본 1장)으로 접어 slices에
+// 조각 키들을 담는다 — 업로더는 원본 단위로 보이고, 제출 시 그 키들을 그대로 재전송해
+// 재업로드·재슬라이싱 없이 라운드트립한다. 슬라이싱 안 한 행은 단일 항목.
+export const collapseServerDetailMedia = (
+	rows: ServerDetailMediaRow[],
+	resolveUrl: (storageKey: string) => string
+): JobFormMediaItem[] =>
+	groupDetailMediaBySlice(rows).map((group) => {
+		const first = group[0];
+
+		if (group.length === 1 && !first.sliceGroupId) {
+			return {
+				altText: first.altText ?? "",
+				byteSize: first.byteSize,
+				fileName: first.fileName,
+				height: first.height ?? undefined,
+				mimeType: first.mimeType,
+				previewUrl: resolveUrl(first.storageKey),
+				storageKey: first.storageKey,
+				width: first.width ?? undefined,
+			};
+		}
+
+		return {
+			altText: first.altText ?? "",
+			byteSize: first.byteSize,
+			fileName: first.fileName,
+			height: first.height ?? undefined,
+			mimeType: first.mimeType,
+			previewUrl: resolveUrl(first.storageKey),
+			sliceGroupId: first.sliceGroupId ?? undefined,
+			slices: group.map((row) => ({
+				byteSize: row.byteSize,
+				fileName: row.fileName,
+				height: row.height ?? 0,
+				mimeType: row.mimeType,
+				sliceIndex: row.sliceIndex ?? 0,
+				storageKey: row.storageKey,
+				width: row.width ?? 0,
+			})),
+			width: first.width ?? undefined,
+		};
+	});
+
 // 프리미엄 광고는 가로형·세로형 배너를 모두 요구한다. requiredUsages 중 media에 없는
 // 슬롯을 돌려준다("ad_horizontal"은 adHorizontal, "ad_vertical"은 adVertical 부재 시 누락).
 // layout은 필수 여부 자체를 가른다 — 배경이 단색인 슬롯은 이미지가 화면에 나오지 않으므로
@@ -416,9 +497,164 @@ export const uploadFileToSignedUrl = async ({
 };
 
 interface ResolvedJobPostMediaItem {
-	apiInput: JobPostMediaApiInput;
+	// 상세 조각 그룹은 여러 행으로 펼쳐지므로 배열이다. 그 외 슬롯은 항상 한 개.
+	apiInputs: JobPostMediaApiInput[];
 	item: JobFormMediaItem;
 }
+
+type CreateUploadIntent = (
+	input: JobPostMediaUploadRequest
+) => Promise<JobPostMediaUploadIntent>;
+
+// 조각 하나를 업로드(또는 이미 올라간 storageKey 재사용)한다. altText·sliceGroupId는 그룹이
+// 공유하므로 호출부가 넘긴다.
+const resolveSliceForSubmit = async ({
+	altText,
+	createUploadIntent,
+	organizationId,
+	sliceGroupId,
+	slice,
+	teamId,
+}: {
+	altText: string;
+	createUploadIntent: CreateUploadIntent;
+	organizationId: string;
+	sliceGroupId: string;
+	slice: JobFormMediaSlice;
+	teamId?: string;
+}): Promise<{ apiInput: JobPostMediaApiInput; slice: JobFormMediaSlice }> => {
+	if (slice.storageKey) {
+		return {
+			apiInput: {
+				altText,
+				byteSize: slice.byteSize,
+				fileName: trim(slice.fileName),
+				height: slice.height,
+				mimeType: slice.mimeType,
+				sliceGroupId,
+				sliceIndex: slice.sliceIndex,
+				storageKey: slice.storageKey,
+				width: slice.width,
+			},
+			slice,
+		};
+	}
+
+	if (!slice.file) {
+		throw new Error("이미지 파일을 다시 선택해 주세요.");
+	}
+
+	const uploadIntent = await createUploadIntent({
+		byteSize: slice.file.size,
+		fileName: slice.file.name,
+		mimeType: slice.file.type,
+		organizationId,
+		teamId,
+		usage: "detail",
+	});
+
+	await uploadFileToSignedUrl({ file: slice.file, uploadIntent });
+
+	return {
+		apiInput: {
+			altText,
+			byteSize: uploadIntent.byteSize,
+			fileName: uploadIntent.fileName,
+			height: slice.height,
+			mimeType: uploadIntent.mimeType,
+			sliceGroupId,
+			sliceIndex: slice.sliceIndex,
+			storageKey: uploadIntent.storageKey,
+			width: slice.width,
+		},
+		slice: {
+			...slice,
+			byteSize: uploadIntent.byteSize,
+			fileName: uploadIntent.fileName,
+			mimeType: uploadIntent.mimeType,
+			storageKey: uploadIntent.storageKey,
+		},
+	};
+};
+
+// 세로로 긴 상세 이미지를 조각 그룹으로 저장한다. 이미 조각이 있으면(프리필·재시도) 그대로
+// 쓰고, 새 파일이면 canvas로 자른다. 자를 필요가 없으면(짧은 이미지) null을 돌려 호출부가
+// 단일 업로드로 처리한다.
+// ponytail: 그룹 업로드는 슬롯 단위로 원자적이다 — 3조각 중 2번째가 실패하면 재시도가 원본을
+// 다시 잘라 모두 재업로드하고 앞서 올라간 조각은 고아가 된다(기존에도 허용되던 고아 부류).
+// 조각별 부분 재개가 필요하면 실패 시에도 성공 조각 키를 폼에 되돌리도록 확장.
+const resolveDetailItemForSubmit = async ({
+	createUploadIntent,
+	item,
+	organizationId,
+	teamId,
+}: {
+	createUploadIntent: CreateUploadIntent;
+	item: JobFormMediaItem;
+	organizationId: string;
+	teamId?: string;
+}): Promise<null | ResolvedJobPostMediaItem> => {
+	let slices = item.slices;
+	let sliceGroupId = item.sliceGroupId;
+
+	if (!slices?.length) {
+		if (!item.file) {
+			return null;
+		}
+
+		const sliced = await sliceDetailImageFile(item.file);
+
+		if (!sliced) {
+			return null;
+		}
+
+		sliceGroupId = globalThis.crypto.randomUUID();
+		slices = sliced.map((entry) => ({
+			byteSize: entry.file.size,
+			file: entry.file,
+			fileName: entry.file.name,
+			height: entry.height,
+			mimeType: entry.file.type,
+			sliceIndex: entry.sliceIndex,
+			width: entry.width,
+		}));
+	}
+
+	const groupId = sliceGroupId ?? globalThis.crypto.randomUUID();
+	const altText = trim(item.altText);
+	const resolvedSlices: JobFormMediaSlice[] = [];
+	const apiInputs: JobPostMediaApiInput[] = [];
+
+	for (const slice of slices) {
+		const resolved = await resolveSliceForSubmit({
+			altText,
+			createUploadIntent,
+			organizationId,
+			sliceGroupId: groupId,
+			slice,
+			teamId,
+		});
+
+		resolvedSlices.push(resolved.slice);
+		apiInputs.push(resolved.apiInput);
+	}
+
+	const first = resolvedSlices[0];
+
+	return {
+		apiInputs,
+		item: {
+			...item,
+			byteSize: first?.byteSize ?? item.byteSize,
+			height: first?.height ?? item.height,
+			mimeType: first?.mimeType ?? item.mimeType,
+			sliceGroupId: groupId,
+			slices: resolvedSlices,
+			storageKey: first?.storageKey,
+			width: first?.width ?? item.width,
+		},
+	};
+};
 
 const resolveMediaItemForSubmit = async ({
 	createUploadIntent,
@@ -427,25 +663,40 @@ const resolveMediaItemForSubmit = async ({
 	teamId,
 	usage,
 }: {
-	createUploadIntent: (
-		input: JobPostMediaUploadRequest
-	) => Promise<JobPostMediaUploadIntent>;
+	createUploadIntent: CreateUploadIntent;
 	item: JobFormMediaItem;
 	organizationId: string;
 	teamId?: string;
 	usage: JobPostMediaUsage;
 }): Promise<ResolvedJobPostMediaItem> => {
+	// 상세는 세로로 길면 조각 그룹으로 저장한다. 짧은 이미지·이미 업로드된 단일 이미지는
+	// null을 돌려받아 아래 단일 경로로 떨어진다.
+	if (usage === "detail" && !item.storageKey) {
+		const sliced = await resolveDetailItemForSubmit({
+			createUploadIntent,
+			item,
+			organizationId,
+			teamId,
+		});
+
+		if (sliced) {
+			return sliced;
+		}
+	}
+
 	if (item.storageKey) {
 		return {
-			apiInput: {
-				altText: trim(item.altText),
-				byteSize: item.byteSize,
-				fileName: trim(item.fileName),
-				height: item.height,
-				mimeType: item.mimeType,
-				storageKey: item.storageKey,
-				width: item.width,
-			},
+			apiInputs: [
+				{
+					altText: trim(item.altText),
+					byteSize: item.byteSize,
+					fileName: trim(item.fileName),
+					height: item.height,
+					mimeType: item.mimeType,
+					storageKey: item.storageKey,
+					width: item.width,
+				},
+			],
 			item,
 		};
 	}
@@ -476,7 +727,7 @@ const resolveMediaItemForSubmit = async ({
 	};
 
 	return {
-		apiInput,
+		apiInputs: [apiInput],
 		item: {
 			...item,
 			byteSize: apiInput.byteSize,
@@ -586,9 +837,10 @@ export const resolveJobPostMediaForSubmit = async ({
 		}
 
 		if (kind === "detail") {
-			apiSet.detail.push(result.value.apiInput);
+			// 조각 그룹은 여러 행으로 펼쳐져 온다(짧은 이미지는 한 개).
+			apiSet.detail.push(...result.value.apiInputs);
 		} else {
-			apiSet[kind] = result.value.apiInput;
+			apiSet[kind] = result.value.apiInputs[0];
 		}
 	}
 
