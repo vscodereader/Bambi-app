@@ -78,31 +78,17 @@ function SearchRowBody({ job }: { job: NativeSeekerJob }) {
 }
 
 function SearchRow({ job }: { job: NativeSeekerJob }) {
-	// 수집 공고는 jobs.getById가 job_post만 조회해 상세가 확정 NOT_FOUND다 — 링크를 걸지 않는다.
-	if (job.source === "crawled") {
-		return (
-			<View
-				accessibilityLabel={`${describeJobForScreenReader(job)} 수집 공고, 상세 보기 준비 중`}
-				accessible
-				className="px-4 py-3"
-			>
-				<View importantForAccessibility="no-hide-descendants">
-					<SearchRowBody job={job} />
-				</View>
-			</View>
-		);
-	}
+	// 수집 공고는 job_post에 없어 jobs.getById가 NOT_FOUND다 — 웹처럼 crawledJobs.getById를
+	// 쓰는 수집 전용 상세(jobs/crawled/[id])로 보낸다. 순수 공고는 jobs/[id] 그대로.
+	const href = (job.source === "crawled"
+		? { pathname: "/(seeker)/jobs/crawled/[id]", params: { id: job.id } }
+		: {
+				pathname: "/(seeker)/jobs/[id]",
+				params: { id: job.id },
+			}) as unknown as Href;
 
 	return (
-		<Link
-			asChild
-			href={
-				{
-					pathname: "/(seeker)/jobs/[id]",
-					params: { id: job.id },
-				} as unknown as Href
-			}
-		>
+		<Link asChild href={href}>
 			<Pressable
 				accessibilityLabel={describeJobForScreenReader(job)}
 				accessibilityRole="button"
