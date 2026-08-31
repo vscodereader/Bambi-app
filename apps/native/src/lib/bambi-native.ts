@@ -277,6 +277,10 @@ export const validateNativeLoginInput = (
 // 객체를 주지만 구조적 타이핑으로 그대로 들어온다. 연락처 계열 필드는 서버 selection에
 // 애초에 없으므로 여기에도 추가하지 않는다.
 export interface NativeSeekerJob {
+	// 유료 카드(스페셜·급구·추천)에만 부착되는 조직 단위 누적 광고 집계. 서버 jobs.list가
+	// inPaidSection일 때만 채우고 그 외(전체 공고·수집)엔 null이다 — 카드는 값이 있을 때만
+	// 등급 배지를 그린다.
+	adPeriod?: { count: number; totalDays: number } | null;
 	// 순수 공고(job_post)의 커버 미디어. 서버는 storageKey 등 여러 필드를 주지만 카드는
 	// storageKey만 써서 공개 버킷 URL을 조립한다. 수집 공고·커버 없는 공고는 null이다.
 	coverImage?: { storageKey: string } | null;
@@ -443,3 +447,52 @@ export const describeJobForScreenReader = (
 		formatJobPay(job.payAmount, job.payUnit),
 		...badges.map((badge) => badge.label),
 	].join(", ");
+
+// 누적 광고일수 등급 — 웹 apps/web/src/lib/bambi/ad-period.ts의 순수 로직만 이식한다.
+// native는 웹의 colorClass(amber/slate 등 Tailwind 팔레트)를 쓰지 않는다 — heroui 토큰만
+// 허용되고 그 팔레트가 native 테마에 없으므로, 렌더 레이어(index.tsx)가 icon 판별자로
+// 색을 정한다. 여기서는 icon 종류·누적일수 경계·운영자 업로드 아이콘 URL만 옮긴다.
+export interface NativeAdPeriodTier {
+	// 카드가 이 값으로 아이콘을 고른다(웹 lucide crown/medal → native Ionicons trophy/medal).
+	icon: "crown" | "medal";
+	// 운영자가 올린 아이콘 이미지(GIF 등) URL. 있으면 icon 프리셋 대신 이걸 그린다.
+	iconImageUrl?: null | string;
+	label: string;
+	// 티어 최대 누적 일수. 최상위는 상한 없음(null).
+	maxDays: null | number;
+	minDays: number;
+}
+
+// 웹 AD_PERIOD_TIERS와 같은 5구간(≤90 / 91–180 / 181–360 / 361–720 / ≥721). 운영자가
+// 등급을 설정하지 않았을 때의 폴백이다.
+export const NATIVE_AD_PERIOD_TIERS: readonly NativeAdPeriodTier[] = [
+	{ icon: "medal", label: "브론즈", maxDays: 90, minDays: 0 },
+	{ icon: "medal", label: "실버", maxDays: 180, minDays: 91 },
+	{ icon: "medal", label: "골드", maxDays: 360, minDays: 181 },
+	{ icon: "crown", label: "플래티넘", maxDays: 720, minDays: 361 },
+	{ icon: "crown", label: "다이아", maxDays: null, minDays: 721 },
+];
+
+// 누적 일수 → 티어. tiers를 주입할 수 있고(운영자 설정값), 비었으면 상수로 폴백한다.
+// 웹과 동일하게, 모든 구간을 넘긴 일수는 최하위가 아니라 최상위로 떨어뜨린다(오름차순 전제).
+export const adPeriodTier = (
+	totalDays: number,
+	tiers: readonly NativeAdPeriodTier[] = NATIVE_AD_PERIOD_TIERS
+): NativeAdPeriodTier => {
+	const list = tiers.length > 0 ? tiers : NATIVE_AD_PERIOD_TIERS;
+	return (
+		list.find((tier) => tier.maxDays === null || totalDays <= tier.maxDays) ??
+		list.at(-1) ??
+		list[0]
+	);
+};
+
+// "22회 900일". totalDays가 0이어도(백필 기간 null 행) 정직하게 그대로 노출한다.
+export const formatAdPeriod = ({
+	count,
+	totalDays,
+}: {
+	count: number;
+	totalDays: number;
+}): string =>
+	`${count.toLocaleString("ko-KR")}회 ${totalDays.toLocaleString("ko-KR")}일`;

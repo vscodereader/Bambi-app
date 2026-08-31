@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	adPeriodTier,
 	buildJobCardBadges,
 	buildSeekerJobSections,
 	describeJobForScreenReader,
 	emptyNativeJobForm,
+	formatAdPeriod,
 	getConfirmedScheduleId,
 	getNativeHomeRoute,
 	isEmailLoginId,
+	NATIVE_AD_PERIOD_TIERS,
+	type NativeAdPeriodTier,
 	type NativeSeekerJob,
 	type NativeSeekerJobPage,
 	resolveJobCoverUri,
@@ -258,6 +262,40 @@ describe("bambi native helpers", () => {
 				"https://cdn.example.com"
 			)
 		).toBeNull();
+	});
+
+	it("maps cumulative ad days to the matching tier", () => {
+		// 상수 폴백의 경계값 — ≤90 브론즈, 91 실버, 다이아는 상한 없음.
+		expect(adPeriodTier(0).label).toBe("브론즈");
+		expect(adPeriodTier(90).label).toBe("브론즈");
+		expect(adPeriodTier(91).label).toBe("실버");
+		expect(adPeriodTier(360).label).toBe("골드");
+		expect(adPeriodTier(721).label).toBe("다이아");
+		expect(adPeriodTier(9999).icon).toBe("crown");
+	});
+
+	it("falls back to the top tier when no range has an open ceiling", () => {
+		// 운영자가 상한 없는 최상위 없이 구성하면, 모두 넘긴 일수는 최하위가 아니라 최상위로.
+		const capped: NativeAdPeriodTier[] = [
+			{ icon: "medal", label: "하", maxDays: 100, minDays: 0 },
+			{ icon: "crown", label: "상", maxDays: 200, minDays: 101 },
+		];
+		expect(adPeriodTier(500, capped).label).toBe("상");
+		// 빈 목록은 상수로 폴백한다.
+		expect(adPeriodTier(50, []).label).toBe("브론즈");
+	});
+
+	it("formats the ad period as 'N회 N일'", () => {
+		expect(formatAdPeriod({ count: 22, totalDays: 900 })).toBe("22회 900일");
+		expect(formatAdPeriod({ count: 1, totalDays: 0 })).toBe("1회 0일");
+		expect(formatAdPeriod({ count: 1000, totalDays: 12_345 })).toBe(
+			"1,000회 12,345일"
+		);
+	});
+
+	it("keeps the constant tiers ordered by ascending days", () => {
+		const days = NATIVE_AD_PERIOD_TIERS.map((tier) => tier.minDays);
+		expect(days).toEqual([...days].sort((a, b) => a - b));
 	});
 
 	it("reads a job row as one screen reader sentence", () => {

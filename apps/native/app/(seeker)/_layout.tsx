@@ -6,12 +6,12 @@ export default function SeekerLayout() {
 	return (
 		<Stack>
 			<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-			{/* 검색은 자체 상단(뒤로가기+검색창)을 그리므로 기본 헤더를 끈다. 모달 프레젠테이션이
-			    웹 검색 다이얼로그(아래에서 떠오르는 오버레이) 느낌과 가장 가깝다. */}
-			<Stack.Screen
-				name="search"
-				options={{ headerShown: false, presentation: "modal" }}
-			/>
+			{/* 검색은 자체 상단(뒤로가기+검색창)을 그리므로 기본 헤더를 끈다. 모달이 아닌 카드로
+			    띄운다 — 모달 위에서 같은 Stack의 jobs/[id]를 push하면 상세가 모달 뒤에 깔려
+			    이동이 보이지 않는다(웹 다이얼로그와 달리 native 모달은 push를 가리지 않는다).
+			    카드면 결과 탭 시 상세가 정상적으로 위로 push되고, 상세에서 뒤로 가면 검색어가
+			    남은 결과 화면으로 돌아온다. */}
+			<Stack.Screen name="search" options={{ headerShown: false }} />
 			<Stack.Screen name="point-shop" options={{ title: "포인트몰" }} />
 			<Stack.Screen name="notifications" options={{ title: "알림" }} />
 			<Stack.Screen name="jobs/[id]" options={{ title: "공고 상세" }} />
