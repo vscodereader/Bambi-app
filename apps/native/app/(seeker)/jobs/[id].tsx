@@ -1,3 +1,4 @@
+import { env } from "@bambi-app/env/native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type Href, router, useLocalSearchParams } from "expo-router";
 import { Button, Surface } from "heroui-native";
@@ -13,7 +14,11 @@ import {
 	LoadingState,
 	Pill,
 } from "@/src/components/bambi-screen";
+import { JobDescriptionSection } from "@/src/components/job-description-section";
 import { orpc } from "@/src/lib/orpc";
+
+// 상세 이미지는 storageKey만 내려오므로 공개 버킷 base와 합쳐 URL을 만든다(목록 커버와 동일).
+const GCS_PUBLIC_BASE_URL = env.EXPO_PUBLIC_GCS_PUBLIC_BASE_URL;
 
 export default function SeekerJobDetailScreen() {
 	const insets = useSafeAreaInsets();
@@ -88,15 +93,19 @@ export default function SeekerJobDetailScreen() {
 						label="근무시간"
 						value={job.workSchedule}
 					/>
-					<Text className="text-foreground leading-6" selectable>
-						{job.description}
-					</Text>
 					{job.interviewNotes ? (
 						<Text className="text-muted text-sm leading-5" selectable>
 							면접 안내: {job.interviewNotes}
 						</Text>
 					) : null}
 				</Surface>
+				<JobDescriptionSection
+					description={job.description}
+					descriptionBlocks={job.descriptionBlocks}
+					detail={job.media.detail}
+					gcsPublicBaseUrl={GCS_PUBLIC_BASE_URL}
+					title={job.title}
+				/>
 			</BambiScreen>
 			<View
 				className="gap-2 border-border border-t bg-background px-4 pt-3"
