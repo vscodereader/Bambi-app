@@ -10,6 +10,7 @@ import {
 	isEmailLoginId,
 	type NativeSeekerJob,
 	type NativeSeekerJobPage,
+	resolveJobCoverUri,
 	validateNativeJobForm,
 	validateNativeLoginInput,
 } from "./bambi-native";
@@ -226,6 +227,37 @@ describe("bambi native helpers", () => {
 			{ label: "당일면접", tone: "warning" },
 			{ label: "인증 완료", tone: "success" },
 		]);
+	});
+
+	it("resolves cover URIs from the right source per job kind", () => {
+		// 순수 공고: 공개 버킷 base + storageKey 조립(끝 슬래시는 중복되지 않게 정리).
+		expect(
+			resolveJobCoverUri(
+				{ coverImage: { storageKey: "org/1/cover.jpg" }, coverImageUrl: null },
+				"https://cdn.example.com/"
+			)
+		).toBe("https://cdn.example.com/org/1/cover.jpg");
+		// 수집 공고: base64 data URI를 그대로 쓴다(base와 무관).
+		expect(
+			resolveJobCoverUri(
+				{ coverImage: null, coverImageUrl: "data:image/gif;base64,AAAA" },
+				undefined
+			)
+		).toBe("data:image/gif;base64,AAAA");
+		// base가 없으면 순수 공고 커버는 만들 수 없다 → 폴백(null).
+		expect(
+			resolveJobCoverUri(
+				{ coverImage: { storageKey: "org/1/cover.jpg" }, coverImageUrl: null },
+				undefined
+			)
+		).toBeNull();
+		// 커버가 아예 없는 공고 → 폴백(null).
+		expect(
+			resolveJobCoverUri(
+				{ coverImage: null, coverImageUrl: null },
+				"https://cdn.example.com"
+			)
+		).toBeNull();
 	});
 
 	it("reads a job row as one screen reader sentence", () => {
