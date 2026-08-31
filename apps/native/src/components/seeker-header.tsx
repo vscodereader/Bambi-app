@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BambiLogo } from "@/src/components/bambi-logo";
 
 // 아직 연결된 화면이 없는 자리 표시 버튼 — 비활성으로 렌더한다.
+// 룩은 웹 헤더의 outline 아이콘 버튼(border+card 표면, 반경 16px=rounded-2xl)을 따른다.
 // ponytail: 검색·포인트몰·알림 화면이 생기면 onPress 라우팅을 연결하고 disabled를 푼다.
 function HeaderIconButton({
 	label,
@@ -22,7 +23,7 @@ function HeaderIconButton({
 			accessibilityLabel={label}
 			accessibilityRole="button"
 			accessibilityState={{ disabled: true }}
-			className="h-11 w-11 items-center justify-center rounded-full"
+			className="h-11 w-11 items-center justify-center rounded-2xl border border-border bg-surface"
 			disabled
 		>
 			<Ionicons color={foreground} name={name} size={22} />
@@ -47,8 +48,8 @@ export function SeekerHomeHeader() {
 						밤비알바
 					</Text>
 				</View>
-				{/* 아이콘 버튼이 각자 44dp(h-11) 터치 영역을 가지므로 사이 gap은 두지 않는다. */}
-				<View className="flex-row items-center">
+				{/* 테두리 박스끼리 맞닿지 않게 gap을 둔다 — 터치 영역은 각자 44dp(h-11)로 충분. */}
+				<View className="flex-row items-center gap-2">
 					<HeaderIconButton label="공고 검색" name="search-outline" />
 					<HeaderIconButton label="포인트몰" name="storefront-outline" />
 					<HeaderIconButton label="알림" name="notifications-outline" />
