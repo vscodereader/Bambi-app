@@ -5,10 +5,16 @@ import {
 	formatTestAccountPhoneInput,
 	normalizeTestAccountPhone,
 	TEST_ACCOUNT_BIRTH_PLACEHOLDER,
+	TEST_ACCOUNT_GENDERS,
 	TEST_ACCOUNT_PHONE_ERROR,
 	TEST_ACCOUNT_PHONE_PLACEHOLDER,
+	TEST_ACCOUNT_ROLES,
 } from "@bambi-app/api/services/bambi-test-account-policy";
 import { ADULT_MIN_AGE } from "@bambi-app/api/services/portone-identity";
+import {
+	DISPLAY_NAME_MIN_LENGTH,
+	displayNameMinimumMessage,
+} from "@bambi-app/auth/display-name-policy";
 import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
 import {
 	PASSWORD_MIN_LENGTH,
@@ -40,19 +46,18 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon, CircleCheckIcon, InfoIcon } from "lucide-react";
 import { useRef, useState } from "react";
+import { userGenderLabel, userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { orpc } from "@/utils/orpc";
 
-const ROLE_ITEMS = {
-	job_seeker: "구직자",
-	employer: "구인자",
-} as const;
-const GENDER_ITEMS = {
-	female: "여성",
-	male: "남성",
-} as const;
+type Role = (typeof TEST_ACCOUNT_ROLES)[number];
+type Gender = (typeof TEST_ACCOUNT_GENDERS)[number];
 
-type Role = keyof typeof ROLE_ITEMS;
-type Gender = keyof typeof GENDER_ITEMS;
+const ROLE_ITEMS = Object.fromEntries(
+	TEST_ACCOUNT_ROLES.map((role) => [role, userRoleLabel(role)])
+) as Record<Role, string>;
+const GENDER_ITEMS = Object.fromEntries(
+	TEST_ACCOUNT_GENDERS.map((gender) => [gender, userGenderLabel(gender)])
+) as Record<Gender, string>;
 
 interface FormState {
 	birthDate: string;
@@ -88,8 +93,8 @@ const validationMessage = (form: FormState): string | null => {
 	if (!form.name.trim()) {
 		return "이름을 입력해 주세요.";
 	}
-	if (form.nickname.trim().length < 2) {
-		return "닉네임을 2자 이상 입력해 주세요.";
+	if (form.nickname.trim().length < DISPLAY_NAME_MIN_LENGTH) {
+		return displayNameMinimumMessage();
 	}
 	const loginIdError = getLoginIdErrorMessage(form.loginId.trim());
 	if (loginIdError) {

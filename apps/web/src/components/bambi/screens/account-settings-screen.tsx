@@ -1,5 +1,10 @@
 "use client";
 
+import {
+	DISPLAY_NAME_MIN_LENGTH,
+	displayNameMinimumMessage,
+} from "@bambi-app/auth/display-name-policy";
+
 // 계정 설정 — 표시 이름(프로필) 수정, 기본 정보(성별·생년월일) 표시, 휴대폰 본인인증,
 // 로그아웃. 본인인증은 포트원 인증창(PhoneVerifyDialog)으로 진행하고, 성공 시
 // verifyMyPhone이 포트원 조회 결과(번호·성별·생년월일·CI 해시)를 프로필에 저장한다.
@@ -138,7 +143,7 @@ export function AccountSettingsScreen() {
 
 	const trimmedName = displayName.trim();
 	const canSave =
-		trimmedName.length >= 2 &&
+		trimmedName.length >= DISPLAY_NAME_MIN_LENGTH &&
 		trimmedName !== currentName &&
 		!updateMutation.isPending;
 
@@ -229,7 +234,7 @@ export function AccountSettingsScreen() {
 								value={displayName}
 							/>
 							<p className="m-0 text-muted-foreground text-xs">
-								2자 이상 입력해 주세요.
+								{displayNameMinimumMessage()}
 							</p>
 						</div>
 						<Button

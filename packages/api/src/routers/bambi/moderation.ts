@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { DISPLAY_NAME_MIN_LENGTH } from "@bambi-app/auth/display-name-policy";
 import { PASSWORD_MIN_LENGTH } from "@bambi-app/auth/password-policy";
 import { db } from "@bambi-app/db";
 import {
@@ -207,7 +208,7 @@ const createTestAccountInput = z.object({
 	birthDate: z.string().min(1),
 	gender: z.enum(TEST_ACCOUNT_GENDERS),
 	loginId: z.string().min(1),
-	nickname: z.string().min(1),
+	nickname: z.string().min(DISPLAY_NAME_MIN_LENGTH),
 	password: z.string().min(PASSWORD_MIN_LENGTH),
 	phoneNumber: z.string().min(1),
 	role: z.enum(TEST_ACCOUNT_ROLES),

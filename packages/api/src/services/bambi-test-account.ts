@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 
 import { auth } from "@bambi-app/auth";
 import {
+	DISPLAY_NAME_MIN_LENGTH,
+	displayNameMinimumMessage,
+} from "@bambi-app/auth/display-name-policy";
+import {
 	getLoginIdErrorMessage,
 	LOGIN_ID_TAKEN_MESSAGE,
 	normalizeLoginId,
@@ -11,7 +15,11 @@ import {
 	passwordMinimumMessage,
 } from "@bambi-app/auth/password-policy";
 import { db } from "@bambi-app/db";
-import { account, user } from "@bambi-app/db/schema/auth";
+import {
+	account,
+	USER_LOGIN_ID_UNIQUE_CONSTRAINT,
+	user,
+} from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
 	bambiProfile,
@@ -39,7 +47,6 @@ const TEST_CI_NAMESPACE = "admin-test-ci";
 const TEST_DI_NAMESPACE = "admin-test-di";
 const CREDENTIAL_PROVIDER_ID = "credential";
 const CREATE_TEST_ACCOUNT_REASON = "운영자 가계정 생성";
-const LOGIN_ID_UNIQUE_CONSTRAINT = "user_login_id_unique";
 
 export type TestAccountRole = (typeof TEST_ACCOUNT_ROLES)[number];
 export type TestAccountGender = (typeof TEST_ACCOUNT_GENDERS)[number];
@@ -128,7 +135,7 @@ const isLoginIdUniqueViolation = (error: unknown): boolean => {
 	const details = postgresDetails(error);
 	return (
 		details?.code === "23505" &&
-		details.constraint === LOGIN_ID_UNIQUE_CONSTRAINT
+		details.constraint === USER_LOGIN_ID_UNIQUE_CONSTRAINT
 	);
 };
 
@@ -187,8 +194,8 @@ export const createTestAccount = async (
 	input: CreateTestAccountInput
 ): Promise<CreateTestAccountResult> => {
 	const nickname = input.nickname.trim();
-	if (nickname.length < 2) {
-		return badRequest("닉네임을 2자 이상 입력해 주세요.");
+	if (nickname.length < DISPLAY_NAME_MIN_LENGTH) {
+		return badRequest(displayNameMinimumMessage());
 	}
 	await assertDisplayNameAllowed(nickname, { isAdmin: false });
 

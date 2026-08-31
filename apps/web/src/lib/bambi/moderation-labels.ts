@@ -77,6 +77,15 @@ export function userRoleLabel(role: string): string {
 	return USER_ROLE_LABELS[role] ?? "사용자";
 }
 
+const USER_GENDER_LABELS: Record<string, string> = {
+	female: "여성",
+	male: "남성",
+};
+
+export function userGenderLabel(gender: string): string {
+	return USER_GENDER_LABELS[gender] ?? "성별 확인 필요";
+}
+
 // 공고 위험 신호 코드(job_post.risk_flags 항목). 자동 필터가 붙이는 내부 코드라 원값 노출을
 // 막고 운영자용 한글 설명으로 치환한다. 알 수 없는 코드는 중립 폴백으로 표시한다.
 const RISK_FLAG_LABELS: Record<string, string> = {
