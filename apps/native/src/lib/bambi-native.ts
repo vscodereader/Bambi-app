@@ -277,6 +277,12 @@ export const validateNativeLoginInput = (
 // 객체를 주지만 구조적 타이핑으로 그대로 들어온다. 연락처 계열 필드는 서버 selection에
 // 애초에 없으므로 여기에도 추가하지 않는다.
 export interface NativeSeekerJob {
+	// 순수 공고(job_post)의 커버 미디어. 서버는 storageKey 등 여러 필드를 주지만 카드는
+	// storageKey만 써서 공개 버킷 URL을 조립한다. 수집 공고·커버 없는 공고는 null이다.
+	coverImage?: { storageKey: string } | null;
+	// 수집 공고(crawled)의 대표 이미지. job_post_media 행이 아니라 미러링된 한 줄(현재
+	// base64 data URI)이라 storageKey 조립을 거치지 않고 그대로 <Image>에 넣는다.
+	coverImageUrl?: null | string;
 	employerDisplayName: null | string;
 	employerVerificationStatus: null | string;
 	id: string;
@@ -393,6 +399,22 @@ export const buildJobCardBadges = (job: NativeSeekerJob): NativeJobBadge[] => {
 	}
 
 	return badges;
+};
+
+const TRAILING_SLASH_RE = /\/$/;
+
+// 목록 카드 커버 이미지의 소스 URI를 고른다(web api-job-mapper의 커버 우선순위 이식).
+// 순수 공고는 공개 버킷 base + storageKey로 URL을 조립하고, 수집 공고는 base64 data URI를
+// 그대로 쓴다. base가 없거나(개발) 이미지가 아예 없으면 null → 카드가 업소명 타일로 폴백한다.
+export const resolveJobCoverUri = (
+	job: Pick<NativeSeekerJob, "coverImage" | "coverImageUrl">,
+	gcsPublicBaseUrl: string | undefined
+): null | string => {
+	if (job.coverImage?.storageKey && gcsPublicBaseUrl) {
+		return `${gcsPublicBaseUrl.replace(TRAILING_SLASH_RE, "")}/${job.coverImage.storageKey}`;
+	}
+
+	return job.coverImageUrl ?? null;
 };
 
 // bambi-screen.tsx의 formatPay와 같은 규칙. 이 파일은 react-native를 import 하지 않는

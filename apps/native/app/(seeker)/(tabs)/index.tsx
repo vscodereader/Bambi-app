@@ -1,3 +1,4 @@
+import { env } from "@bambi-app/env/native";
 import { Ionicons } from "@expo/vector-icons";
 import {
 	keepPreviousData,
@@ -24,6 +25,7 @@ import {
 } from "react";
 import {
 	AccessibilityInfo,
+	Image,
 	Pressable,
 	RefreshControl,
 	ScrollView,
@@ -42,6 +44,7 @@ import {
 	type NativeJobBadge,
 	type NativeJobSectionKey,
 	type NativeSeekerJob,
+	resolveJobCoverUri,
 } from "@/src/lib/bambi-native";
 import { orpc } from "@/src/lib/orpc";
 
@@ -237,14 +240,31 @@ const jobPayUnitTones = {
 	urgent: "danger",
 } as const;
 
-// 목록엔 커버 이미지가 안 내려오므로 웹 카드의 폴백(업소명 앞 두 글자 타일)을 시각 앵커로 쓴다.
+// 공개 버킷 base URL. 순수 공고 커버는 storageKey만 내려오므로 이 값과 합쳐 URL을 만든다.
+// 미설정(개발)이면 커버를 못 만들어 카드가 업소명 타일로 폴백한다.
+const GCS_PUBLIC_BASE_URL = env.EXPO_PUBLIC_GCS_PUBLIC_BASE_URL;
+
+// 커버 이미지가 없는 공고는 웹 카드와 동일하게 업소명 앞 두 글자 타일(size-14)로 폴백한다.
 function JobCompanyTile({ name }: { name: string }) {
 	return (
-		<View className="size-12 items-center justify-center rounded-xl bg-accent/10">
+		<View className="size-14 shrink-0 items-center justify-center rounded-md bg-accent/10">
 			<Text className="font-bold text-accent-soft-foreground text-sm dark:text-accent">
 				{Array.from(name).slice(0, 2).join("")}
 			</Text>
 		</View>
+	);
+}
+
+// 웹 VisualJobCard와 같은 커버 규격(h-14 w-30, object-fill). 수집 공고는 base64 data URI,
+// 순수 공고는 공개 버킷 URL이다(resolveJobCoverUri가 출처를 가른다). 업소명이 옆에 텍스트로
+// 있어 커버는 장식 이미지다 — 부모 카드가 접근성 트리에서 이미 가린다.
+function JobCoverThumb({ uri }: { uri: string }) {
+	return (
+		<Image
+			className="h-14 w-30 shrink-0 rounded-md border border-border"
+			resizeMode="stretch"
+			source={{ uri }}
+		/>
 	);
 }
 
@@ -259,11 +279,16 @@ function JobCardBody({
 }) {
 	const mutedColor = useThemeColor("muted");
 	const employerName = job.employerDisplayName ?? "밤비알바 구인자";
+	const coverUri = resolveJobCoverUri(job, GCS_PUBLIC_BASE_URL);
 
 	return (
 		<View className="gap-3">
 			<View className="flex-row items-center gap-3">
-				<JobCompanyTile name={employerName} />
+				{coverUri ? (
+					<JobCoverThumb uri={coverUri} />
+				) : (
+					<JobCompanyTile name={employerName} />
+				)}
 				<View className="flex-1 gap-1">
 					<Text
 						className="font-bold text-base text-foreground leading-snug"
@@ -333,15 +358,8 @@ function JobRow({
 					accessible
 					className={cardClassName}
 				>
-					<View
-						className="gap-2"
-						importantForAccessibility="no-hide-descendants"
-					>
+					<View importantForAccessibility="no-hide-descendants">
 						<JobCardBody badges={badges} job={job} sectionKey={sectionKey} />
-						<Text className="text-muted text-xs leading-4">
-							밤비알바 밖에서 수집한 공고예요. 앱에서는 아직 상세를 열 수
-							없어요.
-						</Text>
 					</View>
 				</Surface>
 			</View>
