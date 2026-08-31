@@ -1,8 +1,9 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import { DEFAULT_MINIMUM_WAGE } from "@bambi-app/api/services/bambi-policy";
 import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import { Surface } from "heroui-native";
-import { Image, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import {
 	BambiHeader,
@@ -12,6 +13,8 @@ import {
 	LoadingState,
 	Pill,
 } from "@/src/components/bambi-screen";
+import { CrawledJobDetailImages } from "@/src/components/crawled-job-detail-images";
+import { CrawledJobReviews } from "@/src/components/crawled-job-reviews";
 import { orpc } from "@/src/lib/orpc";
 
 // native는 @orpc/server(InferRouterOutputs)를 의존하지 않으므로 클라이언트 호출 반환형에서
@@ -19,6 +22,20 @@ import { orpc } from "@/src/lib/orpc";
 type CrawledJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["crawledJobs"]["getById"]>
 >;
+
+interface MinimumWageSettings {
+	minimumWageHourly?: null | number;
+	minimumWageYear?: null | number;
+}
+
+// 급여 옆 보조 표기("2026년 최저시급 10,320원") — 웹 lib/bambi/minimum-wage의
+// formatMinimumWageLabel과 같은 규칙. 미설정(null)·조회 실패·로딩 중(undefined)에는 코드
+// 기본값으로 떨어져 표기가 깜빡이며 사라지지 않게 한다. 연도는 저장값을 그대로 쓴다.
+function formatMinimumWageLabel(settings?: MinimumWageSettings | null): string {
+	const year = settings?.minimumWageYear ?? DEFAULT_MINIMUM_WAGE.year;
+	const hourly = settings?.minimumWageHourly ?? DEFAULT_MINIMUM_WAGE.hourly;
+	return `${year}년 최저시급 ${hourly.toLocaleString("ko-KR")}원`;
+}
 
 // 급여는 금액이 파싱된 경우에만 단위와 조립하고, 아니면 원문("일 15만원"·"면접 후 협의")을
 // 그대로 보여준다 — 웹 seeker-crawled-job-detail의 formatCrawledPay와 같은 규칙.
@@ -39,6 +56,10 @@ export default function SeekerCrawledJobDetailScreen() {
 	const jobQuery = useQuery(
 		orpc.bambi.crawledJobs.getById.queryOptions({ input: { id } })
 	);
+	// 최저시급 부기는 우리 공고 상세와 같은 공개 설정 조회에서 가져온다(웹과 동일 프로시저).
+	const siteSettings = useQuery(
+		orpc.bambi.siteSettings.getFooter.queryOptions()
+	);
 
 	if (jobQuery.isLoading) {
 		return <LoadingState label="공고 상세를 불러오고 있습니다." />;
@@ -49,28 +70,36 @@ export default function SeekerCrawledJobDetailScreen() {
 	}
 
 	const job = jobQuery.data;
+	const minimumWageLabel = formatMinimumWageLabel(siteSettings.data);
 	// 고용형태 자리에는 원문(industryRaw)이 우선이고, 없으면 우리 업종 라벨로 떨어진다(웹과 동일).
 	const employmentType = job.industryRaw ?? job.industryCategory;
-	const meta = [job.region, job.district, employmentType]
-		.filter(Boolean)
-		.join(" · ");
-	const assetsById = new Map(
-		job.detailImageDocument.assets.map((asset) => [asset.id, asset])
-	);
 
 	return (
 		<BambiScreen>
 			<BambiHeader
-				description={meta || undefined}
 				title={job.shopName ? `${job.shopName} ${job.title}` : job.title}
 			/>
 			<Surface className="gap-4 rounded-lg p-4" variant="secondary">
+				{/* 지역 · 세부지역 · 고용형태 배지(값이 있을 때만) — 웹의 region/district/고용형태 축. */}
 				<View className="flex-row flex-wrap gap-2">
 					{job.region ? <Pill>{job.region}</Pill> : null}
+					{job.district ? <Pill>{job.district}</Pill> : null}
 					{employmentType ? <Pill tone="accent">{employmentType}</Pill> : null}
 				</View>
-				<Text className="font-bold text-foreground text-xl" selectable>
-					{formatCrawledPay(job)}
+				{/* 급여 오른쪽에 비교 기준(최저시급)을 약한 위계로 붙인다 — 웹과 동일. */}
+				<View className="flex-row flex-wrap items-baseline gap-x-2 gap-y-1">
+					<Text className="font-bold text-foreground text-xl" selectable>
+						{formatCrawledPay(job)}
+					</Text>
+					<Text className="text-muted text-sm" selectable>
+						{minimumWageLabel}
+					</Text>
+				</View>
+				{/* 후기 축은 웹 요약 타일과 같은 형식으로 표기한다. 수집 공고는 job_post 행이 없어
+				    후기 값이 언제나 0개다(웹도 하드코딩 "0개 · 신규").
+				    ponytail: 실제 집계가 필요해지면 그때 후기 개수 프로시저를 붙인다. */}
+				<Text className="text-muted text-sm" selectable>
+					후기 0개 · 신규
 				</Text>
 				{job.workSchedule ? (
 					<Text className="text-muted text-sm leading-5" selectable>
@@ -90,27 +119,11 @@ export default function SeekerCrawledJobDetailScreen() {
 					</Text>
 				) : null}
 			</Surface>
-			{/* 유흥 공고는 조건 대부분을 이미지로만 적어두는 경우가 많다(본문이 거의 비어 있고
-			    이미지 한 장이 공고 전부인 경우도 있다). 본문 폭에 맞춰 원본 비율로 세로로 잇는다.
-			    ponytail: 웹 에디터의 offset·개별 크기 미세조정은 옮기지 않고 asset 원본 비율만
-			    쓴다 — native에서 그 정밀 배치가 필요해지면 그때 item.widthPx/offset을 반영한다. */}
-			{job.detailImageDocument.items.map((item, index) => {
-				const asset = assetsById.get(item.assetId);
-				if (!asset) {
-					return null;
-				}
-
-				return (
-					<Image
-						accessibilityLabel={`${job.title} 상세 이미지 ${index + 1}`}
-						className="w-full rounded-lg border border-border"
-						key={item.id}
-						resizeMode="contain"
-						source={{ uri: asset.src }}
-						style={{ aspectRatio: asset.width / asset.height }}
-					/>
-				);
-			})}
+			<CrawledJobDetailImages
+				document={job.detailImageDocument}
+				title={job.title}
+			/>
+			<CrawledJobReviews crawledJobPostId={job.id} />
 			<Surface className="gap-2 rounded-lg p-4" variant="tertiary">
 				<Text className="font-semibold text-foreground text-sm" selectable>
 					안전 확인
