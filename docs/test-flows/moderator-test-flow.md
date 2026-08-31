@@ -458,7 +458,7 @@
 - **관련 API**: `bambi.moderation.purgeWithdrawnAccounts`(`adminProcedure`) — 자동 실행과 동일한
   서비스 `purgeWithdrawnAccountsBatch`(`packages/api/src/services/bambi-withdrawal-purge.ts`)를 호출한다.
 
-### 4.8 출석 관리 · 포인트 지급·차감
+### 4.8 출석 관리 · 포인트 지급·차감 · 등급 기준 변경
 
 - **경로**: `/moderator/attendance` (파일: `apps/web/src/app/moderator/attendance/page.tsx`)
 - **목록**: `bambi.attendance.adminList`(`adminProcedure`) — `useInfiniteQuery`, `limit=20`, offset 커서(`nextCursor = cursor + limit`).
@@ -495,7 +495,8 @@
   - 확인 모달이 **없다** — [적용]이 곧 실행이고 되돌리기 버튼도 없다. 되돌리려면 반대 방향으로 재조정해야 하며 그 행도 원장에 남는다.
   - 잔액 집계 select에 `FOR UPDATE`를 걸 수 없어 **두 운영자가 동시에 차감하면 둘 다 통과해 음수가 될 수 있다**(코드에 `ponytail:` 주석으로 명시된 알려진 한계, 승급 경로는 advisory lock). 동시 조작 QA는 범위 밖.
   - 페이지 사이에 출석이 끼어들어 오프셋이 밀릴 수 있어 화면이 `userId`로 중복을 걸러낸다.
-- **관련 API**: `bambi.attendance.adminList` / `bambi.attendance.adminAdjustPoints` (`adminProcedure`) — `packages/api/src/routers/bambi/attendance.ts`
+- **등급 변경**: 행 점 3개 → `등급 변경` → 등급+사유 → `adminSetGradeAnchor`. 포인트 원장은 추가·수정하지 않고 프로필에 변경 당시 등급기준 누적·선택 등급 minPoints 스냅샷을 저장한다. 이후 유효 등급 포인트는 `선택 minPoints + (현재 누적 - 변경 당시 누적)`이며 다음 기준 도달 시 자동 승급한다.
+- **관련 API**: `bambi.attendance.adminList` / `bambi.attendance.adminAdjustPoints` / `bambi.attendance.adminSetGradeAnchor` (`adminProcedure`) — `packages/api/src/routers/bambi/attendance.ts`
 - > ⚠ **회원용 출석 기록 자체는 운영자가 손댈 수 없다.** 출석일 추가·삭제 프로시저가 없고, 이 화면이 바꿀 수 있는 것은 포인트 잔액뿐이다.
 
 ---

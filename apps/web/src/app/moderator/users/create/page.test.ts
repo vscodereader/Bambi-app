@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+	MODERATOR_ACCOUNT_CREATE_PATH,
 	MODERATOR_MORE_GROUPS,
 	MODERATOR_NAV_ITEMS,
 } from "../../../../lib/bambi/moderator-navigation";
@@ -11,21 +12,28 @@ const source = readFileSync(
 	fileURLToPath(new URL("./page.tsx", import.meta.url)),
 	"utf8"
 );
+const usersPageSource = readFileSync(
+	fileURLToPath(new URL("../page.tsx", import.meta.url)),
+	"utf8"
+);
 
 describe("moderator test account page", () => {
-	it("shares the account creation destination across desktop and mobile navigation", () => {
+	it("opens account creation from user management instead of global navigation", () => {
 		const desktop = MODERATOR_NAV_ITEMS.flatMap((entry) =>
 			"items" in entry ? entry.items : [entry]
 		);
 		const mobile = MODERATOR_MORE_GROUPS.flatMap((group) => group.items);
-		expect(desktop).toContainEqual({
-			href: "/moderator/users/create",
-			label: "계정 생성",
-		});
-		expect(mobile).toContainEqual({
-			href: "/moderator/users/create",
-			label: "계정 생성",
-		});
+		expect(
+			desktop.some((item) => item.href === "/moderator/users/create")
+		).toBe(false);
+		expect(mobile.some((item) => item.href === "/moderator/users/create")).toBe(
+			false
+		);
+		expect(MODERATOR_ACCOUNT_CREATE_PATH).toBe("/moderator/users/create");
+		expect(usersPageSource).toContain(
+			"router.push(MODERATOR_ACCOUNT_CREATE_PATH)"
+		);
+		expect(usersPageSource).toContain("계정 생성");
 	});
 
 	it("renders every required field without sending the discarded name", () => {

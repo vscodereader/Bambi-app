@@ -1,3 +1,4 @@
+import { MEMBER_GRADE_ANCHOR_ACTION } from "@bambi-app/api/services/bambi-member-grade-policy";
 import { TEST_ACCOUNT_AUDIT_ACTION } from "@bambi-app/api/services/bambi-test-account-policy";
 
 // 밤비 — 운영자 콘솔에서 노출되는 상태·역할·위험 신호 enum의 한글 표시 라벨.
@@ -47,6 +48,7 @@ export function accountStatusLabel(status: string): string {
 // 형태라 원값이 화면에 새지 않게 조치 이름으로 치환한다.
 const MODERATION_ACTION_LABELS: Record<string, string> = {
 	[TEST_ACCOUNT_AUDIT_ACTION]: "가계정 생성",
+	[MEMBER_GRADE_ANCHOR_ACTION]: "등급 기준 변경",
 	"set_status:active": "정상 복구",
 	"set_status:warned": "경고",
 	"set_status:suspended": "이용 정지",
