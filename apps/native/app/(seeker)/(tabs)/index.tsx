@@ -5,7 +5,7 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import { useNetworkState } from "expo-network";
-import { type Href, Link } from "expo-router";
+import type { Href } from "expo-router";
 import {
 	Button,
 	Chip,
@@ -30,15 +30,12 @@ import {
 	Text,
 	View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 import {
 	CardLink,
 	formatPay,
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
-import { LogoutButton } from "@/src/components/logout-button";
 import {
 	buildJobCardBadges,
 	buildSeekerJobSections,
@@ -155,26 +152,13 @@ function SeekerListHeader({
 }) {
 	return (
 		<View className="gap-3 pt-3 pb-2">
-			<View className="flex-row items-center justify-between gap-3 px-4">
-				<View className="flex-1 flex-row items-center gap-2">
-					{availableCount === undefined ? null : (
-						<Text
-							accessibilityLiveRegion="polite"
-							className="text-muted text-sm"
-						>
-							{`총 ${availableCount.toLocaleString("ko-KR")}개`}
-						</Text>
-					)}
-					{isFilterPending ? <Spinner size="sm" /> : null}
-				</View>
-				<View className="flex-row gap-2">
-					<Link asChild href={"/(seeker)/chats" as Href}>
-						<Button size="sm" variant="tertiary">
-							<Button.Label>채팅</Button.Label>
-						</Button>
-					</Link>
-					<LogoutButton />
-				</View>
+			<View className="flex-row items-center gap-2 px-4">
+				{availableCount === undefined ? null : (
+					<Text accessibilityLiveRegion="polite" className="text-muted text-sm">
+						{`총 ${availableCount.toLocaleString("ko-KR")}개`}
+					</Text>
+				)}
+				{isFilterPending ? <Spinner size="sm" /> : null}
 			</View>
 			{isOffline ? (
 				<NoticeBanner
@@ -419,7 +403,6 @@ function SeekerListFooter({
 }
 
 export default function SeekerHomeScreen() {
-	const insets = useSafeAreaInsets();
 	const listRef = useRef<SectionList<NativeSeekerJob, JobSection>>(null);
 	const [industry, setIndustry] = useState<null | NativeIndustryOption>(null);
 	const accentColor = useThemeColor("accent");
@@ -512,8 +495,9 @@ export default function SeekerHomeScreen() {
 
 	return (
 		<View className="flex-1 bg-background">
+			{/* 하단 인셋은 이제 탭바(BottomTabBar)가 자체 paddingBottom으로 소화하므로
+			    목록에 다시 더하지 않는다 — 겹치면 마지막 행 아래 죽은 여백이 한 겹 생긴다. */}
 			<SectionList<NativeSeekerJob, JobSection>
-				contentContainerStyle={{ paddingBottom: insets.bottom }}
 				initialNumToRender={8}
 				keyExtractor={(item) => item.id}
 				ListEmptyComponent={
