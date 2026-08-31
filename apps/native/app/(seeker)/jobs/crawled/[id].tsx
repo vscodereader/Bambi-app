@@ -1,15 +1,15 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
-import { DEFAULT_MINIMUM_WAGE } from "@bambi-app/api/services/bambi-policy";
-import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
-import { Surface, useThemeColor } from "heroui-native";
-import type { ComponentProps, ReactNode } from "react";
+import { Surface } from "heroui-native";
 import { Text, View } from "react-native";
 
 import {
 	BambiScreen,
 	ErrorState,
+	formatMinimumWageLabel,
+	formatPayUnitFirst,
+	InfoTile,
 	LoadingState,
 	Pill,
 } from "@/src/components/bambi-screen";
@@ -23,59 +23,14 @@ type CrawledJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["crawledJobs"]["getById"]>
 >;
 
-interface MinimumWageSettings {
-	minimumWageHourly?: null | number;
-	minimumWageYear?: null | number;
-}
-
-// 급여 옆 보조 표기("2026년 최저시급 10,320원") — 웹 lib/bambi/minimum-wage의
-// formatMinimumWageLabel과 같은 규칙. 미설정(null)·조회 실패·로딩 중(undefined)에는 코드
-// 기본값으로 떨어져 표기가 깜빡이며 사라지지 않게 한다. 연도는 저장값을 그대로 쓴다.
-function formatMinimumWageLabel(settings?: MinimumWageSettings | null): string {
-	const year = settings?.minimumWageYear ?? DEFAULT_MINIMUM_WAGE.year;
-	const hourly = settings?.minimumWageHourly ?? DEFAULT_MINIMUM_WAGE.hourly;
-	return `${year}년 최저시급 ${hourly.toLocaleString("ko-KR")}원`;
-}
-
 // 급여는 금액이 파싱된 경우에만 단위와 조립하고, 아니면 원문("일 15만원"·"면접 후 협의")을
-// 그대로 보여준다. 웹 정보 타일과 같은 "월급 12,000,000원"(단위 앞) 순서.
+// 그대로 보여준다.
 function formatCrawledPay(job: CrawledJob): string {
 	if (job.payAmount !== null) {
-		const money = `${job.payAmount.toLocaleString("ko-KR")}원`;
-		return job.payUnit ? `${job.payUnit} ${money}` : money;
+		return formatPayUnitFirst(job.payAmount, job.payUnit);
 	}
 
 	return job.payRaw ?? "급여 협의";
-}
-
-// 웹 수집 상세의 InfoTile 이식 — 원형 테두리 아이콘 + 작은 라벨/굵은 값/보조 줄.
-function InfoTile({
-	icon,
-	label,
-	sub,
-	value,
-}: {
-	icon: ComponentProps<typeof Ionicons>["name"];
-	label: string;
-	sub?: ReactNode;
-	value: string;
-}) {
-	const foreground = useThemeColor("foreground");
-
-	return (
-		<View className="flex-row items-center gap-3">
-			<View className="size-11 shrink-0 items-center justify-center rounded-full border border-border bg-surface">
-				<Ionicons color={foreground} name={icon} size={20} />
-			</View>
-			<View className="flex-1 gap-0.5">
-				<Text className="text-muted text-xs">{label}</Text>
-				<Text className="font-bold text-base text-foreground" selectable>
-					{value}
-				</Text>
-				{sub}
-			</View>
-		</View>
-	);
 }
 
 // 수집 공고 상세. 제목 + 배지/정보 타일 Surface + 상세 이미지 + 후기 구성이되, 채팅 CTA

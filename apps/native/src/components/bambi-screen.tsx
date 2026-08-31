@@ -1,7 +1,8 @@
+import { DEFAULT_MINIMUM_WAGE } from "@bambi-app/api/services/bambi-policy";
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, Link } from "expo-router";
 import { Button, cn, Spinner, Surface, useThemeColor } from "heroui-native";
-import type { PropsWithChildren, ReactNode } from "react";
+import type { ComponentProps, PropsWithChildren, ReactNode } from "react";
 import { Pressable, type ScrollViewProps, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
@@ -226,6 +227,65 @@ export const formatPay = (
 
 	return unit ? `${money} / ${unit}` : money;
 };
+
+// 상세 정보 타일용 표기 — 웹 InfoTile과 같은 "월급 12,000,000원"(단위 앞) 순서.
+export const formatPayUnitFirst = (
+	amount: null | number,
+	unit: null | string
+): string => {
+	if (amount === null) {
+		return "급여 협의";
+	}
+
+	const money = `${amount.toLocaleString("ko-KR")}원`;
+
+	return unit ? `${unit} ${money}` : money;
+};
+
+// 급여 타일 보조 표기("2026년 최저시급 10,320원") — 웹 lib/bambi/minimum-wage의
+// formatMinimumWageLabel과 같은 규칙. 미설정(null)·조회 실패·로딩 중(undefined)에는 코드
+// 기본값(DEFAULT_MINIMUM_WAGE)으로 떨어져 표기가 깜빡이며 사라지지 않게 한다.
+export const formatMinimumWageLabel = (
+	settings?: null | {
+		minimumWageHourly?: null | number;
+		minimumWageYear?: null | number;
+	}
+): string => {
+	const year = settings?.minimumWageYear ?? DEFAULT_MINIMUM_WAGE.year;
+	const hourly = settings?.minimumWageHourly ?? DEFAULT_MINIMUM_WAGE.hourly;
+	return `${year}년 최저시급 ${hourly.toLocaleString("ko-KR")}원`;
+};
+
+// 웹 상세의 InfoTile 이식 — 원형 테두리 아이콘 + 작은 라벨/굵은 값/보조 줄.
+// 순수·수집 공고 상세가 공유한다.
+export function InfoTile({
+	icon,
+	label,
+	sub,
+	value,
+}: {
+	icon: ComponentProps<typeof Ionicons>["name"];
+	label: string;
+	sub?: ReactNode;
+	value: string;
+}) {
+	const foregroundColor = useThemeColor("foreground");
+
+	return (
+		<View className="flex-row items-center gap-3">
+			<View className="size-11 shrink-0 items-center justify-center rounded-full border border-border bg-surface">
+				<Ionicons color={foregroundColor} name={icon} size={20} />
+			</View>
+			<View className="flex-1 gap-0.5">
+				<Text className="text-muted text-xs">{label}</Text>
+				<Text className="font-bold text-base text-foreground" selectable>
+					{value}
+				</Text>
+				{sub}
+			</View>
+		</View>
+	);
+}
 
 export const formatDateTime = (value: Date | string): string =>
 	new Intl.DateTimeFormat("ko-KR", {

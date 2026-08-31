@@ -5,10 +5,11 @@ import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-	BambiHeader,
 	BambiScreen,
 	ErrorState,
-	formatPay,
+	formatMinimumWageLabel,
+	formatPayUnitFirst,
+	InfoTile,
 	LoadingState,
 	Pill,
 } from "@/src/components/bambi-screen";
@@ -19,6 +20,10 @@ export default function SeekerJobDetailScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const jobQuery = useQuery(
 		orpc.bambi.jobs.getById.queryOptions({ input: { id } })
+	);
+	// 급여 타일의 최저시급 부기 — 수집 상세와 같은 공개 설정 조회(웹과 동일 프로시저).
+	const siteSettings = useQuery(
+		orpc.bambi.siteSettings.getFooter.queryOptions()
 	);
 	const startChatMutation = useMutation(
 		orpc.bambi.chats.startFromJobPost.mutationOptions({
@@ -49,10 +54,11 @@ export default function SeekerJobDetailScreen() {
 	return (
 		<View className="flex-1 bg-background">
 			<BambiScreen>
-				<BambiHeader
-					description={`${job.employerDisplayName} · ${job.workSchedule}`}
-					title={job.title}
-				/>
+				{/* BambiHeader 대신 제목만 그린다 — 수집 상세와 동일하게 py-2 초과 여백 없이
+				    섹션 간격(BambiScreen gap-4)을 유지한다. 업소명·근무시간은 아래 타일로 내려간다. */}
+				<Text className="font-bold text-3xl text-foreground" selectable>
+					{job.title}
+				</Text>
 				<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 					<View className="flex-row flex-wrap gap-2">
 						<Pill tone="success">
@@ -61,9 +67,27 @@ export default function SeekerJobDetailScreen() {
 						<Pill>{job.region}</Pill>
 						<Pill>{job.industryCategory}</Pill>
 					</View>
-					<Text className="font-bold text-foreground text-xl" selectable>
-						{formatPay(job.payAmount, job.payUnit)}
-					</Text>
+					{/* 수집 상세와 같은 정보 타일 스택(급여/구인 업소/근무시간). */}
+					<InfoTile
+						icon="cash-outline"
+						label="급여"
+						sub={
+							<Text className="text-muted text-sm" selectable>
+								{formatMinimumWageLabel(siteSettings.data)}
+							</Text>
+						}
+						value={formatPayUnitFirst(job.payAmount, job.payUnit)}
+					/>
+					<InfoTile
+						icon="business-outline"
+						label="구인 업소"
+						value={job.employerDisplayName ?? "밤비알바 구인자"}
+					/>
+					<InfoTile
+						icon="time-outline"
+						label="근무시간"
+						value={job.workSchedule}
+					/>
 					<Text className="text-foreground leading-6" selectable>
 						{job.description}
 					</Text>
