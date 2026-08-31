@@ -496,3 +496,53 @@ export const formatAdPeriod = ({
 	totalDays: number;
 }): string =>
 	`${count.toLocaleString("ko-KR")}회 ${totalDays.toLocaleString("ko-KR")}일`;
+
+// media.detail 상세 이미지 한 행. sliceGroupId가 있으면 세로로 긴 원본을 잘라 저장한
+// 조각이고(같은 id끼리 한 장), 없으면(null) 비조각 단독 이미지다.
+export interface DetailImageSliceItem {
+	assetId: string;
+	id: string;
+	sliceGroupId?: null | string;
+}
+
+// 한 조각의 그룹 내 위치. 그룹 위/아래 끝에만 라운드·상하 테두리를 걸기 위한 플래그다.
+export interface DetailImageSlicePiece {
+	assetId: string;
+	id: string;
+	isGroupEnd: boolean;
+	isGroupStart: boolean;
+}
+
+// 렌더 그룹: 조각들을 간격 0으로 이어 한 장처럼 그린다. key는 첫 조각 id.
+export interface DetailImageSliceGroup {
+	key: string;
+	pieces: readonly DetailImageSlicePiece[];
+}
+
+// 상세 이미지 행들을 렌더 그룹으로 묶는다. 같은 sliceGroupId를 공유하는 "연속" 조각이
+// 한 그룹이 되고, sliceGroupId가 없는 비조각 이미지는 각자 단독 그룹이 된다. 조각은
+// 서버가 sliceIndex 오름차순으로 연속 배치해 내려주므로 여기선 인접 런만 묶으면 된다.
+export const groupDetailImageSlices = (
+	items: readonly DetailImageSliceItem[]
+): DetailImageSliceGroup[] => {
+	const runs: { groupId: null | string; items: DetailImageSliceItem[] }[] = [];
+	for (const item of items) {
+		const groupId = item.sliceGroupId ?? null;
+		const current = runs.at(-1);
+		if (groupId !== null && current?.groupId === groupId) {
+			current.items.push(item);
+		} else {
+			runs.push({ groupId, items: [item] });
+		}
+	}
+
+	return runs.map((run) => ({
+		key: run.items[0].id,
+		pieces: run.items.map((item, index) => ({
+			assetId: item.assetId,
+			id: item.id,
+			isGroupEnd: index === run.items.length - 1,
+			isGroupStart: index === 0,
+		})),
+	}));
+};

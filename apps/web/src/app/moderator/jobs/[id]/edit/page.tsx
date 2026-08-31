@@ -48,6 +48,7 @@ import Loader from "@/components/loader";
 import { useRequiredBannerGate } from "@/hooks/use-required-banner-gate";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
+	collapseServerDetailMedia,
 	emptyJobForm,
 	emptyJobFormMedia,
 	type JobDescriptionBlockFormValue,
@@ -215,7 +216,7 @@ export default function ModeratorEditJobPage({
 				? toJobFormMediaItem(job.media.adVertical)
 				: null,
 			cover: job.media.cover ? toJobFormMediaItem(job.media.cover) : null,
-			detail: job.media.detail.map(toJobFormMediaItem),
+			detail: collapseServerDetailMedia(job.media.detail, jobMediaPublicUrl),
 		});
 	}, [job]);
 

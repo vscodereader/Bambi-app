@@ -113,6 +113,7 @@ import {
 import {
 	JOB_AD_BANNER_SPECS,
 	JOB_POST_DETAIL_IMAGE_LIMIT,
+	JOB_POST_DETAIL_MAX_SLICES_PER_IMAGE,
 	JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH,
 	type JobPostMediaPolicyInput,
 	type JobPostMediaUsage,
@@ -169,6 +170,10 @@ const jobPostMediaInput = z.object({
 	fileName: z.string().max(180),
 	height: z.number().int().min(1).max(20_000).optional(),
 	mimeType: z.string().min(1).max(120),
+	// 조각 그룹 메타(detail 슬라이스만 싣는다). 같은 원본에서 잘린 조각들이 공유하는 id와
+	// 그룹 내 순서(0부터). 슬라이싱 안 한 이미지·썸네일·배너는 보내지 않는다(undefined).
+	sliceGroupId: z.string().uuid().optional(),
+	sliceIndex: z.number().int().min(0).optional(),
 	storageKey: z.string().min(1).max(512),
 	width: z.number().int().min(1).max(20_000).optional(),
 });
@@ -178,9 +183,11 @@ const jobPostMediaSetInput = z
 		adHorizontal: jobPostMediaInput.optional(),
 		adVertical: jobPostMediaInput.optional(),
 		cover: jobPostMediaInput.optional(),
+		// 원본 상한(5장)은 개수 정책이 원본 단위로 검사한다. 배열 자체는 원본이 조각으로
+		// 갈라진 하드캡(5 × 조각 상한)까지 받는다.
 		detail: z
 			.array(jobPostMediaInput)
-			.max(JOB_POST_DETAIL_IMAGE_LIMIT)
+			.max(JOB_POST_DETAIL_IMAGE_LIMIT * JOB_POST_DETAIL_MAX_SLICES_PER_IMAGE)
 			.default([]),
 	})
 	.optional();
@@ -606,6 +613,9 @@ const buildJobPostMediaInsertRows = ({
 		mimeType: item.mimeType,
 		organizationId,
 		position: item.position,
+		// 조각 그룹 메타. detail 슬라이스에만 값이 있고 나머지는 null이다.
+		sliceGroupId: item.sliceGroupId ?? null,
+		sliceIndex: item.sliceIndex ?? null,
 		storageKey: item.storageKey,
 		uploadedByUserId: actorUserId,
 		usage: item.usage,
