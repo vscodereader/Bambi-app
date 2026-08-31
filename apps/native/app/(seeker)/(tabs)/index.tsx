@@ -5,10 +5,11 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import { useNetworkState } from "expo-network";
-import type { Href } from "expo-router";
+import { type Href, Link } from "expo-router";
 import {
 	Button,
 	Chip,
+	cn,
 	Skeleton,
 	Spinner,
 	Surface,
@@ -23,6 +24,7 @@ import {
 } from "react";
 import {
 	AccessibilityInfo,
+	Pressable,
 	RefreshControl,
 	ScrollView,
 	SectionList,
@@ -30,18 +32,15 @@ import {
 	Text,
 	View,
 } from "react-native";
-import {
-	CardLink,
-	formatPay,
-	Pill,
-	StateCard,
-} from "@/src/components/bambi-screen";
+import { Pill, StateCard } from "@/src/components/bambi-screen";
 import {
 	buildJobCardBadges,
 	buildSeekerJobSections,
 	describeJobForScreenReader,
 	industryOptions,
 	type NativeIndustryOption,
+	type NativeJobBadge,
+	type NativeJobSectionKey,
 	type NativeSeekerJob,
 } from "@/src/lib/bambi-native";
 import { orpc } from "@/src/lib/orpc";
@@ -207,37 +206,121 @@ function JobSectionHeader({
 function JobRowSkeleton() {
 	return (
 		<View className="px-4 pb-3">
-			<Surface className="gap-2 rounded-2xl p-4" variant="secondary">
-				<Skeleton className="h-5 w-3/4 rounded-md" />
-				<Skeleton className="h-4 w-1/2 rounded-md" />
-				<Skeleton className="h-4 w-24 rounded-full" />
+			<Surface className="gap-3 rounded-2xl border border-border p-4">
+				<View className="flex-row items-center gap-3">
+					<Skeleton className="size-12 rounded-xl" />
+					<View className="flex-1 gap-2">
+						<Skeleton className="h-5 w-3/4 rounded-md" />
+						<Skeleton className="h-4 w-1/2 rounded-md" />
+					</View>
+				</View>
+				<Skeleton className="h-5 w-28 rounded-full" />
 			</Surface>
 		</View>
 	);
 }
 
-function JobRow({ job }: { job: NativeSeekerJob }) {
-	const badges = buildJobCardBadges(job);
-	const body = (
-		<View className="gap-2">
-			<Text className="font-bold text-foreground text-lg" numberOfLines={2}>
-				{job.title}
+// 웹 VisualJobCard의 톤 언어 이식 — 배경 틴트 없이 테두리 색만으로 유료 섹션을 구분한다
+// (스페셜=coral, 급구=amber, 추천=blue). 섹션 헤더 액센트 바와 같은 축이라 새 색을 짓지 않는다.
+const jobCardBorderClassNames = {
+	organic: "border-border",
+	recommended: "border-link/40",
+	special: "border-accent/40",
+	urgent: "border-warning/60",
+} as const;
+
+// 급여 단위 배지 톤도 웹과 동일 — 유료 섹션은 danger, 전체 공고는 중립.
+const jobPayUnitTones = {
+	organic: "neutral",
+	recommended: "danger",
+	special: "danger",
+	urgent: "danger",
+} as const;
+
+// 목록엔 커버 이미지가 안 내려오므로 웹 카드의 폴백(업소명 앞 두 글자 타일)을 시각 앵커로 쓴다.
+function JobCompanyTile({ name }: { name: string }) {
+	return (
+		<View className="size-12 items-center justify-center rounded-xl bg-accent/10">
+			<Text className="font-bold text-accent-soft-foreground text-sm dark:text-accent">
+				{Array.from(name).slice(0, 2).join("")}
 			</Text>
-			<Text className="text-muted text-sm" numberOfLines={1}>
-				{job.employerDisplayName ?? "밤비알바 구인자"} · {job.region} ·{" "}
-				{job.workSchedule ?? "일정 협의"}
-			</Text>
-			<View className="flex-row flex-wrap items-center gap-2">
-				<Text className="font-semibold text-foreground">
-					{formatPay(job.payAmount, job.payUnit)}
+		</View>
+	);
+}
+
+function JobCardBody({
+	badges,
+	job,
+	sectionKey,
+}: {
+	badges: NativeJobBadge[];
+	job: NativeSeekerJob;
+	sectionKey: NativeJobSectionKey;
+}) {
+	const mutedColor = useThemeColor("muted");
+	const employerName = job.employerDisplayName ?? "밤비알바 구인자";
+
+	return (
+		<View className="gap-3">
+			<View className="flex-row items-center gap-3">
+				<JobCompanyTile name={employerName} />
+				<View className="flex-1 gap-1">
+					<Text
+						className="font-bold text-base text-foreground leading-snug"
+						numberOfLines={2}
+					>
+						{job.title}
+					</Text>
+					<View className="flex-row items-center gap-1">
+						<Ionicons color={mutedColor} name="location-outline" size={12} />
+						<Text className="flex-1 text-muted text-xs" numberOfLines={1}>
+							{employerName} · {job.region} · {job.workSchedule ?? "일정 협의"}
+						</Text>
+					</View>
+				</View>
+			</View>
+			{/* 급여가 카드 앵커 — 웹처럼 단위는 배지로 떼고 금액만 코럴로 강조한다.
+			    코럴 원색은 흰 카드 위 대비가 모자라 Pill과 같은 규칙(라이트=soft-foreground,
+			    다크=원색)을 쓴다. */}
+			<View className="flex-row items-center gap-2">
+				{job.payAmount !== null && job.payUnit ? (
+					<Pill tone={jobPayUnitTones[sectionKey]}>{job.payUnit}</Pill>
+				) : null}
+				<Text
+					className="font-bold text-accent-soft-foreground text-base dark:text-accent"
+					numberOfLines={1}
+				>
+					{job.payAmount === null
+						? "급여 협의"
+						: `${job.payAmount.toLocaleString("ko-KR")}원`}
 				</Text>
-				{badges.map((badge) => (
-					<Pill key={badge.label} tone={badge.tone}>
-						{badge.label}
-					</Pill>
-				))}
+				{badges.length > 0 ? (
+					<View className="flex-1 flex-row justify-end gap-1.5">
+						{badges.map((badge) => (
+							<Pill key={badge.label} tone={badge.tone}>
+								{badge.label}
+							</Pill>
+						))}
+					</View>
+				) : null}
 			</View>
 		</View>
+	);
+}
+
+function JobRow({
+	job,
+	sectionKey,
+}: {
+	job: NativeSeekerJob;
+	sectionKey: NativeJobSectionKey;
+}) {
+	const badges = buildJobCardBadges(job);
+	// 기본 Surface(흰 카드)+톤 테두리 = 웹 카드의 border bg-card 조합. 목록 배경이
+	// bg-background(흰색)라 secondary 회색 대신 테두리로 카드 경계를 세운다.
+	const cardClassName = cn(
+		"rounded-2xl border p-4",
+		jobCardBorderClassNames[sectionKey]
 	);
 
 	// 수집 공고는 jobs.getById가 job_post만 조회해 상세가 확정 NOT_FOUND다 — 링크를 걸지
@@ -248,12 +331,14 @@ function JobRow({ job }: { job: NativeSeekerJob }) {
 				<Surface
 					accessibilityLabel={`${describeJobForScreenReader(job, badges)} 수집 공고, 상세 보기 준비 중`}
 					accessible
-					className="gap-2 rounded-2xl p-4"
-					variant="secondary"
+					className={cardClassName}
 				>
-					<View importantForAccessibility="no-hide-descendants">
-						{body}
-						<Text className="mt-2 text-muted text-xs leading-4">
+					<View
+						className="gap-2"
+						importantForAccessibility="no-hide-descendants"
+					>
+						<JobCardBody badges={badges} job={job} sectionKey={sectionKey} />
+						<Text className="text-muted text-xs leading-4">
 							밤비알바 밖에서 수집한 공고예요. 앱에서는 아직 상세를 열 수
 							없어요.
 						</Text>
@@ -265,8 +350,8 @@ function JobRow({ job }: { job: NativeSeekerJob }) {
 
 	return (
 		<View className="px-4 pb-3">
-			<CardLink
-				accessibilityLabel={describeJobForScreenReader(job, badges)}
+			<Link
+				asChild
 				href={
 					{
 						pathname: "/(seeker)/jobs/[id]",
@@ -274,8 +359,19 @@ function JobRow({ job }: { job: NativeSeekerJob }) {
 					} as unknown as Href
 				}
 			>
-				{body}
-			</CardLink>
+				<Pressable
+					accessibilityLabel={describeJobForScreenReader(job, badges)}
+					accessibilityRole="button"
+					accessible
+					className="rounded-2xl active:opacity-75"
+				>
+					<Surface className={cardClassName}>
+						<View importantForAccessibility="no-hide-descendants">
+							<JobCardBody badges={badges} job={job} sectionKey={sectionKey} />
+						</View>
+					</Surface>
+				</Pressable>
+			</Link>
 		</View>
 	);
 }
@@ -554,7 +650,9 @@ export default function SeekerHomeScreen() {
 				// 사각형을 기준으로 잘라 sticky 섹션 헤더가 사라지거나 깜빡이고, RN 스스로도
 				// "may have bugs (missing content)"라고 경고한다(SectionList.js). 섹션 4개·
 				// 페이지당 20행이라 클리핑 이득도 크지 않다.
-				renderItem={({ item }) => <JobRow job={item} />}
+				renderItem={({ item, section }) => (
+					<JobRow job={item} sectionKey={section.key} />
+				)}
 				renderSectionHeader={({ section }) => (
 					<JobSectionHeader section={section} />
 				)}
