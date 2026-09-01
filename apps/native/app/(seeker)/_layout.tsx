@@ -26,6 +26,9 @@ export default function SeekerLayout() {
 			{/* 수집 공고는 job_post에 없어 jobs/[id](jobs.getById)로는 NOT_FOUND다. 웹
 			    /seeker/jobs/crawled/[id]와 같이 crawledJobs.getById를 쓰는 전용 상세로 보낸다. */}
 			<Stack.Screen name="jobs/crawled/[id]" options={{ title: "공고 상세" }} />
+			{/* me/* 나머지 6개는 화면이 스스로 Stack.Screen title을 주입하지만 blocks만 없어
+			    커스텀 헤더 제목이 빈칸으로 뜬다(seeker-header는 options.title ?? ""). */}
+			<Stack.Screen name="me/blocks" options={{ title: "차단한 상대" }} />
 			<Stack.Screen name="chats/[id]" options={{ title: "채팅방" }} />
 			<Stack.Screen
 				name="chats/[id]/reveal"
