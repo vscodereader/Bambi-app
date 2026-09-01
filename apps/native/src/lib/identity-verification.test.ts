@@ -51,6 +51,14 @@ describe("parseIdentityReturnUrl", () => {
 		).toEqual({ message: "인증이 완료되지 않았어요.", status: "failed" });
 	});
 
+	it("identityVerificationId가 2개 이상이면(스머글링 조작) 통째로 버린다", () => {
+		expect(
+			parseIdentityReturnUrl(
+				`${IDENTITY_RETURN_URL}?identityVerificationId=evil&identityVerificationId=real`
+			)
+		).toEqual({ status: "unknown" });
+	});
+
 	it("딥링크가 없거나 다른 주소이거나 파라미터가 없으면 unknown이다", () => {
 		expect(parseIdentityReturnUrl(null)).toEqual({ status: "unknown" });
 		expect(

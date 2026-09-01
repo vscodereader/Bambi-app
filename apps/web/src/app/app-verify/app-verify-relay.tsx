@@ -18,24 +18,30 @@ import { useEffect, useRef } from "react";
 import { usePortOneVerification } from "@/components/bambi/use-portone-verification";
 
 // 복귀 주소는 앱 스킴만 허용한다. 공개 라우트라 이 검사가 없으면 임의 URL로 튕겨 주는
-// 오픈 리디렉터가 된다.
+// 오픈 리디렉터가 된다. 쿼리·프래그먼트가 이미 실린 redirect도 거부한다 — 허용하면
+// 공격자가 redirect 안에 identityVerificationId를 심어(파라미터 스머글링) 뒤에 붙는
+// 진짜 값보다 앞자리를 차지한다(URLSearchParams는 첫 값 우선).
 const APP_SCHEME = "bambi-app://";
 
+const isAllowedRedirect = (redirect: string): boolean =>
+	redirect.startsWith(APP_SCHEME) &&
+	!(redirect.includes("?") || redirect.includes("#") || redirect.includes("&"));
+
 const returnToApp = (redirect: string, params: Record<string, string>) => {
-	// 성공(onVerified)·실패 양쪽이 이 함수로만 복귀하므로 스킴 검사도 여기서 한다.
+	// 성공(onVerified)·실패 양쪽이 이 함수로만 복귀하므로 검사도 여기서 한다.
 	// redirect가 비면 상대 이동(?query)이 되어 같은 페이지가 무한 재로드된다.
-	if (!redirect.startsWith(APP_SCHEME)) {
+	if (!isAllowedRedirect(redirect)) {
 		return;
 	}
 	const query = new URLSearchParams(params).toString();
 
-	window.location.href = `${redirect}${redirect.includes("?") ? "&" : "?"}${query}`;
+	window.location.href = `${redirect}?${query}`;
 };
 
 export function AppVerifyRelay() {
 	const searchParams = useSearchParams();
 	const redirect = searchParams.get("redirect") ?? "";
-	const isValidRequest = redirect.startsWith(APP_SCHEME);
+	const isValidRequest = isAllowedRedirect(redirect);
 
 	const { isConfigured, isVerifying, startVerification } =
 		usePortOneVerification({

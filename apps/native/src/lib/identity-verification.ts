@@ -47,9 +47,11 @@ export const parseIdentityReturnUrl = (
 		};
 	}
 
-	const identityVerificationId = params.get("identityVerificationId");
+	// 정상 복귀에는 정확히 1개만 실려 온다. 2개 이상이면 스머글링(redirect에 심은 값이
+	// 릴레이가 붙인 진짜 값보다 앞에 오는 조작)이므로 통째로 버린다.
+	const ids = params.getAll("identityVerificationId");
 
-	return identityVerificationId
-		? { identityVerificationId, status: "verified" }
+	return ids.length === 1 && ids[0]
+		? { identityVerificationId: ids[0], status: "verified" }
 		: { status: "unknown" };
 };
