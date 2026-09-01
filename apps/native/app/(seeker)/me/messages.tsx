@@ -12,10 +12,21 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { MessageBody } from "@/src/components/message-body";
 import { directMessageBodyToText } from "@/src/lib/me-messages";
 import { orpc, queryClient } from "@/src/lib/orpc";
 
 const PAGE_SIZE = 20;
+
+// read·remove 응답의 unreadCount가 정본이다(웹 messages-screen의 applyUnreadCount와 같은
+// 계약). 허브 배지 쿼리를 바로 덮어, (tabs)/me.tsx가 포커스로 재조회하기 전에도 숫자가 맞는다.
+// setArchived에는 붙이지 않는다 — {ok:true}만 오고, 서버 countUnread가 archivedAt을 보지
+// 않아 안 읽은 쪽지를 보관해도 카운트는 그대로다.
+const applyUnreadCount = (unreadCount: number) => {
+	queryClient.setQueryData(orpc.bambi.directMessages.unreadCount.queryKey(), {
+		unreadCount,
+	});
+};
 
 type MessagesTab = "archived" | "inbox";
 type MessageCursor = null | { createdAt: string; messageId: string };
@@ -75,13 +86,10 @@ function MessageCard({
 			{isOpen ? (
 				<>
 					<Separator />
-					{/* 본문 Text는 Pressable 바깥에 둔다 — Android에서 selectable Text는 스스로
+					{/* 본문은 Pressable 바깥에 둔다 — Android에서 selectable Text는 스스로
 					    clickable이 되어 부모 Pressable로 탭이 전파되지 않는다(Pill 주석과 같은 함정).
-					    ponytail: 본문은 Tiptap JSON을 평문으로 눌러 보여준다(링크는 텍스트, 이미지는
-					    "[이미지]" 자리표시). 리치 렌더가 필요해지면 노드 렌더러를 붙인다. */}
-					<Text className="text-foreground text-sm leading-6" selectable>
-						{text}
-					</Text>
+					    접힘 미리보기는 평문 2줄, 펼친 본문만 doc JSON을 그대로 그린다. */}
+					<MessageBody body={item.body} />
 					<View className="flex-row justify-end gap-2 pt-1">
 						<Button
 							isDisabled={isMutating}
@@ -171,7 +179,11 @@ function MessageList({ tab }: { tab: MessagesTab }) {
 					error.message || "잠시 후 다시 시도해 주세요."
 				);
 			},
-			onSuccess: invalidateList,
+			onSuccess: (result) => {
+				applyUnreadCount(result.unreadCount);
+
+				return invalidateList();
+			},
 		})
 	);
 
@@ -199,7 +211,8 @@ function MessageList({ tab }: { tab: MessagesTab }) {
 					error.message || "잠시 후 다시 시도해 주세요."
 				);
 			},
-			onSuccess: async () => {
+			onSuccess: async (result) => {
+				applyUnreadCount(result.unreadCount);
 				setOpenId(null);
 				await invalidateList();
 			},
