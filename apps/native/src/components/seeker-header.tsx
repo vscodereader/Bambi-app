@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, useRouter } from "expo-router";
 import { useThemeColor } from "heroui-native";
-import type { ComponentProps } from "react";
-import { Pressable, Text, View } from "react-native";
+import type { ComponentProps, ReactNode } from "react";
+import { type ColorValue, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BambiLogo } from "@/src/components/bambi-logo";
@@ -38,6 +38,7 @@ function HeaderIconButton({
 // 헤더와 같은 축(border-b + h-14 행 + outline 아이콘 버튼).
 // props는 native-stack HeaderProps의 부분집합만 구조적으로 받는다 — @react-navigation/
 // native-stack이 직접 의존성이 아니라 타입 import가 불가하다(라이브러리 추가 금지).
+// headerRight는 화면이 <Stack.Screen options={{ headerRight }}>로 주입하는 우측 슬롯이다.
 export function SeekerStackHeader({
 	back,
 	navigation,
@@ -45,7 +46,16 @@ export function SeekerStackHeader({
 }: {
 	back?: unknown;
 	navigation: { goBack: () => void };
-	options: { title?: string };
+	// headerRight 시그니처는 native-stack 옵션과 맞춘다(인자 슬롯이 다르면 header prop
+	// 스프레드에서 타입이 어긋난다). 필드는 모두 선택적이라 인자 없이 호출해도 안전하다.
+	options: {
+		title?: string;
+		headerRight?: (props: {
+			tintColor?: ColorValue;
+			canGoBack?: boolean;
+			backgroundColor?: ColorValue;
+		}) => ReactNode;
+	};
 }) {
 	const insets = useSafeAreaInsets();
 	const foreground = useThemeColor("foreground");
@@ -70,6 +80,9 @@ export function SeekerStackHeader({
 				<Text className="font-bold text-foreground text-lg" numberOfLines={1}>
 					{options.title ?? ""}
 				</Text>
+				{options.headerRight ? (
+					<View className="ml-auto">{options.headerRight({})}</View>
+				) : null}
 			</View>
 		</View>
 	);
