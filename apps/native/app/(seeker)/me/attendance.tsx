@@ -11,11 +11,15 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { GradeBadge } from "@/src/components/grade-badge";
 import {
 	buildMonthWeeks,
 	formatPointAmount,
 	formatPointDate,
+	isBenefitExpired,
 	monthLabel,
+	pointShopBenefitTypeLabel,
+	pointShopBuyerStatusLabel,
 	shiftMonth,
 } from "@/src/lib/me-attendance";
 import { orpc, queryClient } from "@/src/lib/orpc";
@@ -27,6 +31,25 @@ import { orpc, queryClient } from "@/src/lib/orpc";
 const SCREEN_TITLE = "포인트 내역";
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 const HISTORY_PAGE_SIZE = 20;
+
+// owned로 담기는 보유·사용형(끌올·연장)만 "내 아이템"에 노출하고, 나머지 이력은 전부
+// "구매 내역"이 맡는다 — 두 섹션이 서로 여집합이라 같은 주문이 두 번 보이지 않는다(웹과 동일).
+const USABLE_BENEFIT_TYPES = new Set<string>([
+	"ad_extend",
+	"boost_auto_period",
+	"boost_manual_count",
+	"boost_manual_period",
+]);
+
+// 취소는 포인트가 이미 되돌아온 중립 상태라 danger로 칠하지 않는다(웹 STATUS_TONES와 같은
+// 배분). danger는 "기한 만료"에만 쓴다.
+const ORDER_STATUS_TONES: Record<string, "neutral" | "success" | "warning"> = {
+	canceled: "neutral",
+	completed: "success",
+	owned: "success",
+	pending: "warning",
+	used: "neutral",
+};
 
 type HistoryCursor = null | { createdAt: string; id: string };
 
@@ -153,6 +176,252 @@ function PointHistoryCard() {
 	);
 }
 
+// 두 섹션이 같은 쿼리를 공유하므로 실패 표시도 같다 — 여기만 죽고 출석·달력·포인트 내역은 산다.
+function OrdersErrorCard({
+	isFetching,
+	onRetry,
+	title,
+}: {
+	isFetching: boolean;
+	onRetry: () => void;
+	title: string;
+}) {
+	return (
+		<StateCard
+			action={
+				<Button
+					accessibilityLabel={`${title} 다시 불러오기`}
+					isDisabled={isFetching}
+					onPress={onRetry}
+					size="sm"
+					variant="secondary"
+				>
+					<Button.Label>다시 시도</Button.Label>
+				</Button>
+			}
+			description="네트워크 연결을 확인한 뒤 다시 시도해 주세요."
+			title={title}
+		/>
+	);
+}
+
+function SectionHeading({
+	isLoading,
+	subtitle,
+	title,
+}: {
+	isLoading: boolean;
+	subtitle: string;
+	title: string;
+}) {
+	return (
+		<View className="gap-1">
+			<Text className="font-bold text-base text-foreground">{title}</Text>
+			{isLoading ? (
+				<Skeleton className="h-4 w-40 rounded-lg" />
+			) : (
+				<Text className="text-muted text-xs">{subtitle}</Text>
+			)}
+		</View>
+	);
+}
+
+// 내 아이템(보유함) — 웹 MyBenefitsCard의 조회 축만 옮긴다. 사용·취소 액션은 포인트몰
+// 화면 몫이라 이 화면은 읽기 전용이다. 구매 내역과 같은 queryKey를 쓰므로 훅을 따로
+// 호출해도 실제 요청은 1회다(웹과 동일).
+function MyBenefitsCard() {
+	const query = useQuery(orpc.bambi.pointShop.myOrders.queryOptions());
+	// 필드명을 손으로 재선언하지 않는다 — myOrders는 output 스키마가 없는 raw select라
+	// 서버가 select를 바꾸면 여기 추론도 함께 따라와야 드리프트가 드러난다.
+	const benefits = (query.data ?? []).filter(
+		(order) =>
+			order.status === "owned" && USABLE_BENEFIT_TYPES.has(order.benefitType)
+	);
+
+	return (
+		<Surface className="gap-3 rounded-lg p-4" variant="secondary">
+			<SectionHeading
+				isLoading={query.isLoading}
+				subtitle={`사용할 수 있는 혜택 ${benefits.length}건`}
+				title="내 아이템"
+			/>
+
+			{query.isError ? (
+				<OrdersErrorCard
+					isFetching={query.isFetching}
+					onRetry={() => query.refetch()}
+					title="보유 혜택을 불러오지 못했어요"
+				/>
+			) : null}
+
+			{query.isLoading ? (
+				<View className="gap-2">
+					<Skeleton className="h-12 rounded-lg" />
+					<Skeleton className="h-12 rounded-lg" />
+				</View>
+			) : null}
+
+			{query.isError || query.isLoading || benefits.length > 0 ? null : (
+				<StateCard
+					description="포인트몰에서 끌어올리기·광고 연장 혜택을 구매하면 여기에 담겨요."
+					title="보유한 혜택이 없어요"
+				/>
+			)}
+
+			{benefits.map((order, index) => {
+				const expired = isBenefitExpired(order.usableUntil);
+
+				return (
+					<View
+						className={cn(
+							"flex-row items-start gap-3 border-border border-b pb-3",
+							index === benefits.length - 1 && "border-b-0 pb-0"
+						)}
+						key={order.id}
+					>
+						<View className="flex-1 items-start gap-1.5">
+							<Text
+								className="font-bold text-foreground text-sm"
+								numberOfLines={2}
+							>
+								{order.itemName}
+							</Text>
+							<Pill tone="neutral">
+								{pointShopBenefitTypeLabel(order.benefitType)}
+							</Pill>
+						</View>
+						<View className="shrink-0 items-end">
+							{expired ? (
+								<Pill tone="danger">기한 만료</Pill>
+							) : (
+								<Text className="text-muted text-xs">
+									{order.usableUntil
+										? `${formatPointDate(order.usableUntil)}까지`
+										: "무기한"}
+								</Text>
+							)}
+						</View>
+					</View>
+				);
+			})}
+		</Surface>
+	);
+}
+
+// 구매 내역 — 웹 PointOrdersCard의 조회 축만. 취소·사용 버튼은 포인트몰 화면이 생길 때.
+function PointOrdersCard() {
+	const query = useQuery(orpc.bambi.pointShop.myOrders.queryOptions());
+	const orders = (query.data ?? []).filter(
+		(order) =>
+			!(order.status === "owned" && USABLE_BENEFIT_TYPES.has(order.benefitType))
+	);
+
+	return (
+		<Surface className="gap-3 rounded-lg p-4" variant="secondary">
+			<SectionHeading
+				isLoading={query.isLoading}
+				subtitle={`포인트몰에서 신청한 아이템 ${orders.length}건`}
+				title="구매 내역"
+			/>
+
+			{query.isError ? (
+				<OrdersErrorCard
+					isFetching={query.isFetching}
+					onRetry={() => query.refetch()}
+					title="구매 내역을 불러오지 못했어요"
+				/>
+			) : null}
+
+			{query.isLoading ? (
+				<View className="gap-2">
+					<Skeleton className="h-12 rounded-lg" />
+					<Skeleton className="h-12 rounded-lg" />
+				</View>
+			) : null}
+
+			{query.isError || query.isLoading || orders.length > 0 ? null : (
+				<StateCard
+					description="포인트몰에서 아이템을 신청하면 여기에 기록돼요."
+					title="아직 구매한 아이템이 없어요"
+				/>
+			)}
+
+			{orders.map((order, index) => {
+				const isCanceled = order.status === "canceled";
+
+				return (
+					<View
+						className={cn(
+							"gap-2 border-border border-b pb-3",
+							index === orders.length - 1 && "border-b-0 pb-0"
+						)}
+						key={order.id}
+					>
+						<View className="flex-row items-start gap-3">
+							<View className="flex-1 gap-1">
+								<Text
+									className="font-bold text-foreground text-sm"
+									numberOfLines={2}
+								>
+									{order.itemName}
+								</Text>
+								{/* 시:분은 버린다 — 주문 이력에 분 단위는 불필요하고, formatPointDate는
+								    Intl 없이 KST로 떨어져 기기 시간대에 흔들리지 않는다. */}
+								<Text className="text-muted text-xs">
+									{`주문 ${formatPointDate(order.createdAt)}${
+										order.processedAt
+											? ` · 처리 ${formatPointDate(order.processedAt)}`
+											: ""
+									}`}
+								</Text>
+							</View>
+							<View className="shrink-0 items-end gap-1.5">
+								<Pill tone={ORDER_STATUS_TONES[order.status] ?? "neutral"}>
+									{pointShopBuyerStatusLabel(order.status)}
+								</Pill>
+								<Text
+									className={cn(
+										"text-sm",
+										isCanceled ? "text-muted" : "font-bold text-foreground"
+									)}
+								>
+									{`-${order.pricePoints.toLocaleString("ko-KR")}P`}
+								</Text>
+							</View>
+						</View>
+
+						{/* 쿠폰형은 운영자가 본인인증 번호로 외부 발송한다 — 발송 대상을 미리 알린다. */}
+						{order.benefitType === "coupon" && !isCanceled ? (
+							<Text className="text-muted text-xs">
+								본인인증한 휴대폰 번호로 발송돼요.
+							</Text>
+						) : null}
+
+						{isCanceled ? (
+							// 실환급액은 보유 상한 클램프로 가격과 다를 수 있어 금액을 단정하지 않는다 —
+							// 실제 환급 포인트는 위 포인트 내역에 남는다.
+							<Text className="text-muted text-xs">
+								주문이 취소되어 포인트를 돌려드렸어요.
+							</Text>
+						) : null}
+
+						{order.operatorMemo ? (
+							<View className="rounded-lg bg-muted/10 p-3">
+								<Text className="font-semibold text-foreground text-xs">
+									운영자 메모
+								</Text>
+								<Text className="mt-1 text-muted text-sm leading-5">
+									{order.operatorMemo}
+								</Text>
+							</View>
+						) : null}
+					</View>
+				);
+			})}
+		</Surface>
+	);
+}
+
 function MonthNavButton({
 	direction,
 	onPress,
@@ -225,6 +494,7 @@ export default function SeekerAttendanceScreen() {
 					<Skeleton className="h-32 rounded-lg" />
 					<Skeleton className="h-72 rounded-lg" />
 					<Skeleton className="h-40 rounded-lg" />
+					<Skeleton className="h-40 rounded-lg" />
 				</BambiScreen>
 			</>
 		);
@@ -295,9 +565,10 @@ export default function SeekerAttendanceScreen() {
 						</View>
 					</View>
 					<View className="flex-row flex-wrap items-center gap-2">
-						{/* 등급 아이콘(iconUrl)·색은 아직 쓰지 않는다 — me.tsx와 같이 이름만. */}
+						{/* GradeBadge는 grade가 null이면 렌더하지 않는 계약이라(웹과 동일)
+						    "등급 없음" 폴백은 이 호출부가 준다. */}
 						{grade ? (
-							<Pill tone="accent">{grade.name}</Pill>
+							<GradeBadge grade={grade} />
 						) : (
 							<Pill tone="neutral">등급 없음</Pill>
 						)}
@@ -391,6 +662,9 @@ export default function SeekerAttendanceScreen() {
 					</Text>
 				</Surface>
 
+				{/* 카드 순서(스펙 §6): 내 아이템(보유함) → 구매 내역 → 포인트 내역 */}
+				<MyBenefitsCard />
+				<PointOrdersCard />
 				<PointHistoryCard />
 			</BambiScreen>
 		</>
