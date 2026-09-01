@@ -40,6 +40,76 @@ export const formatPhoneNumber = (value: string): string => {
 	return rule ? value.replace(rule[0], rule[1]) : value;
 };
 
+// 서버 profileImageUploadInput(onboarding.ts:139~149)과 같은 값 — byteSize max, fileName max,
+// MIME 화이트리스트. 어긋나면 눌러 봐야 BAD_REQUEST라 화면에서 먼저 막는다.
+export const PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const PROFILE_IMAGE_NAME_MAX_LENGTH = 180;
+const PROFILE_IMAGE_MIME_TYPES = new Set([
+	"image/jpeg",
+	"image/png",
+	"image/webp",
+]);
+const MIME_BY_EXTENSION: Record<string, string> = {
+	jpeg: "image/jpeg",
+	jpg: "image/jpeg",
+	png: "image/png",
+	webp: "image/webp",
+};
+
+// "file:///.../IMG_0001.HEIC?x=1" → "IMG_0001.HEIC". 쿼리를 먼저 떼야 확장자가 안 섞인다.
+const lastSegment = (value: string): string =>
+	value.split("?")[0].split("/").pop() ?? "";
+
+const fileExtension = (value: string): string => {
+	const segment = lastSegment(value);
+	const dot = segment.lastIndexOf(".");
+
+	return dot === -1 ? "" : segment.slice(dot + 1).toLowerCase();
+};
+
+// 고른 사진을 createProfileImageUpload 입력으로 옮긴다. byteSize는 호출부가 실제 전송 바이트
+// (blob.size)를 넘긴다 — asset.fileSize는 크롭·압축 뒤 어긋날 수 있는데 GCS 서명에
+// content-length가 묶여 있어 1바이트만 달라도 403이다.
+export const resolveProfileImageUpload = (
+	asset: { fileName?: null | string; mimeType?: string; uri: string },
+	byteSize: number
+):
+	| { byteSize: number; fileName: string; mimeType: string }
+	| { error: string } => {
+	// Android는 mimeType이 비거나 generic으로 오기도 해서 파일명 → uri 확장자로 유도한다.
+	const mimeType =
+		asset.mimeType && PROFILE_IMAGE_MIME_TYPES.has(asset.mimeType)
+			? asset.mimeType
+			: MIME_BY_EXTENSION[
+					fileExtension(asset.fileName ?? "") || fileExtension(asset.uri)
+				];
+
+	if (!mimeType) {
+		// iOS 원본 HEIC·GIF가 여기서 걸린다(서버 문구와 같은 뜻).
+		return { error: "JPG, PNG, WebP 이미지만 등록할 수 있어요." };
+	}
+
+	if (byteSize < 1) {
+		return { error: "사진을 불러오지 못했어요. 다시 선택해 주세요." };
+	}
+
+	if (byteSize > PROFILE_IMAGE_MAX_BYTES) {
+		return { error: "프로필 사진은 5MB 이하만 등록할 수 있어요." };
+	}
+
+	// 한글 파일명을 그대로 보내도 서버가 normalizeFileNameForStorage로 정규화한다 — 길이만 맞춘다.
+	const fileName =
+		(asset.fileName ?? "").trim() ||
+		lastSegment(asset.uri) ||
+		`profile.${mimeType.split("/")[1]}`;
+
+	return {
+		byteSize,
+		fileName: fileName.slice(0, PROFILE_IMAGE_NAME_MAX_LENGTH),
+		mimeType,
+	};
+};
+
 // 표시 이름 정본은 세션 user.name이라 current도 세션 값이 들어온다. 저장 가능하면 null.
 export const validateDisplayName = (
 	next: string,

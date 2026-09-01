@@ -407,6 +407,16 @@ export const buildJobCardBadges = (job: NativeSeekerJob): NativeJobBadge[] => {
 
 const TRAILING_SLASH_RE = /\/$/;
 
+// 공개 버킷 객체 URL 조립(server gcs.ts getPublicObjectUrl과 같은 모양). base가 없으면
+// (개발·env 미설정) 만들 수 없으므로 null — 호출부가 각자 폴백을 고른다.
+export const publicObjectUri = (
+	storageKey: string,
+	gcsPublicBaseUrl: string | undefined
+): null | string =>
+	gcsPublicBaseUrl
+		? `${gcsPublicBaseUrl.replace(TRAILING_SLASH_RE, "")}/${storageKey}`
+		: null;
+
 // 목록 카드 커버 이미지의 소스 URI를 고른다(web api-job-mapper의 커버 우선순위 이식).
 // 순수 공고는 공개 버킷 base + storageKey로 URL을 조립하고, 수집 공고는 base64 data URI를
 // 그대로 쓴다. base가 없거나(개발) 이미지가 아예 없으면 null → 카드가 업소명 타일로 폴백한다.
@@ -414,11 +424,13 @@ export const resolveJobCoverUri = (
 	job: Pick<NativeSeekerJob, "coverImage" | "coverImageUrl">,
 	gcsPublicBaseUrl: string | undefined
 ): null | string => {
-	if (job.coverImage?.storageKey && gcsPublicBaseUrl) {
-		return `${gcsPublicBaseUrl.replace(TRAILING_SLASH_RE, "")}/${job.coverImage.storageKey}`;
-	}
+	const storageKey = job.coverImage?.storageKey;
 
-	return job.coverImageUrl ?? null;
+	return (
+		(storageKey ? publicObjectUri(storageKey, gcsPublicBaseUrl) : null) ??
+		job.coverImageUrl ??
+		null
+	);
 };
 
 // bambi-screen.tsx의 formatPay와 같은 규칙. 이 파일은 react-native를 import 하지 않는

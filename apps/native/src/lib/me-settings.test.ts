@@ -4,6 +4,8 @@ import {
 	formatBirthDate8,
 	formatPhoneNumber,
 	genderLabel,
+	PROFILE_IMAGE_MAX_BYTES,
+	resolveProfileImageUpload,
 	validateDisplayName,
 } from "./me-settings";
 
@@ -71,5 +73,84 @@ describe("validateDisplayName", () => {
 
 	it("공백만 다른 기존 이름은 같은 값으로 본다", () => {
 		expect(validateDisplayName("  밤비  ", "밤비")).toBe("기존 이름과 같아요.");
+	});
+});
+
+describe("resolveProfileImageUpload", () => {
+	it("화이트리스트 MIME은 그대로 통과한다", () => {
+		expect(
+			resolveProfileImageUpload(
+				{
+					fileName: "셀카.png",
+					mimeType: "image/png",
+					uri: "file:///tmp/셀카.png",
+				},
+				1024
+			)
+		).toEqual({ byteSize: 1024, fileName: "셀카.png", mimeType: "image/png" });
+	});
+
+	it("iOS 원본 HEIC는 막는다", () => {
+		expect(
+			resolveProfileImageUpload(
+				{
+					fileName: "IMG_0001.HEIC",
+					mimeType: "image/heic",
+					uri: "file:///tmp/IMG_0001.HEIC",
+				},
+				1024
+			)
+		).toEqual({ error: "JPG, PNG, WebP 이미지만 등록할 수 있어요." });
+	});
+
+	it("mimeType이 없으면 파일명·uri 확장자에서 유도한다", () => {
+		expect(
+			resolveProfileImageUpload(
+				{ fileName: "photo.JPG", uri: "file:///tmp/x" },
+				10
+			)
+		).toEqual({ byteSize: 10, fileName: "photo.JPG", mimeType: "image/jpeg" });
+		expect(
+			resolveProfileImageUpload(
+				{ fileName: null, uri: "file:///tmp/photo.webp?ts=1" },
+				10
+			)
+		).toEqual({ byteSize: 10, fileName: "photo.webp", mimeType: "image/webp" });
+	});
+
+	it("서버 상한을 넘거나 빈 파일이면 막는다", () => {
+		const asset = { mimeType: "image/jpeg", uri: "file:///tmp/a.jpg" };
+
+		expect(
+			resolveProfileImageUpload(asset, PROFILE_IMAGE_MAX_BYTES + 1)
+		).toEqual({ error: "프로필 사진은 5MB 이하만 등록할 수 있어요." });
+		expect(resolveProfileImageUpload(asset, 0)).toEqual({
+			error: "사진을 불러오지 못했어요. 다시 선택해 주세요.",
+		});
+	});
+
+	it("파일명이 없으면 uri 세그먼트 → 기본명 순으로 폴백한다", () => {
+		expect(
+			resolveProfileImageUpload(
+				{ fileName: "  ", mimeType: "image/jpeg", uri: "file:///tmp/a.jpg" },
+				10
+			)
+		).toEqual({ byteSize: 10, fileName: "a.jpg", mimeType: "image/jpeg" });
+		expect(
+			resolveProfileImageUpload({ mimeType: "image/png", uri: "" }, 10)
+		).toEqual({ byteSize: 10, fileName: "profile.png", mimeType: "image/png" });
+	});
+
+	it("서버 zod max(180)에 맞춰 파일명을 자른다", () => {
+		const resolved = resolveProfileImageUpload(
+			{
+				fileName: `${"가".repeat(200)}.jpg`,
+				mimeType: "image/jpeg",
+				uri: "file:///tmp/a.jpg",
+			},
+			10
+		);
+
+		expect("error" in resolved ? "" : resolved.fileName).toHaveLength(180);
 	});
 });
