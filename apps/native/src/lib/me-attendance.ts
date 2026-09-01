@@ -80,3 +80,45 @@ export const formatPointDate = (value: Date | string): string =>
 		.toISOString()
 		.slice(0, 10)
 		.replaceAll("-", ".");
+
+// 포인트몰 주문 라벨. apps/web/src/lib/bambi/point-shop-labels.ts는 web 패키지 안이라
+// native에서 import할 수 없어 구매자 화면에 필요한 두 맵만 옮겨 적는다(운영자용
+// "처리 대기" 라벨은 native에 운영자 화면이 없어 가져오지 않는다). enum 원값 노출 금지.
+const BUYER_STATUS_LABELS: Record<string, string> = {
+	canceled: "취소·환불",
+	completed: "지급완료",
+	owned: "보유 중",
+	pending: "주문완료",
+	used: "사용 완료",
+};
+
+export const pointShopBuyerStatusLabel = (status: string): string =>
+	BUYER_STATUS_LABELS[status] ?? "상태 확인 필요";
+
+const BENEFIT_TYPE_LABELS: Record<string, string> = {
+	ad_extend: "광고 기간 연장",
+	boost_auto_period: "자동 끌어올리기(기간)",
+	boost_manual_count: "끌어올리기 횟수권",
+	boost_manual_period: "끌어올리기(기간)",
+	coupon: "쿠폰 발송",
+	none: "직접 지급",
+};
+
+export const pointShopBenefitTypeLabel = (benefitType: string): string =>
+	BENEFIT_TYPE_LABELS[benefitType] ?? "혜택 확인 필요";
+
+// 보유 혜택의 사용 기한 만료(웹 my-benefits-card.tsx의 isExpired와 같은 식).
+// usableUntil이 null이면 무기한이다. 표시 보조일 뿐 사용 가부의 정본은 서버다.
+export const isBenefitExpired = (usableUntil: Date | null | string): boolean =>
+	usableUntil !== null && new Date(usableUntil).getTime() <= Date.now();
+
+// 등급 아이콘 URL 가드. 서버 resolveGradeIconUrl은 세 가지를 내려준다 — 프로덕션 GCS
+// 절대 URL, builtin 웹 상대 경로("/grade-icons/*.gif"), 개발 폴백 웹 라우트
+// ("/bambi/local-grade-icons?key=..."). 뒤 둘은 apps/web 오리진 자산이라 native <Image>가
+// 조용히 아무것도 그리지 않는다 — 절대 URL일 때만 그리고 아니면 이름만 남긴다.
+// (커버 이미지와 달리 base URL 조립은 하지 않는다. 서버가 완성 URL을 준다.)
+export const isAbsoluteIconUrl = (
+	value: null | string | undefined
+): value is string =>
+	typeof value === "string" &&
+	(value.startsWith("https://") || value.startsWith("http://"));

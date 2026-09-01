@@ -4,6 +4,8 @@ import {
 	buildMonthWeeks,
 	formatPointAmount,
 	formatPointDate,
+	isAbsoluteIconUrl,
+	isBenefitExpired,
 	monthLabel,
 	shiftMonth,
 } from "./me-attendance";
@@ -70,5 +72,39 @@ describe("formatPointDate", () => {
 		expect(formatPointDate(new Date("2026-08-31T14:59:59.000Z"))).toBe(
 			"2026.08.31"
 		);
+	});
+});
+
+describe("isBenefitExpired", () => {
+	it("기한이 지났으면 만료, 무기한(null)은 만료가 아니다", () => {
+		expect(isBenefitExpired(new Date(Date.now() - 1000))).toBe(true);
+		expect(isBenefitExpired(null)).toBe(false);
+	});
+
+	it("아직 남은 기한은 만료가 아니다", () => {
+		expect(
+			isBenefitExpired(new Date(Date.now() + 60 * 60 * 1000).toISOString())
+		).toBe(false);
+	});
+});
+
+describe("isAbsoluteIconUrl", () => {
+	it("절대 URL만 통과시킨다", () => {
+		expect(
+			isAbsoluteIconUrl("https://storage.googleapis.com/bucket/icon.gif")
+		).toBe(true);
+	});
+
+	it("웹 오리진 상대 경로는 거른다", () => {
+		// builtin 아이콘·개발 폴백은 apps/web 자산이라 native가 가리킬 곳이 없다.
+		expect(isAbsoluteIconUrl("/grade-icons/vip-v2.gif")).toBe(false);
+		expect(isAbsoluteIconUrl("/bambi/local-grade-icons?key=a%2Fb.gif")).toBe(
+			false
+		);
+	});
+
+	it("null·undefined는 거른다", () => {
+		expect(isAbsoluteIconUrl(null)).toBe(false);
+		expect(isAbsoluteIconUrl(undefined)).toBe(false);
 	});
 });
