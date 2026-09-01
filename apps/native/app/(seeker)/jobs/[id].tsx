@@ -1,8 +1,10 @@
 import { env } from "@bambi-app/env/native";
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { type Href, router, useLocalSearchParams } from "expo-router";
-import { Button, Surface } from "heroui-native";
-import { Text, View } from "react-native";
+import { type Href, router, Stack, useLocalSearchParams } from "expo-router";
+import { Button, Surface, useThemeColor } from "heroui-native";
+import { useState } from "react";
+import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -15,6 +17,7 @@ import {
 	Pill,
 } from "@/src/components/bambi-screen";
 import { JobDescriptionSection } from "@/src/components/job-description-section";
+import { JobReportDialog } from "@/src/components/report-dialog";
 import { orpc } from "@/src/lib/orpc";
 
 // 상세 이미지는 storageKey만 내려오므로 공개 버킷 base와 합쳐 URL을 만든다(목록 커버와 동일).
@@ -22,7 +25,9 @@ const GCS_PUBLIC_BASE_URL = env.EXPO_PUBLIC_GCS_PUBLIC_BASE_URL;
 
 export default function SeekerJobDetailScreen() {
 	const insets = useSafeAreaInsets();
+	const foreground = useThemeColor("foreground");
 	const { id } = useLocalSearchParams<{ id: string }>();
+	const [isReportOpen, setIsReportOpen] = useState(false);
 	const jobQuery = useQuery(
 		orpc.bambi.jobs.getById.queryOptions({ input: { id } })
 	);
@@ -58,6 +63,27 @@ export default function SeekerJobDetailScreen() {
 	// 이 화면이 탭바 없는 Stack 상세라 탭바가 소화하지 않으므로 바가 직접 흡수한다.
 	return (
 		<View className="flex-1 bg-background">
+			{/* 헤더 우측 신고 버튼 — SeekerStackHeader가 options.headerRight를 렌더한다. */}
+			<Stack.Screen
+				options={{
+					headerRight: () => (
+						<Pressable
+							accessibilityLabel="이 공고 신고"
+							accessibilityRole="button"
+							className="h-11 w-11 items-center justify-center rounded-2xl border border-border bg-surface active:opacity-75"
+							hitSlop={8}
+							onPress={() => setIsReportOpen(true)}
+						>
+							<Ionicons color={foreground} name="flag-outline" size={22} />
+						</Pressable>
+					),
+				}}
+			/>
+			<JobReportDialog
+				isOpen={isReportOpen}
+				onOpenChange={setIsReportOpen}
+				targetId={job.id}
+			/>
 			<BambiScreen>
 				{/* BambiHeader 대신 제목만 그린다 — 수집 상세와 동일하게 py-2 초과 여백 없이
 				    섹션 간격(BambiScreen gap-4)을 유지한다. 업소명·근무시간은 아래 타일로 내려간다. */}
