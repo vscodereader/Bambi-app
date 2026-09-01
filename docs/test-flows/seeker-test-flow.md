@@ -34,7 +34,7 @@
 | 계정 | 조건 | 검증 대상 |
 |---|---|---|
 | A. 구직자(여성, 인증완료) | `bambi_profile.role='job_seeker'`, `gender='female'`, `isPhoneVerified=true`, `status='active'` | 전 기능 정상 경로 + **수다방 입장 가능** |
-| B. 구직자(남성, 인증완료) | `gender='male'` | **수다방 입장 차단** 확인 |
+| B. 구직자(남성, 인증완료) | `gender='male'` | 수다방 진입 후 **공지사항·비밀게시판만 허용**, 다른 게시판 차단 확인 |
 | C. 구직자(미인증) | `isPhoneVerified=false`, `gender=null` | 채팅 시작 차단 · 수다방 차단(`notice='unverified'`) |
 | D. 구직자(경고) | `status='warned'` | 경고 배너(닫기 가능) |
 | E. 구직자(정지) | `status='suspended'` | 정지 배너(닫기 불가) + 대부분 프로시저 FORBIDDEN |
@@ -60,7 +60,7 @@
 |---|---|---|
 | 채팅 시작 가능 | `status!=='suspended' && isPhoneVerified && jobPostStatus==='published'` | `packages/api/src/services/bambi-policy.ts` (`canStartChat`) |
 | 연락처 공개 대상 면접 상태 | `confirmed` 또는 `completed` | 동일 (`isContactRevealEligibleInterviewStatus`) |
-| 수다방 입장 | `status!=='suspended' && (role==='admin' \|\| role==='legal_advisor' \|\| gender==='female' \|\| (role==='employer' && isAdvertiser))` | `packages/api/src/services/bambi-community-access.ts` |
+| 수다방 입장 | `status!=='suspended' && (role==='admin' \|\| role==='legal_advisor' \|\| (role==='job_seeker' && gender!==null) \|\| (role==='employer' && isAdvertiser))`; 남성 구직자는 보드 범위 가드로 `notice|secret`만 허용 | `packages/api/src/services/bambi-community-access.ts`, `bambi-community-authz.ts` |
 | 본인인증 건 유효시간 | **30분**, 1회 소진 | `packages/api/src/services/bambi-identity-ticket.ts` |
 | 성인 기준 | 만 **19세** 이상, KST 기준 | `packages/api/src/services/portone-identity.ts` |
 | 공개 레이트리밋 | IP당 **시간당 10회**(프로시저별 개별 버킷) | `packages/api/src/index.ts`, `apps/web/src/app/api/guest/route.ts` |
@@ -756,7 +756,7 @@
   | 대상 | 입장 |
   |---|---|
   | 여성 구직자(active/warned) | **가능** |
-  | 남성 구직자 | 불가 |
+  | 남성 구직자 | 가능 — 공지사항·비밀게시판만, 다른 게시판은 불가 |
   | 성별 미설정(미인증) | 불가 |
   | 광고 중 업소회원(owner/manager) | 가능 |
   | 광고 없음/만료 업소회원 | 불가 |

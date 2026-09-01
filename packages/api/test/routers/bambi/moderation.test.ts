@@ -22,6 +22,7 @@ const [{ db }, authSchema, bambiSchema, { moderationRouter }] =
 const { organization, user } = authSchema;
 const {
 	adminModerationAction,
+	bambiNotification,
 	bambiProfile,
 	chatAttachment,
 	chatMessage,
@@ -175,6 +176,9 @@ const createReportFixture = async (): Promise<ReportFixture> => {
 };
 
 const cleanupReportFixture = async (fixture: ReportFixture): Promise<void> => {
+	await db
+		.delete(bambiNotification)
+		.where(inArray(bambiNotification.actorUserId, fixture.userIds));
 	await db
 		.delete(adminModerationAction)
 		.where(inArray(adminModerationAction.adminUserId, fixture.userIds));

@@ -28,6 +28,7 @@ import {
 } from "@/components/bambi/screens/moderator";
 import { useMod } from "@/components/bambi/screens/moderator-context";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
+import { MODERATOR_ACCOUNT_CREATE_PATH } from "@/lib/bambi/moderator-navigation";
 import type { ManagedUser } from "@/lib/bambi/types";
 
 // 탈퇴는 계정 상태 enum이 아니라 deletedAt 유무지만, 운영자 눈에는 같은 축이라 함께 둔다.
@@ -360,6 +361,12 @@ export default function ModeratorUsersPage() {
 					variant="outline"
 				>
 					쪽지 보내기
+				</Button>
+				<Button
+					onClick={() => router.push(MODERATOR_ACCOUNT_CREATE_PATH)}
+					variant="outline"
+				>
+					계정 생성
 				</Button>
 			</div>
 

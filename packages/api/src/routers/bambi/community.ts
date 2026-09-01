@@ -72,6 +72,13 @@ import {
 	hashCommunityPassword,
 	verifyCommunityPassword,
 } from "../../services/bambi-community-password";
+import {
+	COMMUNITY_AUTHOR_NAME_MAX_LENGTH,
+	COMMUNITY_PASSWORD_MAX_LENGTH,
+	COMMUNITY_PASSWORD_MIN_LENGTH,
+	COMMUNITY_TITLE_MAX_LENGTH,
+	COMMUNITY_TITLE_MIN_LENGTH,
+} from "../../services/bambi-community-post-policy";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import { pingCommunityPost } from "../../services/bambi-indexnow";
@@ -178,7 +185,7 @@ const postIdInput = z.object({
 });
 
 const createPostInput = z.object({
-	authorName: z.string().trim().min(1).max(30),
+	authorName: z.string().trim().min(1).max(COMMUNITY_AUTHOR_NAME_MAX_LENGTH),
 	board: boardKeySchema,
 	body: z.string().min(2).max(BODY_MAX),
 	// 법률 자문 글의 선택 입력 연락처. 다른 게시판에서는 받지 않는다(아래 assertContactPhoneBoard).
@@ -190,8 +197,12 @@ const createPostInput = z.object({
 	isPromotion: z.boolean().default(false),
 	noticeBoardKeys: z.array(boardKeySchema).default([]),
 	// 비밀번호는 비밀글(잠금)에만 필요하다 — 잠그지 않으면 생략하고 등록할 수 있다.
-	password: z.string().trim().max(30).optional(),
-	title: z.string().trim().min(2).max(100),
+	password: z.string().trim().max(COMMUNITY_PASSWORD_MAX_LENGTH).optional(),
+	title: z
+		.string()
+		.trim()
+		.min(COMMUNITY_TITLE_MIN_LENGTH)
+		.max(COMMUNITY_TITLE_MAX_LENGTH),
 });
 
 // 본문 이미지 업로드 인텐트 입력. userId는 입력으로 받지 않는다 — 세션에서 꺼내야
@@ -214,7 +225,7 @@ const MEDIA_UPLOAD_ERROR_MESSAGES: Record<
 	unsupported_type: "JPG·PNG·WebP 이미지만 올릴 수 있습니다.",
 };
 
-const LOCKED_PASSWORD_ERROR = "비밀글은 4자 이상의 비밀번호가 필요합니다.";
+const LOCKED_PASSWORD_ERROR = `비밀글은 ${COMMUNITY_PASSWORD_MIN_LENGTH}자 이상의 비밀번호가 필요합니다.`;
 const CONTACT_PHONE_BOARD_ERROR =
 	"연락처는 무료 법률 자문 게시판에만 남길 수 있습니다.";
 
@@ -2150,7 +2161,10 @@ export const communityRouter = {
 				input.noticeBoardKeys
 			);
 			// 비밀글(잠금)은 잠금 게이트에 쓸 4자 이상 비밀번호가 필요하다.
-			if (isLocked && (input.password?.length ?? 0) < 4) {
+			if (
+				isLocked &&
+				(input.password?.length ?? 0) < COMMUNITY_PASSWORD_MIN_LENGTH
+			) {
 				throw new ORPCError("BAD_REQUEST", { message: LOCKED_PASSWORD_ERROR });
 			}
 			// 비회원은 게시판이 좁고 비밀번호가 필수다. 법률 자문을 뺀 보드에서는 is_locked가

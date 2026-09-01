@@ -1,5 +1,10 @@
 "use client";
 
+import {
+	COMMUNITY_PASSWORD_MAX_LENGTH,
+	COMMUNITY_PASSWORD_MIN_LENGTH,
+} from "@bambi-app/api/services/bambi-community-post-policy";
+
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
@@ -11,8 +16,6 @@ import { CommunityPostForm } from "@/components/bambi/community-post-form";
 import type { CommunityBoardMeta } from "@/lib/bambi/community";
 import { canOpenEditForm } from "@/lib/bambi/community-edit-gate";
 import { orpc } from "@/utils/orpc";
-
-const PASSWORD_MIN = 4;
 
 // 비작성자·비밀글 수정 진입 게이트. 글 비밀번호로 getPost 재조회를 트리거한다.
 function CommunityEditPasswordGate({
@@ -37,9 +40,9 @@ function CommunityEditPasswordGate({
 				<Input
 					autoComplete="off"
 					id="community-edit-gate-password"
-					maxLength={30}
+					maxLength={COMMUNITY_PASSWORD_MAX_LENGTH}
 					onChange={(event) => setPassword(event.target.value)}
-					placeholder="4자 이상"
+					placeholder={`${COMMUNITY_PASSWORD_MIN_LENGTH}자 이상`}
 					type="password"
 					value={password}
 				/>
@@ -51,7 +54,7 @@ function CommunityEditPasswordGate({
 			</div>
 			<div className="flex justify-end">
 				<Button
-					disabled={password.length < PASSWORD_MIN}
+					disabled={password.length < COMMUNITY_PASSWORD_MIN_LENGTH}
 					onClick={onSubmit}
 					type="button"
 				>

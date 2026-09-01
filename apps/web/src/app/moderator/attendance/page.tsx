@@ -7,6 +7,7 @@
 // 개인 상세·차트는 후속 범위다(스펙 §8).
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import { MEMBER_GRADE_CHANGE_REASON_MAX_LENGTH } from "@bambi-app/api/services/bambi-member-grade-policy";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
@@ -16,6 +17,12 @@ import {
 	CardTitle,
 } from "@bambi-app/ui/components/card";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogTitle,
+} from "@bambi-app/ui/components/dialog";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -40,6 +47,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@bambi-app/ui/components/table";
+import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownIcon, ArrowUpDownIcon, MoreHorizontal } from "lucide-react";
 import type { Route } from "next";
@@ -86,6 +94,9 @@ const SORTABLE_COLUMNS: { key: SortKey; label: string }[] = [
 type AttendanceRow = Awaited<
 	ReturnType<AppRouterClient["bambi"]["attendance"]["adminList"]>
 >["items"][number];
+type GradeRow = Awaited<
+	ReturnType<AppRouterClient["bambi"]["memberGrades"]["list"]>
+>[number];
 
 const formatPoints = (points: number) => `${points.toLocaleString("ko-KR")}P`;
 
@@ -123,10 +134,96 @@ function SortHead({
 	);
 }
 
+function GradeAnchorDialog({
+	grades,
+	isPending,
+	member,
+	onClose,
+	onSubmit,
+}: {
+	grades: GradeRow[];
+	isPending: boolean;
+	member: AttendanceRow;
+	onClose: () => void;
+	onSubmit: (gradeId: string, reason: string) => void;
+}) {
+	const [gradeId, setGradeId] = useState("");
+	const [reason, setReason] = useState("");
+	const gradeItems = Object.fromEntries(
+		grades.map((grade) => [
+			grade.id,
+			`${grade.name} (${grade.minPoints.toLocaleString("ko-KR")}P부터)`,
+		])
+	);
+	const canSubmit =
+		gradeId.length > 0 && reason.trim().length > 0 && !isPending;
+
+	return (
+		<Dialog onOpenChange={(open) => !open && onClose()} open>
+			<DialogContent>
+				<div className="flex flex-col gap-1">
+					<DialogTitle>등급 변경</DialogTitle>
+					<DialogDescription>
+						{`${member.displayName} 회원의 포인트 잔액은 유지하고 등급 계산 출발점만 변경합니다.`}
+					</DialogDescription>
+				</div>
+				<div className="flex flex-col gap-4">
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="attendance-grade-anchor">변경 등급</Label>
+						<Select
+							items={gradeItems}
+							onValueChange={(value) => setGradeId(String(value))}
+							value={gradeId}
+						>
+							<SelectTrigger id="attendance-grade-anchor">
+								<SelectValue placeholder="등급 선택" />
+							</SelectTrigger>
+							<SelectContent>
+								{grades.map((grade) => (
+									<SelectItem key={grade.id} value={grade.id}>
+										{`${grade.name} · 기준 ${grade.minPoints.toLocaleString("ko-KR")}P`}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="attendance-grade-reason">변경 사유</Label>
+						<Textarea
+							id="attendance-grade-reason"
+							maxLength={MEMBER_GRADE_CHANGE_REASON_MAX_LENGTH}
+							onChange={(event) => setReason(event.target.value)}
+							placeholder="등급을 변경하는 사유를 입력해 주세요."
+							value={reason}
+						/>
+					</div>
+					<p className="m-0 text-muted-foreground text-xs">
+						변경 후 포인트 증감은 선택 등급의 기준점부터 계산되며, 다음 등급
+						기준에 도달하면 자동으로 승급합니다.
+					</p>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button onClick={onClose} type="button" variant="outline">
+						취소
+					</Button>
+					<Button
+						disabled={!canSubmit}
+						onClick={() => onSubmit(gradeId, reason.trim())}
+						type="button"
+					>
+						{isPending ? "변경 중" : "등급 변경"}
+					</Button>
+				</div>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
 // 회원 한 행. 행 클릭은 사용자 상세로, 체크박스·관리 버튼은 stopPropagation으로 행 이동을 막는다.
 function MemberRow({
 	item,
 	onAdjust,
+	onGrade,
 	onOpen,
 	onPoints,
 	onToggle,
@@ -134,6 +231,7 @@ function MemberRow({
 }: {
 	item: AttendanceRow;
 	onAdjust: () => void;
+	onGrade: () => void;
 	onOpen: () => void;
 	onPoints: () => void;
 	onToggle: () => void;
@@ -205,6 +303,7 @@ function MemberRow({
 					<DropdownMenuContent align="end">
 						<DropdownMenuItem onClick={onPoints}>포인트 상세</DropdownMenuItem>
 						<DropdownMenuItem onClick={onAdjust}>지급·차감</DropdownMenuItem>
+						<DropdownMenuItem onClick={onGrade}>등급 변경</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</TableCell>
@@ -219,6 +318,7 @@ export default function ModeratorAttendancePage() {
 	const [sort, setSort] = useState<SortKey>("recent");
 	const [page, setPage] = useState(1);
 	const [adjusting, setAdjusting] = useState<AttendanceRow | null>(null);
+	const [grading, setGrading] = useState<AttendanceRow | null>(null);
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
 	const [bulkOpen, setBulkOpen] = useState(false);
 	const [bulkPending, setBulkPending] = useState(false);
@@ -239,6 +339,7 @@ export default function ModeratorAttendancePage() {
 			},
 		})
 	);
+	const gradesQuery = useQuery(orpc.bambi.memberGrades.list.queryOptions());
 
 	const adjustMutation = useMutation(
 		orpc.bambi.attendance.adminAdjustPoints.mutationOptions({
@@ -251,6 +352,16 @@ export default function ModeratorAttendancePage() {
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.attendance.adminList.key(),
 				});
+			},
+		})
+	);
+	const gradeMutation = useMutation(
+		orpc.bambi.attendance.adminSetGradeAnchor.mutationOptions({
+			onError: (error) => toast.error(error.message),
+			onSuccess: async (result) => {
+				toast.success(`${result.gradeName} 등급부터 다시 계산합니다.`);
+				setGrading(null);
+				await queryClient.invalidateQueries();
 			},
 		})
 	);
@@ -472,6 +583,7 @@ export default function ModeratorAttendancePage() {
 									item={item}
 									key={item.userId}
 									onAdjust={() => setAdjusting(item)}
+									onGrade={() => setGrading(item)}
 									onOpen={() => openMember(item.userId)}
 									onPoints={() =>
 										router.push(
@@ -512,6 +624,23 @@ export default function ModeratorAttendancePage() {
 					open
 					pending={adjustMutation.isPending}
 					pointBalance={adjusting.pointBalance}
+				/>
+			) : null}
+
+			{grading ? (
+				<GradeAnchorDialog
+					grades={gradesQuery.data ?? []}
+					isPending={gradeMutation.isPending}
+					key={grading.userId}
+					member={grading}
+					onClose={() => setGrading(null)}
+					onSubmit={(gradeId, reason) =>
+						gradeMutation.mutate({
+							gradeId,
+							reason,
+							userId: grading.userId,
+						})
+					}
 				/>
 			) : null}
 

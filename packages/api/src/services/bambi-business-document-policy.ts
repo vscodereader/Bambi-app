@@ -1,0 +1,1 @@
+export const MAX_BUSINESS_DOCUMENTS = 5;

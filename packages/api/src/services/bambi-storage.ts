@@ -2,6 +2,17 @@ import { randomUUID } from "node:crypto";
 
 import type { ChatMediaCategory } from "./bambi-media-policy";
 import {
+	buildLocalMediaUrl,
+	CHAT_ATTACHMENT_KEY_ROOT,
+	EMPLOYER_PRIVATE_KEY_ROOT,
+	editorMediaKeyPrefix,
+	jobPostMediaKeyPrefix,
+	LOCAL_EDITOR_MEDIA_PATH,
+	LOCAL_JOB_MEDIA_PATH,
+	LOCAL_PRIVATE_MEDIA_PATH,
+	localJobPostMediaKeyPrefix,
+} from "./bambi-storage-policy";
+import {
 	createPrivateSignedReadUrl,
 	createPrivateSignedUploadUrl,
 	createSignedUploadUrl,
@@ -100,7 +111,6 @@ const normalizeFileNameForStorage = (fileName: string): string => {
 	return normalized || "attachment";
 };
 
-const JOB_POST_MEDIA_KEY_ROOT = "bambi-job-post-media";
 const GRADE_ICON_KEY_ROOT = "bambi-grade-icons";
 const BUILTIN_GRADE_ICON_KEY_ROOT = "builtin/";
 
@@ -167,15 +177,13 @@ export const deleteGradeIconObject = async (
 //   employer/{orgId}/{userId}/…  구인자 민감 파일(사업자 문서가 첫 사용자)
 // 구인자 파일은 조직이 소유 경계(DB organizationId)라 키에 조직 경계를 드러내
 // 조직 단위 일괄 정리·감사가 프리픽스만으로 가능하게 한다.
-const PRIVATE_EMPLOYER_KEY_ROOT = "employer";
-
 const buildBusinessDocumentKeyPrefix = ({
 	organizationId,
 	userId,
 }: {
 	organizationId: string;
 	userId: string;
-}): string => `${PRIVATE_EMPLOYER_KEY_ROOT}/${organizationId}/${userId}/`;
+}): string => `${EMPLOYER_PRIVATE_KEY_ROOT}/${organizationId}/${userId}/`;
 
 export const isOwnedBusinessDocumentKey = ({
 	organizationId,
@@ -190,9 +198,6 @@ export const isOwnedBusinessDocumentKey = ({
 		buildBusinessDocumentKeyPrefix({ organizationId, userId })
 	) && !storageKey.includes("..");
 
-const buildJobPostMediaKeyPrefix = (organizationId: string): string =>
-	`${JOB_POST_MEDIA_KEY_ROOT}/${organizationId}/`;
-
 // storageKey는 공개 API 응답에 그대로 실려 나가므로 비밀이 아니다. 공고를 저장할 때
 // 클라이언트가 보낸 키를 그대로 믿으면 남의 조직 키를 자기 공고에 붙였다가 지워
 // 원본 객체를 삭제할 수 있다. 그래서 발급 시점의 prefix 규칙으로 소유권을 다시 확인한다.
@@ -202,19 +207,13 @@ export const isOwnedJobPostMediaKey = ({
 }: {
 	organizationId: string;
 	storageKey: string;
-}): boolean =>
-	storageKey.startsWith(buildJobPostMediaKeyPrefix(organizationId));
+}): boolean => storageKey.startsWith(jobPostMediaKeyPrefix(organizationId));
 
 // 리치텍스트 본문(Tiptap)에 삽입되는 이미지의 공용 네임스페이스. 수다방 글과 운영자 FAQ 답변이
 // 같은 에디터(CommunityPostEditor)를 쓰므로 "community"가 아니라 표면 중립적인 이름을 쓴다 —
 // 나중에 다른 본문 에디터가 붙어도 키 규칙을 다시 만들 필요가 없다.
-const EDITOR_MEDIA_KEY_ROOT = "bambi-editor-media";
-
 // 공고는 조직이 소유 경계이고 작성자는 별도 감사 정보라 3단(root/org/user)이지만,
 // 본문 이미지는 업로드한 계정 본인이 곧 소유 경계라 2단(root/user)이면 충분하다.
-const buildEditorMediaKeyPrefix = (userId: string): string =>
-	`${EDITOR_MEDIA_KEY_ROOT}/${userId}/`;
-
 // 지금은 호출자가 없다. 본문 이미지 경로는 deletePublicObjects를 부르지 않으므로 남의 키를
 // 본문에 적어 봐야 공개 객체 핫링크에 그친다. 하지만 누군가 본문 파싱 기반 고아 객체 정리를
 // 붙이는 순간 이 가드가 필수가 된다 — 없으면 A가 B의 이미지 URL을 자기 글에 넣고 그 글을 지워
@@ -225,7 +224,7 @@ export const isOwnedEditorMediaKey = ({
 }: {
 	storageKey: string;
 	userId: string;
-}): boolean => storageKey.startsWith(buildEditorMediaKeyPrefix(userId));
+}): boolean => storageKey.startsWith(editorMediaKeyPrefix(userId));
 
 const buildLocalObjectUrl = ({
 	category,
@@ -238,10 +237,8 @@ const buildLocalObjectUrl = ({
 		key: storageKey,
 	});
 
-	return `/bambi/local-chat-attachments?${params.toString()}`;
+	return `${LOCAL_PRIVATE_MEDIA_PATH}?${params.toString()}`;
 };
-
-const CHAT_ATTACHMENT_KEY_ROOT = "bambi-chat";
 
 const buildChatAttachmentKeyPrefix = ({
 	chatRoomId,
@@ -290,16 +287,20 @@ export const createChatAttachmentUploadIntent = async ({
 		fileName: fileName.trim(),
 		mimeType,
 		storageKey,
-		uploadUrl: isPublicBucketConfigured()
+		uploadUrl: shouldUsePublicBucket()
 			? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
-			: `local://upload/${storageKey}`,
+			: buildLocalObjectUrl({
+					category,
+					fileName: fileName.trim(),
+					storageKey,
+				}),
 	};
 };
 
 export const getChatAttachmentObjectUrl = (
 	input: ChatAttachmentObjectInput
 ): string =>
-	isPublicBucketConfigured()
+	shouldUsePublicBucket()
 		? getPublicObjectUrl(input.storageKey)
 		: buildLocalObjectUrl(input);
 
@@ -368,10 +369,10 @@ export const createEditorMediaUploadIntent = async ({
 }: EditorMediaStorageInput): Promise<EditorMediaUploadIntent> => {
 	const storageFileName = normalizeFileNameForStorage(fileName);
 	// 공고와 같은 규칙: 키를 서버가 정해 클라이언트가 경로를 고르지 못하게 한다.
-	const storageKey = `${buildEditorMediaKeyPrefix(userId)}${randomUUID()}-${storageFileName}`;
-	const uploadUrl = isPublicBucketConfigured()
+	const storageKey = `${editorMediaKeyPrefix(userId)}${randomUUID()}-${storageFileName}`;
+	const uploadUrl = shouldUsePublicBucket()
 		? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
-		: `local://upload/${storageKey}`;
+		: buildLocalMediaUrl(LOCAL_EDITOR_MEDIA_PATH, storageKey, fileName.trim());
 
 	return {
 		byteSize,
@@ -419,10 +420,15 @@ export const createJobPostMediaUploadIntent = async ({
 }: JobPostMediaStorageInput): Promise<JobPostMediaUploadIntent> => {
 	const storageFileName = normalizeFileNameForStorage(fileName);
 	// 키를 서버가 정한다. 클라이언트가 경로를 고르지 못하므로 남의 객체를 덮어쓸 수 없다.
-	const storageKey = `${buildJobPostMediaKeyPrefix(organizationId)}${actorUserId}/${randomUUID()}-${storageFileName}`;
-	const uploadUrl = isPublicBucketConfigured()
+	const usePublicBucket = shouldUsePublicBucket();
+	const storageKey = `${
+		usePublicBucket
+			? jobPostMediaKeyPrefix(organizationId)
+			: localJobPostMediaKeyPrefix(organizationId)
+	}${actorUserId}/${randomUUID()}-${storageFileName}`;
+	const uploadUrl = usePublicBucket
 		? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
-		: `local://upload/${storageKey}`;
+		: buildLocalMediaUrl(LOCAL_JOB_MEDIA_PATH, storageKey, fileName.trim());
 
 	return {
 		byteSize,

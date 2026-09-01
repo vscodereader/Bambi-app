@@ -7,6 +7,10 @@
 // 글 자체의 좋아요·수정·삭제·신고는 없다 — 우리 회원이 쓴 글이 아니라 귀속 대상이 없다.
 
 import type { AppRouter } from "@bambi-app/api/routers/index";
+import {
+	COMMUNITY_PASSWORD_MAX_LENGTH,
+	COMMUNITY_PASSWORD_MIN_LENGTH,
+} from "@bambi-app/api/services/bambi-community-post-policy";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Dialog,
@@ -47,8 +51,8 @@ const CRAWLED_BOARD = getBoardByKey("work_talk");
 const CRAWLED_COMMENT_AUTHOR_FALLBACK = "익명";
 
 const COMMENT_MAX = 1000;
-const PASSWORD_MIN = 4;
-const PASSWORD_MAX = 30;
+const PASSWORD_MIN = COMMUNITY_PASSWORD_MIN_LENGTH;
+const PASSWORD_MAX = COMMUNITY_PASSWORD_MAX_LENGTH;
 
 // 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 상세 타입을 파생한다.
 type CrawledTopicDetail =

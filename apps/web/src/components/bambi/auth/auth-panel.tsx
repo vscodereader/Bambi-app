@@ -1,6 +1,11 @@
 "use client";
 
+import {
+	DISPLAY_NAME_MIN_LENGTH,
+	displayNameMinimumMessage,
+} from "@bambi-app/auth/display-name-policy";
 import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
+import { PASSWORD_MIN_LENGTH } from "@bambi-app/auth/password-policy";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
@@ -67,16 +72,19 @@ const getValidationError = (
 	isSignUp: boolean
 ): Notice | null => {
 	if (!isSignUp) {
-		if (values.username.trim().length === 0 || values.password.length < 8) {
+		if (
+			values.username.trim().length === 0 ||
+			values.password.length < PASSWORD_MIN_LENGTH
+		) {
 			return {
-				text: "아이디(이메일)와 8자 이상 비밀번호를 확인해 주세요.",
+				text: `아이디(이메일)와 ${PASSWORD_MIN_LENGTH}자 이상 비밀번호를 확인해 주세요.`,
 				tone: "error",
 			};
 		}
 		return null;
 	}
-	if (values.nickname.trim().length < 2) {
-		return { text: "닉네임을 2자 이상 입력해 주세요.", tone: "error" };
+	if (values.nickname.trim().length < DISPLAY_NAME_MIN_LENGTH) {
+		return { text: displayNameMinimumMessage(), tone: "error" };
 	}
 	// 아이디 규칙은 서버(better-auth username 플러그인)와 같은 공용 함수로 본다 —
 	// 여기서 통과한 값은 서버도 통과한다(규칙이 갈리면 폼은 보내는데 서버가 막는다).
@@ -84,9 +92,12 @@ const getValidationError = (
 	if (loginIdError) {
 		return { text: loginIdError, tone: "error" };
 	}
-	if (!values.email.includes("@") || values.password.length < 8) {
+	if (
+		!values.email.includes("@") ||
+		values.password.length < PASSWORD_MIN_LENGTH
+	) {
 		return {
-			text: "이메일과 8자 이상 비밀번호를 확인해 주세요.",
+			text: `이메일과 ${PASSWORD_MIN_LENGTH}자 이상 비밀번호를 확인해 주세요.`,
 			tone: "error",
 		};
 	}

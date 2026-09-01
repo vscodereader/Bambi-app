@@ -5,6 +5,7 @@
 // 진입점 링크는 로그인 폼 안(아이디·비밀번호 라벨 옆)에 있어야 해서 auth-fields가 그리고,
 // 인증 시작과 모달 상태는 이 훅이 들고 있다 — auth-panel은 핸들러와 모달만 받아 간다.
 
+import { PASSWORD_MIN_LENGTH } from "@bambi-app/auth/password-policy";
 import {
 	Dialog,
 	DialogContent,
@@ -76,8 +77,11 @@ function PasswordForm({
 
 	const submit = async () => {
 		setNotice(null);
-		if (password.length < 8) {
-			setNotice({ text: "비밀번호를 8자 이상 입력해 주세요.", tone: "error" });
+		if (password.length < PASSWORD_MIN_LENGTH) {
+			setNotice({
+				text: `비밀번호를 ${PASSWORD_MIN_LENGTH}자 이상 입력해 주세요.`,
+				tone: "error",
+			});
 			return;
 		}
 		if (password !== passwordConfirm) {
@@ -117,7 +121,7 @@ function PasswordForm({
 					autoComplete="new-password"
 					id="recovery-new-password"
 					onChange={(event) => setPassword(event.target.value)}
-					placeholder="8자 이상 입력해주세요."
+					placeholder={`${PASSWORD_MIN_LENGTH}자 이상 입력해주세요.`}
 					type="password"
 					value={password}
 				/>

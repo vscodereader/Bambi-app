@@ -8,6 +8,8 @@ export interface ModeratorMoreGroup {
 	label: string;
 }
 
+export const MODERATOR_ACCOUNT_CREATE_PATH = "/moderator/users/create" as Route;
+
 /** 데스크톱 헤더와 모바일 더보기 메뉴가 함께 쓰는 운영자 전체 메뉴. */
 export const MODERATOR_NAV_ITEMS: NavEntry[] = [
 	{ href: "/moderator", label: "검수 큐" },
