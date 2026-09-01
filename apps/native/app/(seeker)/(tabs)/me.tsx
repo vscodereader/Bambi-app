@@ -51,6 +51,28 @@ function ProfileCard() {
 		return <Skeleton className="h-20 rounded-lg" />;
 	}
 
+	// 조회 실패를 삼키면 역할·인증 배지가 "구직자 / 인증 필요"로 거짓 확정된다 —
+	// PointsSummaryCard와 같은 규칙으로 카드 자리를 재시도 카드로 바꾼다.
+	// 세션은 살아 있으므로 화면의 나머지는 그대로 렌더된다.
+	if (mineQuery.isError) {
+		return (
+			<StateCard
+				action={
+					<Button
+						isDisabled={mineQuery.isFetching}
+						onPress={() => mineQuery.refetch()}
+						size="sm"
+						variant="secondary"
+					>
+						<Button.Label>다시 시도</Button.Label>
+					</Button>
+				}
+				description="로그인 상태와 네트워크 연결을 확인해 주세요."
+				title="프로필을 불러오지 못했어요"
+			/>
+		);
+	}
+
 	return (
 		// 웹 ProfileCard와 같이 카드 전체가 계정 설정 진입점이다. CardLink가 표면·셰브런·
 		// 누름 피드백을 이미 갖고 있어 Surface를 Pressable로 감싸는 대신 그걸 쓴다.
