@@ -39,8 +39,10 @@ const usableCondition = (identityVerificationId: string, now: Date) =>
 	);
 
 // 인증 건 발급. 클라이언트는 이 값을 그대로 포트원 인증창에 넘긴다.
+// KCP는 이 값(ordr_idxx)에 "영문 대소문자·숫자만, 40자 이하"를 요구한다. 운영 MID는
+// 하이픈을 눈감아 주지만 테스트 MID는 500으로 거부하므로 UUID의 하이픈을 걷어낸다.
 export const issueIdentityVerificationId = async (): Promise<string> => {
-	const identityVerificationId = `iv-${randomUUID()}`;
+	const identityVerificationId = `iv${randomUUID().replaceAll("-", "")}`;
 	await db
 		.insert(bambiIdentityVerification)
 		.values({ id: identityVerificationId });

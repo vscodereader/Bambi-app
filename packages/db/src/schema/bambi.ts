@@ -432,7 +432,8 @@ export interface JobDescriptionBlock {
 export const bambiIdentityVerification = pgTable(
 	"bambi_identity_verification",
 	{
-		// 서버가 만든 `iv-<uuid>` 값. 포트원 인증 건 식별자와 동일한 값이라 PK로 쓴다.
+		// 서버가 만든 `iv<uuid의 하이픈 제거>` 값(KCP 제약: 영문·숫자만 40자 이하).
+		// 포트원 인증 건 식별자와 동일한 값이라 PK로 쓴다.
 		id: text("id").primaryKey(),
 		issuedAt: timestamp("issued_at").defaultNow().notNull(),
 		// 최종 소비(가입·재인증 완료) 시각. null이면 아직 쓰이지 않은 인증 건이다.
