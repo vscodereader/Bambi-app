@@ -1,5 +1,16 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Avatar, Button, Skeleton, Surface } from "heroui-native";
+import { type Href, router } from "expo-router";
+import {
+	Avatar,
+	Button,
+	ListGroup,
+	Separator,
+	Skeleton,
+	Surface,
+	useThemeColor,
+} from "heroui-native";
+import { Fragment } from "react";
 import { Alert, Text, View } from "react-native";
 
 import { authClient } from "@/lib/auth-client";
@@ -154,16 +165,65 @@ function PointsSummaryCard() {
 	);
 }
 
+// 허브 메뉴 — 이미 존재하는 native 화면만 넣는다(범위 합의: 하위 화면 신규 제작 없음).
+// 웹 NAV_ITEMS의 나머지 항목(신고 내역·글 관리·면접·차단·포인트 내역·쪽지함·계정 설정)은
+// native 화면이 생길 때 이 배열에 행을 추가하는 것으로 충분하다.
+const MENU_ITEMS = [
+	{
+		description: "새 소식과 받은 알림을 확인해요.",
+		href: "/(seeker)/notifications" as Href,
+		icon: "notifications-outline" as const,
+		label: "알림",
+	},
+	{
+		description: "모은 포인트로 아이템을 구매해요.",
+		href: "/(seeker)/point-shop" as Href,
+		// 헤더의 포인트몰 버튼(seeker-header.tsx)과 같은 글리프 — 같은 목적지는 같은 아이콘.
+		icon: "storefront-outline" as const,
+		label: "포인트몰",
+	},
+];
+
+function MeMenu() {
+	const foregroundColor = useThemeColor("foreground");
+
+	return (
+		// 위 프로필·포인트 카드와 같은 표면 규칙(secondary + rounded-lg)로 맞춘다 —
+		// 기본 variant는 bg-surface + rounded-3xl이라 이 카드만 어긋나 보인다.
+		<ListGroup className="rounded-lg" variant="secondary">
+			{MENU_ITEMS.map((item, index) => (
+				<Fragment key={item.label}>
+					{index > 0 ? <Separator className="mx-4" /> : null}
+					<ListGroup.Item
+						accessibilityLabel={`${item.label} — ${item.description}`}
+						accessibilityRole="button"
+						className="active:opacity-75"
+						onPress={() => router.push(item.href)}
+					>
+						<ListGroup.ItemPrefix>
+							<Ionicons color={foregroundColor} name={item.icon} size={22} />
+						</ListGroup.ItemPrefix>
+						<ListGroup.ItemContent>
+							<ListGroup.ItemTitle>{item.label}</ListGroup.ItemTitle>
+							<ListGroup.ItemDescription>
+								{item.description}
+							</ListGroup.ItemDescription>
+						</ListGroup.ItemContent>
+						<ListGroup.ItemSuffix />
+					</ListGroup.Item>
+				</Fragment>
+			))}
+		</ListGroup>
+	);
+}
+
 export default function SeekerMeScreen() {
 	return (
 		<BambiScreen>
 			<BambiHeader description="내 계정과 활동을 관리합니다." title="내 정보" />
 			<ProfileCard />
 			<PointsSummaryCard />
-			<StateCard
-				description="포인트 요약과 메뉴를 준비하고 있어요."
-				title="준비 중이에요"
-			/>
+			<MeMenu />
 			<View className="items-start">
 				<LogoutButton />
 			</View>
