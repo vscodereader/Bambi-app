@@ -19,7 +19,8 @@ const toNativeJobForm = (job: {
 	organizationId: string;
 	payAmount: null | number;
 	payUnit: string;
-	region: string;
+	// 지역 백필 이전 공고는 코드가 비어 있다 — 그 경우 폼에서 다시 고르게 한다.
+	regionCode: null | string;
 	teamId: null | string;
 	title: string;
 	workSchedule: string;
@@ -31,7 +32,7 @@ const toNativeJobForm = (job: {
 	// 급여 협의 공고는 금액이 없다.
 	payAmount: job.payAmount === null ? "" : String(job.payAmount),
 	payUnit: job.payUnit,
-	region: job.region,
+	regionCode: job.regionCode ?? "",
 	teamId: job.teamId ?? "",
 	title: job.title,
 	workSchedule: job.workSchedule,

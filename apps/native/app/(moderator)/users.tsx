@@ -58,7 +58,7 @@ export default function ModeratorUsersScreen() {
 								<Pill>{user.role}</Pill>
 							</View>
 							<Text className="font-semibold text-foreground" selectable>
-								{user.displayName ?? user.email}
+								{user.name || user.email}
 							</Text>
 							<Text className="text-muted text-sm" selectable>
 								{user.email}

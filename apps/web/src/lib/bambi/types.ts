@@ -120,6 +120,10 @@ export interface JobMedia {
 	height?: null | number;
 	id?: string;
 	mimeType: string;
+	// 세로로 긴 상세 이미지를 잘라 만든 조각 그룹 메타. 같은 원본에서 나온 조각들은
+	// sliceGroupId를 공유하고 sliceIndex(0부터) 순서를 갖는다. 슬라이싱 안 한 미디어는 null.
+	sliceGroupId?: null | string;
+	sliceIndex?: null | number;
 	storageKey: string;
 	url: string;
 	usage: JobMediaUsage;

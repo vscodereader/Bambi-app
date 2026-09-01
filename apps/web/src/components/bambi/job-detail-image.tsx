@@ -16,10 +16,12 @@ export function JobDetailImage({
 	src: string;
 	width?: null | number;
 }) {
+	// 라운드·테두리는 감싸는 그룹 컨테이너가 갖는다. 조각 그룹은 여러 장을 간격 0으로 이어
+	// 그려야 해서(block으로 이미지 사이 여백 제거) 각 이미지에 테두리를 두지 않는다.
 	return (
 		<Image
 			alt={alt}
-			className="h-auto w-full rounded-lg border"
+			className="block h-auto w-full"
 			height={height ?? LEGACY_DETAIL_IMAGE_HEIGHT}
 			src={src}
 			unoptimized
