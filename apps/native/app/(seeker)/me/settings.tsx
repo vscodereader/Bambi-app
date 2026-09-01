@@ -25,6 +25,7 @@ import {
 	validateDisplayName,
 } from "@/src/lib/me-settings";
 import { orpc, queryClient } from "@/src/lib/orpc";
+import { useIdentityVerification } from "@/src/lib/use-identity-verification";
 
 // (seeker)/_layout.tsx의 Stack.Screen 목록에 이 라우트가 없어 커스텀 헤더가 제목을
 // 빈 문자열로 읽는다 — 형제 화면들과 같이 화면이 스스로 제목을 주입한다. 로딩 조기
@@ -260,6 +261,68 @@ function ProfileImageCard() {
 	);
 }
 
+// 본인인증. 포트원 KCP 인증창이 브라우저 SDK 전용이라 웹 릴레이(/app-verify)를 시스템
+// 브라우저로 열어 처리한다 — EXPO_PUBLIC_WEB_URL이 없으면 릴레이 주소를 만들 수 없어
+// 기존 "웹사이트에서" 안내로 폴백한다. 이 화면의 primary는 표시 이름 저장이라 인증
+// 버튼은 secondary로 둔다.
+function PhoneVerificationCard({
+	isPhoneVerified,
+	phoneNumber,
+}: {
+	isPhoneVerified: boolean;
+	phoneNumber: null | string | undefined;
+}) {
+	const { isAvailable, isPending, startIdentityVerification } =
+		useIdentityVerification();
+
+	let description =
+		"휴대폰 본인인증은 아직 앱에서 지원하지 않아요. 밤비알바 웹사이트의 마이페이지 > 계정 설정에서 인증할 수 있어요.";
+
+	if (isAvailable) {
+		description = isPhoneVerified
+			? "번호가 바뀌었다면 다시 인증해 주세요."
+			: "브라우저 창이 열리고, 인증을 마치면 앱으로 돌아와요.";
+	} else if (isPhoneVerified) {
+		description = "휴대폰 본인인증이 완료됐어요.";
+	}
+
+	let label = "휴대폰 본인인증";
+
+	if (isPending) {
+		label = "인증 중";
+	} else if (isPhoneVerified) {
+		label = "다시 인증하기";
+	}
+
+	return (
+		<Surface className="gap-3 rounded-lg p-4" variant="secondary">
+			<View className="flex-row items-center justify-between gap-3">
+				<Text className="font-semibold text-base text-foreground">
+					본인인증
+				</Text>
+				<Pill tone={isPhoneVerified ? "accent" : "neutral"}>
+					{isPhoneVerified ? "인증완료" : "인증 필요"}
+				</Pill>
+			</View>
+			{isPhoneVerified && phoneNumber ? (
+				<InfoRow label="인증된 번호" value={formatPhoneNumber(phoneNumber)} />
+			) : null}
+			<Text className="text-muted text-sm">{description}</Text>
+			{isAvailable ? (
+				<Button
+					accessibilityLabel={label}
+					className="active:opacity-75"
+					isDisabled={isPending}
+					onPress={startIdentityVerification}
+					variant="secondary"
+				>
+					<Button.Label>{label}</Button.Label>
+				</Button>
+			) : null}
+		</Surface>
+	);
+}
+
 // 위험 구역. 탈퇴 흐름은 bambiProfile에 아무 의존도 없어(세션 + 자격 조회만) 프로필을
 // 못 읽은 상태에서도 그대로 그린다 — 탈퇴는 개인정보 삭제 요구 경로라 막히면 안 된다.
 // 표시 이름 저장이 이 화면의 primary라 탈퇴 버튼은 danger로 둔다.
@@ -466,28 +529,10 @@ export default function SeekerAccountSettingsScreen() {
 						/>
 					</Surface>
 
-					<Surface className="gap-3 rounded-lg p-4" variant="secondary">
-						<View className="flex-row items-center justify-between gap-3">
-							<Text className="font-semibold text-base text-foreground">
-								본인인증
-							</Text>
-							<Pill tone={isPhoneVerified ? "accent" : "neutral"}>
-								{isPhoneVerified ? "인증완료" : "인증 필요"}
-							</Pill>
-						</View>
-						{isPhoneVerified && profile.phoneNumber ? (
-							<InfoRow
-								label="인증된 번호"
-								value={formatPhoneNumber(profile.phoneNumber)}
-							/>
-						) : null}
-						{/* 포트원 KCP 인증창이 브라우저 SDK 전용이라 native에서는 상태만 보여준다. */}
-						<Text className="text-muted text-sm">
-							{isPhoneVerified
-								? "휴대폰 본인인증이 완료됐어요."
-								: "휴대폰 본인인증은 아직 앱에서 지원하지 않아요. 밤비알바 웹사이트의 마이페이지 > 계정 설정에서 인증할 수 있어요."}
-						</Text>
-					</Surface>
+					<PhoneVerificationCard
+						isPhoneVerified={isPhoneVerified}
+						phoneNumber={profile.phoneNumber}
+					/>
 				</>
 			) : (
 				<NoProfileCard
