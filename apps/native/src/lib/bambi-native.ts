@@ -546,3 +546,24 @@ export const groupDetailImageSlices = (
 		})),
 	}));
 };
+
+// 역할 enum 원값을 화면에 내보내지 않는다 — 웹 my-page-shell의 ROLE_LABELS와 같은 표.
+// 미등록 역할은 "구직자"로 폴백(법률자문 등 구직자 계정에 얹는 역할의 자연스러운 기본값).
+const PROFILE_ROLE_LABELS: Record<string, string> = {
+	admin: "관리자",
+	employer: "구인자",
+	job_seeker: "구직자",
+	legal_advisor: "법률자문가",
+};
+
+export const profileRoleLabel = (role: null | string | undefined): string =>
+	PROFILE_ROLE_LABELS[role ?? ""] ?? "구직자";
+
+// 웹 MyPointsSummaryCard의 "다음 등급까지" 문구와 같은 규칙.
+export const pointsToNextLabel = (
+	nextGrade: { minPoints: number; name: string } | null,
+	pointsToNext: null | number
+): string =>
+	nextGrade
+		? `${(pointsToNext ?? 0).toLocaleString("ko-KR")}P 남음`
+		: "최고 등급입니다";

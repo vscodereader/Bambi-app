@@ -15,6 +15,8 @@ import {
 	type NativeAdPeriodTier,
 	type NativeSeekerJob,
 	type NativeSeekerJobPage,
+	pointsToNextLabel,
+	profileRoleLabel,
 	resolveJobCoverUri,
 	validateNativeJobForm,
 	validateNativeLoginInput,
@@ -381,5 +383,32 @@ describe("bambi native helpers", () => {
 		).toBe(
 			"강남 라운지 스태프, 밤비알바 구인자, 강남, 일정 협의, 급여 협의, 인증 완료"
 		);
+	});
+});
+
+describe("profileRoleLabel", () => {
+	it("등록된 역할은 한글 라벨로 바꾼다", () => {
+		expect(profileRoleLabel("job_seeker")).toBe("구직자");
+		expect(profileRoleLabel("employer")).toBe("구인자");
+		expect(profileRoleLabel("admin")).toBe("관리자");
+		expect(profileRoleLabel("legal_advisor")).toBe("법률자문가");
+	});
+
+	it("미등록·빈 역할은 구직자로 폴백한다", () => {
+		expect(profileRoleLabel(null)).toBe("구직자");
+		expect(profileRoleLabel(undefined)).toBe("구직자");
+		expect(profileRoleLabel("unknown_role")).toBe("구직자");
+	});
+});
+
+describe("pointsToNextLabel", () => {
+	it("다음 등급이 있으면 남은 포인트를 천 단위 구분으로 보여준다", () => {
+		expect(pointsToNextLabel({ minPoints: 5000, name: "골드" }, 1200)).toBe(
+			"1,200P 남음"
+		);
+	});
+
+	it("다음 등급이 없으면 최고 등급 문구를 보여준다", () => {
+		expect(pointsToNextLabel(null, null)).toBe("최고 등급입니다");
 	});
 });
