@@ -1,6 +1,11 @@
+import { env } from "@bambi-app/env/native";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+	type ImagePickerResult,
+	launchImageLibraryAsync,
+} from "expo-image-picker";
 import { type Href, router, Stack } from "expo-router";
-import { Button, Input, Surface, TextField } from "heroui-native";
+import { Avatar, Button, Input, Surface, TextField } from "heroui-native";
 import { useEffect, useState } from "react";
 import { Alert, Text, View } from "react-native";
 
@@ -11,10 +16,12 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { publicObjectUri } from "@/src/lib/bambi-native";
 import {
 	formatBirthDate8,
 	formatPhoneNumber,
 	genderLabel,
+	resolveProfileImageUpload,
 	validateDisplayName,
 } from "@/src/lib/me-settings";
 import { orpc, queryClient } from "@/src/lib/orpc";
@@ -65,6 +72,191 @@ function NoProfileCard({
 					: "프로필 정보를 찾을 수 없어요"
 			}
 		/>
+	);
+}
+
+const GCS_PUBLIC_BASE_URL = env.EXPO_PUBLIC_GCS_PUBLIC_BASE_URL;
+
+// oRPC·better-auth 오류 message는 영어 기본값이 섞여 있어 그대로 노출하지 않는다
+// (me-interviews.ts의 interviewStatusErrorMessage와 같은 규칙). createProfileImageUpload의
+// BAD_REQUEST만 서버가 한국어를 싣는데 뜻이 같아 맵으로 덮어도 문구가 어긋나지 않는다.
+const PROFILE_IMAGE_ERROR_MESSAGES: Record<string, string> = {
+	BAD_REQUEST: "JPG, PNG, WebP 이미지만 등록할 수 있어요.",
+	FORBIDDEN: "지금은 프로필 사진을 변경할 수 없어요.",
+	UNAUTHORIZED: "로그인 후 다시 시도해 주세요.",
+};
+
+const profileImageErrorMessage = (error: unknown): string => {
+	const code =
+		typeof error === "object" && error !== null && "code" in error
+			? String(error.code)
+			: "";
+
+	return (
+		PROFILE_IMAGE_ERROR_MESSAGES[code] ??
+		"프로필 사진을 저장하지 못했어요. 잠시 후 다시 시도해 주세요."
+	);
+};
+
+// 프로필 사진. 웹은 고른 뒤 별도 저장 버튼을 누르는 2단계지만 native는 선택 즉시 반영한다.
+// 아바타 정본은 세션 user.image 하나라(getMine에는 없다) refetch 한 번이면 이 화면과
+// 내 정보 탭 ProfileCard가 함께 갱신된다.
+function ProfileImageCard() {
+	const session = authClient.useSession();
+	const imageUrl = session.data?.user?.image ?? null;
+	const [isSaving, setIsSaving] = useState(false);
+	const uploadMutation = useMutation(
+		orpc.bambi.onboarding.createProfileImageUpload.mutationOptions()
+	);
+
+	const saveImage = async (image: null | string) => {
+		// better-auth 클라이언트는 throw 하지 않고 {data,error}를 돌려준다.
+		const result = await authClient.updateUser({ image });
+
+		if (result.error) {
+			throw new Error(result.error.message);
+		}
+
+		await session.refetch();
+	};
+
+	const handlePick = async () => {
+		let picked: ImagePickerResult;
+
+		try {
+			// SDK 56의 시스템 포토 피커는 사전 권한 요청이 필요 없다 — 권한이 막힌 구형 OS는
+			// 여기서 예외로 떨어지므로 그 경로만 안내한다.
+			picked = await launchImageLibraryAsync({
+				allowsEditing: true,
+				aspect: [1, 1],
+				mediaTypes: ["images"],
+				quality: 0.8,
+			});
+		} catch {
+			// allowsEditing 경로(iOS 레거시 피커·Android 시스템 피커)는 권한 없이 열리므로
+			// 여기 예외는 대부분 권한이 아니다 — 설정 앱으로 보내는 안내는 오히려 오도한다.
+			Alert.alert("사진을 불러오지 못했어요", "잠시 후 다시 시도해 주세요.");
+
+			return;
+		}
+
+		const asset = picked.canceled ? null : picked.assets[0];
+
+		if (!asset) {
+			return;
+		}
+
+		setIsSaving(true);
+
+		try {
+			// 서명에 content-length가 묶여 있어 실제 전송 바이트와 1바이트라도 다르면 GCS가 403이다.
+			// asset.fileSize는 크롭·압축 뒤 어긋날 수 있으므로 blob.size를 정본으로 쓴다.
+			const blob = await (await fetch(asset.uri)).blob();
+			const resolved = resolveProfileImageUpload(asset, blob.size);
+
+			if ("error" in resolved) {
+				Alert.alert("등록할 수 없는 사진이에요", resolved.error);
+
+				return;
+			}
+
+			const intent = await uploadMutation.mutateAsync(resolved);
+
+			if (!intent.uploadUrl.startsWith("https://")) {
+				// 서버 GCS 미구성(dev)이면 local:// 플레이스홀더가 내려온다 — 올리지 않고 멈춘다.
+				Alert.alert(
+					"지금은 프로필 사진을 등록할 수 없어요",
+					"잠시 후 다시 시도해 주세요."
+				);
+
+				return;
+			}
+
+			// Content-Length는 손대지 않는다 — 네트워크 스택이 body 길이로 채운다.
+			const response = await fetch(intent.uploadUrl, {
+				body: blob,
+				headers: { "Content-Type": intent.mimeType },
+				method: "PUT",
+			});
+
+			if (!response.ok) {
+				// GCS 오류 본문은 영어 XML이라 화면에 싣지 않는다.
+				throw new Error("upload failed");
+			}
+
+			await saveImage(
+				// env 미설정 기기 폴백: 서명 URL에서 쿼리만 떼면 공개 객체 URL과 같다(gcs.ts:71).
+				publicObjectUri(intent.storageKey, GCS_PUBLIC_BASE_URL) ??
+					intent.uploadUrl.split("?")[0]
+			);
+			Alert.alert("저장했어요", "프로필 사진을 변경했어요.");
+		} catch (error) {
+			Alert.alert("저장하지 못했어요", profileImageErrorMessage(error));
+		} finally {
+			setIsSaving(false);
+		}
+	};
+
+	const handleReset = () => {
+		Alert.alert("프로필 사진을 지울까요?", "기본 이미지로 돌아가요.", [
+			{ style: "cancel", text: "취소" },
+			{
+				onPress: async () => {
+					setIsSaving(true);
+
+					try {
+						await saveImage(null);
+						// 등록 성공 Alert와 대칭 — 아바타 폴백 전환만으로는 완료 신호가 약하다.
+						Alert.alert("변경했어요", "기본 이미지로 돌아갔어요.");
+					} catch (error) {
+						Alert.alert("저장하지 못했어요", profileImageErrorMessage(error));
+					} finally {
+						setIsSaving(false);
+					}
+				},
+				style: "destructive",
+				text: "기본 이미지로 변경",
+			},
+		]);
+	};
+
+	return (
+		<Surface className="gap-3 rounded-lg p-4" variant="secondary">
+			<View className="gap-1">
+				<Text className="font-semibold text-base text-foreground">
+					프로필 사진
+				</Text>
+				<Text className="text-muted text-sm">
+					JPG, PNG, WebP 형식의 5MB 이하 이미지를 등록할 수 있어요.
+				</Text>
+			</View>
+			<View className="flex-row items-center gap-4">
+				<Avatar alt="프로필 사진" size="lg">
+					{imageUrl ? <Avatar.Image source={{ uri: imageUrl }} /> : null}
+					<Avatar.Fallback />
+				</Avatar>
+				<View className="flex-1 gap-2">
+					<Button
+						accessibilityLabel="프로필 사진 선택"
+						isDisabled={isSaving}
+						onPress={handlePick}
+						variant="secondary"
+					>
+						<Button.Label>{isSaving ? "저장 중" : "사진 선택"}</Button.Label>
+					</Button>
+					{imageUrl ? (
+						<Button
+							accessibilityLabel="프로필 사진을 기본 이미지로 변경"
+							isDisabled={isSaving}
+							onPress={handleReset}
+							variant="tertiary"
+						>
+							<Button.Label>기본 이미지로 변경</Button.Label>
+						</Button>
+					) : null}
+				</View>
+			</View>
+		</Surface>
 	);
 }
 
@@ -212,6 +404,10 @@ export default function SeekerAccountSettingsScreen() {
 			<Stack.Screen options={SCREEN_OPTIONS} />
 			{profile ? (
 				<>
+					{/* 허브 ProfileCard의 아바타를 눌러 들어오는 동선이라 사진 카드를 맨 위에 둔다
+					    (웹은 본인인증 카드 뒤 — 의도적 차이). */}
+					<ProfileImageCard />
+
 					<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 						<View className="gap-1">
 							<Text className="font-semibold text-base text-foreground">
