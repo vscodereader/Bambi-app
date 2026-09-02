@@ -13,6 +13,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { LogoutButton } from "@/src/components/logout-button";
 import {
 	jobStatusLabels,
 	verificationStatusLabels,
@@ -53,6 +54,7 @@ export default function EmployerHomeScreen() {
 		return (
 			<BambiScreen>
 				<StateCard
+					action={<LogoutButton />}
 					description="구인자 프로필을 만든 뒤 공고를 등록하고 관리할 수 있습니다."
 					title="구인자 권한이 필요합니다"
 				/>
@@ -64,11 +66,14 @@ export default function EmployerHomeScreen() {
 		<BambiScreen>
 			<BambiHeader
 				action={
-					<Link asChild href={"/(employer)/new" as Href}>
-						<Button size="sm">
-							<Button.Label>새 공고</Button.Label>
-						</Button>
-					</Link>
+					<View className="flex-row flex-wrap justify-end gap-2">
+						<Link asChild href={"/(employer)/new" as Href}>
+							<Button size="sm">
+								<Button.Label>새 공고</Button.Label>
+							</Button>
+						</Link>
+						<LogoutButton />
+					</View>
 				}
 				description="내 조직의 공고 상태와 등록 범위를 확인합니다."
 				title="구인자 관리"

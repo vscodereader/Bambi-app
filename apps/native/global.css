@@ -3,3 +3,94 @@
 @import "heroui-native/styles";
 
 @source "./node_modules/heroui-native/lib";
+
+/* ---------------------------------------------------------------------------
+ * 밤비 브랜드 색 이식 (웹 → 네이티브)
+ *
+ * ⚠ 수동 동기화 커플링: 색의 정본은 apps/web/src/styles/bambi/tokens.css 다.
+ *   이 블록은 그 값을 손으로 베껴 온 사본이고, 빌드 시점에 웹 토큰을 읽어 오는
+ *   장치는 없다. tokens.css 의 색이 바뀌면 이 블록도 사람이 같이 고쳐야 한다.
+ *
+ * heroui-native 가 실제로 읽는 것은 여기서 덮는 "원시 변수"(--accent 등)다.
+ * 파생 토큰(--color-accent-hover / --color-accent-soft / --color-*-soft-foreground …)은
+ * 절대 덮지 마라 — node_modules/heroui-native/lib/module/styles/theme.css 가
+ * color-mix(in oklab, var(--accent) …) 로 계산하므로, 원시 변수만 덮으면
+ * hover / soft / focus 가 전부 코랄 기준으로 자동 재계산된다.
+ * --focus 는 variables.css 에서 이미 var(--accent) 별칭이라 따로 덮지 않는다.
+ * --radius 도 덮지 않는다 — theme.css 의 --radius-2xl 은 --radius(0.5rem) * 2 = 16px 라
+ * 웹 --radius-card(16px) 와 이미 같다.
+ *
+ * 블록 구조(@layer theme > :root > @variant light / @variant dark)는
+ * heroui-native 의 variables.css 와 같은 문법이다. 다만 light / dark 를 :root 블록
+ * 하나에 겹쳐 넣으면 biome 의 noDuplicateCustomProperties 가 @variant 를 별개 스코프로
+ * 못 읽고 오탐을 내므로(heroui 원본 variables.css 도 같은 오탐이 뜬다) :root 를 둘로 나눴다.
+ * ------------------------------------------------------------------------ */
+
+@layer theme {
+	:root {
+		@variant light {
+			/* 기본 표면·본문 — 웹 --surface-page(#ffffff), --text-strong(= --gray-900) */
+			--background: #ffffff;
+			--foreground: #111827;
+			/* 웹 --text-muted (= --gray-500) */
+			--muted: #6b7280;
+
+			/* 카드 표면 — 웹 --surface-card(#ffffff), --surface-subtle(= --gray-50),
+			 * --surface-sunken(= --gray-100), 본문은 --text-strong */
+			--surface: #ffffff;
+			--surface-foreground: #111827;
+			--surface-secondary: #f9fafb;
+			--surface-secondary-foreground: #111827;
+			--surface-tertiary: #f3f4f6;
+			--surface-tertiary-foreground: #111827;
+
+			/* 웹 --surface-sunken (= --gray-100) / --text-strong (= --gray-900) */
+			--default: #f3f4f6;
+			--default-foreground: #111827;
+
+			/* 브랜드 코랄 — 웹 --color-primary(= --coral-500), --color-on-primary(= --white) */
+			--accent: #f94b63;
+			--accent-foreground: #ffffff;
+
+			/* 입력 필드 — 웹 --surface-card, --text-strong, --border-default(= --gray-200),
+			 * --text-muted(= --gray-500) */
+			--field-background: #ffffff;
+			--field-foreground: #111827;
+			--field-border: #e5e7eb;
+			--field-placeholder: #6b7280;
+
+			/* 상태색 — 웹 --green-500 / --amber-500 / --red-500.
+			 * 초록·앰버 위 흰 텍스트는 대비가 모자라 전경을 웹 --gray-900 으로 둔다. */
+			--success: #1fb573;
+			--success-foreground: #111827;
+			--warning: #f59e0b;
+			--warning-foreground: #111827;
+			--danger: #ff5a5f;
+			--danger-foreground: #ffffff;
+
+			/* 경계 — 웹 --border-default(= --gray-200) / --border-strong(= --gray-300) */
+			--border: #e5e7eb;
+			--separator: #d1d5db;
+
+			/* 웹 --status-info-fg (= --blue-500).
+			 * 웹 --text-link 는 코랄(--coral-600)이지만, 네이티브에서는 링크·정보 축을
+			 * 강조(코랄)와 갈라 놓으려고 info 파랑을 쓴다. */
+			--link: #2969ff;
+		}
+	}
+
+	:root {
+		@variant dark {
+			/* 웹 tokens.css 에는 다크 팔레트가 없다(라이트 전용 브랜드).
+			 * 없는 값을 지어내지 않고 브랜드 hue 만 덮는다 —
+			 * 표면·경계·muted 는 heroui 기본 중립 다크를 그대로 쓴다. */
+			--accent: #f94b63;
+			--accent-foreground: #ffffff;
+			--danger: #ff5a5f;
+			--danger-foreground: #ffffff;
+			--success: #1fb573;
+			--warning: #f59e0b;
+			--link: #2969ff;
+		}
+	}
+}
