@@ -54,6 +54,7 @@ describe("takeRateLimit", () => {
 });
 
 const IDENTITY_SCOPE = "bambi.onboarding.startIdentityVerification";
+const GUEST_TOKEN_SCOPE = "bambi.onboarding.issueGuestToken";
 const RECOVERY_SCOPE = "bambi.accountRecovery.lookupAccountByIdentity";
 
 describe("resolvePublicRateLimit", () => {
@@ -86,6 +87,15 @@ describe("resolvePublicRateLimit", () => {
 			}).limit
 		).toBe(IDENTITY_RATE_LIMIT);
 		expect(IDENTITY_RATE_LIMIT).toBeGreaterThan(DEFAULT_PUBLIC_RATE_LIMIT);
+	});
+
+	it("게스트 토큰 발급도 본인인증과 같은 한도를 쓴다", () => {
+		expect(
+			resolvePublicRateLimit({
+				clientIp: "203.0.113.9",
+				scope: GUEST_TOKEN_SCOPE,
+			}).limit
+		).toBe(IDENTITY_RATE_LIMIT);
 	});
 
 	it("그 밖의 공개 프로시저는 기본 한도를 유지한다", () => {

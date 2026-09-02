@@ -15,9 +15,14 @@ import {
 	type NativeAdPeriodTier,
 	type NativeSeekerJob,
 	type NativeSeekerJobPage,
+	pointsToNextLabel,
+	profileRoleLabel,
 	resolveJobCoverUri,
+	type SignupFormValues,
 	validateNativeJobForm,
 	validateNativeLoginInput,
+	validateNewPassword,
+	validateSignupInput,
 } from "./bambi-native";
 
 const seekerJob = (
@@ -380,6 +385,99 @@ describe("bambi native helpers", () => {
 			)
 		).toBe(
 			"강남 라운지 스태프, 밤비알바 구인자, 강남, 일정 협의, 급여 협의, 인증 완료"
+		);
+	});
+});
+
+describe("profileRoleLabel", () => {
+	it("등록된 역할은 한글 라벨로 바꾼다", () => {
+		expect(profileRoleLabel("job_seeker")).toBe("구직자");
+		expect(profileRoleLabel("employer")).toBe("구인자");
+		expect(profileRoleLabel("admin")).toBe("관리자");
+		expect(profileRoleLabel("legal_advisor")).toBe("법률자문가");
+	});
+
+	it("미등록·빈 역할은 구직자로 폴백한다", () => {
+		expect(profileRoleLabel(null)).toBe("구직자");
+		expect(profileRoleLabel(undefined)).toBe("구직자");
+		expect(profileRoleLabel("unknown_role")).toBe("구직자");
+	});
+});
+
+describe("pointsToNextLabel", () => {
+	it("다음 등급이 있으면 남은 포인트를 천 단위 구분으로 보여준다", () => {
+		expect(pointsToNextLabel({ minPoints: 5000, name: "골드" }, 1200)).toBe(
+			"1,200P 남음"
+		);
+	});
+
+	it("다음 등급이 없으면 최고 등급 문구를 보여준다", () => {
+		expect(pointsToNextLabel(null, null)).toBe("최고 등급입니다");
+	});
+});
+
+describe("validateNewPassword", () => {
+	it("길이·일치 규칙을 순서대로 검사한다", () => {
+		expect(validateNewPassword("short", "short")).toBe(
+			"비밀번호를 8자 이상 입력해 주세요."
+		);
+		expect(validateNewPassword("a".repeat(129), "a".repeat(129))).toBe(
+			"비밀번호는 128자까지 입력할 수 있어요."
+		);
+		expect(validateNewPassword("password1", "password2")).toBe(
+			"비밀번호가 일치하지 않아요."
+		);
+	});
+
+	it("규칙을 모두 만족하면 null을 준다", () => {
+		expect(validateNewPassword("password1", "password1")).toBeNull();
+	});
+});
+
+describe("validateSignupInput", () => {
+	const validSignup = (
+		overrides: Partial<SignupFormValues> = {}
+	): SignupFormValues => ({
+		agreedToTerms: true,
+		email: "seeker@bambi.dev",
+		nickname: "밤비구직",
+		password: "password1",
+		passwordConfirm: "password1",
+		username: "bambi-alba",
+		...overrides,
+	});
+
+	it("웹 규칙을 모두 만족하면 null을 준다", () => {
+		expect(validateSignupInput(validSignup())).toBeNull();
+	});
+
+	it("닉네임이 2자 미만이면 안내한다", () => {
+		expect(validateSignupInput(validSignup({ nickname: "김" }))).toBe(
+			"닉네임을 2자 이상 입력해 주세요."
+		);
+	});
+
+	it("아이디가 규칙에 어긋나면 login-id 문구를 그대로 준다", () => {
+		expect(validateSignupInput(validSignup({ username: "ab" }))).toBe(
+			"아이디는 3자 이상 입력해 주세요."
+		);
+	});
+
+	it("이메일에 @가 없으면 이메일·비밀번호 안내를 준다", () => {
+		expect(validateSignupInput(validSignup({ email: "noatsign" }))).toBe(
+			"이메일과 8자 이상 비밀번호를 확인해 주세요."
+		);
+	});
+
+	it("비밀번호와 확인이 다르면 안내한다", () => {
+		expect(
+			validateSignupInput(validSignup({ passwordConfirm: "password2" }))
+		).toBe("비밀번호가 일치하지 않아요.");
+	});
+
+	it("약관에 동의하지 않으면 안내한다", () => {
+		expect(validateSignupInput(validSignup({ agreedToTerms: false }))).toBe(
+			"이용약관과 개인정보 처리방침에 동의해주세요"
 		);
 	});
 });

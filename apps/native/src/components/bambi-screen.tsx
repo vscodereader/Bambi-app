@@ -3,7 +3,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { type Href, Link } from "expo-router";
 import { Button, cn, Spinner, Surface, useThemeColor } from "heroui-native";
 import type { ComponentProps, PropsWithChildren, ReactNode } from "react";
-import { Pressable, type ScrollViewProps, Text, View } from "react-native";
+import {
+	Alert,
+	Pressable,
+	type ScrollViewProps,
+	Text,
+	View,
+} from "react-native";
 
 import { Container } from "@/components/container";
 
@@ -292,3 +298,28 @@ export const formatDateTime = (value: Date | string): string =>
 		dateStyle: "short",
 		timeStyle: "short",
 	}).format(new Date(value));
+
+// 미구현 진입점 안내는 인라인 Alert 슬롯이 아니라 OS 알럿으로 띄운다 — 로그인·회원가입
+// 화면에서 이 안내가 붙는 버튼들은 인라인 슬롯보다 아래에 있어, 인라인이면 안내가 화면
+// 밖 위쪽에 꽂히고 버튼만 밀린다. 로그인·회원가입·member-only 공용(logout-button과 같은
+// Alert.alert 패턴).
+export const notifyWebOnly = (title: string) =>
+	Alert.alert(title, "앱에서는 준비 중이에요. 웹에서 이용해 주세요.");
+
+// 청소년유해매체물 고지. 로그인·회원가입 화면 공용 — 색은 muted 계열로만 둔다(코럴은 주
+// 액션 CTA의 색이라 여기에 쓰면 위계가 뒤집힌다). role="alert"를 달지 않는다: 상시 노출되는
+// 법정 고지를 매 렌더마다 스크린리더가 경보로 읽어버린다.
+export function AdultNotice() {
+	return (
+		<View className="flex-row items-start gap-3">
+			<View className="h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-muted">
+				<Text className="font-extrabold text-muted text-sm">19</Text>
+			</View>
+			<Text className="flex-1 text-muted text-xs leading-5" selectable>
+				본 정보내용은 청소년 유해매체물로서 정보통신망 이용촉진 및 정보보호 등에
+				관한 법률 및 청소년 보호법의 규정에 의하여 만 19세 미만의 청소년이
+				이용할 수 없습니다.
+			</Text>
+		</View>
+	);
+}

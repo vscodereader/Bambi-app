@@ -1,11 +1,13 @@
 import {
 	decodeGuestTokenGender,
+	GUEST_TOKEN_MAX_AGE_SECONDS,
 	readGuestTokenFromCookieString,
 } from "@bambi-app/api/services/bambi-guest-token";
 
 // 쿠키 이름(GUEST_COOKIE_NAME)은 토큰 모듈이 소유한다 — api 서버도 Cookie 헤더에서
-// 같은 이름을 찾으므로, 필요한 쪽에서 직접 import 한다.
-export const GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+// 같은 이름을 찾으므로, 필요한 쪽에서 직접 import 한다. 쿠키 maxAge는 토큰 exp와
+// 같은 값이어야 하므로 토큰 모듈의 상수를 그대로 쓴다.
+export const GUEST_COOKIE_MAX_AGE = GUEST_TOKEN_MAX_AGE_SECONDS;
 
 // 실인증(포트원) 이전의 목 인증 쿠키들. 더는 발급하지 않지만 기존 방문자 브라우저에
 // 남아 있어 로그인·로그아웃 시 함께 만료시킨다. 신규 코드에서 읽지 말 것.

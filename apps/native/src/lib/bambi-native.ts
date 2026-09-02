@@ -1,3 +1,5 @@
+import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
+
 const TITLE_MIN_LENGTH = 2;
 const TITLE_MAX_LENGTH = 80;
 // 서버 jobPostInput이 지역 마스터의 법정동코드(10자리)만 받는다.
@@ -273,6 +275,64 @@ export const validateNativeLoginInput = (
 	return errors;
 };
 
+// 계정복구의 새 비밀번호 검증. 서버 resetPasswordInput(8~128)과 같은 규칙을 클라에서 먼저
+// 걸러 인증 건을 헛되이 소진시키지 않는다. 확인 입력 일치까지 한 함수에서 본다.
+export const validateNewPassword = (
+	password: string,
+	passwordConfirm: string
+): null | string => {
+	if (password.length < PASSWORD_MIN_LENGTH) {
+		return "비밀번호를 8자 이상 입력해 주세요.";
+	}
+	if (password.length > PASSWORD_MAX_LENGTH) {
+		return "비밀번호는 128자까지 입력할 수 있어요.";
+	}
+	if (password !== passwordConfirm) {
+		return "비밀번호가 일치하지 않아요.";
+	}
+	return null;
+};
+
+export type SignupRole = "job_seeker" | "employer";
+
+export interface SignupFormValues {
+	agreedToTerms: boolean;
+	email: string;
+	nickname: string;
+	password: string;
+	passwordConfirm: string;
+	username: string;
+}
+
+export type SignupSubmitValues = SignupFormValues & { role: SignupRole };
+
+// 웹 getValidationError(auth-panel.tsx:65) + 약관 동의 가드와 같은 규칙·문구·순서.
+// username·nickname은 웹과 동일하게 trim해서 검사한다.
+export const validateSignupInput = (
+	values: SignupFormValues
+): null | string => {
+	if (values.nickname.trim().length < 2) {
+		return "닉네임을 2자 이상 입력해 주세요.";
+	}
+	const loginIdError = getLoginIdErrorMessage(values.username.trim());
+	if (loginIdError) {
+		return loginIdError;
+	}
+	if (
+		!values.email.includes("@") ||
+		values.password.length < PASSWORD_MIN_LENGTH
+	) {
+		return "이메일과 8자 이상 비밀번호를 확인해 주세요.";
+	}
+	if (values.password !== values.passwordConfirm) {
+		return "비밀번호가 일치하지 않아요.";
+	}
+	if (!values.agreedToTerms) {
+		return "이용약관과 개인정보 처리방침에 동의해주세요";
+	}
+	return null;
+};
+
 // 목록 한 행이 쓰는 필드만 좁혀 둔 클라이언트 타입. 서버 응답(bambi.jobs.list)은 더 넓은
 // 객체를 주지만 구조적 타이핑으로 그대로 들어온다. 연락처 계열 필드는 서버 selection에
 // 애초에 없으므로 여기에도 추가하지 않는다.
@@ -407,6 +467,16 @@ export const buildJobCardBadges = (job: NativeSeekerJob): NativeJobBadge[] => {
 
 const TRAILING_SLASH_RE = /\/$/;
 
+// 공개 버킷 객체 URL 조립(server gcs.ts getPublicObjectUrl과 같은 모양). base가 없으면
+// (개발·env 미설정) 만들 수 없으므로 null — 호출부가 각자 폴백을 고른다.
+export const publicObjectUri = (
+	storageKey: string,
+	gcsPublicBaseUrl: string | undefined
+): null | string =>
+	gcsPublicBaseUrl
+		? `${gcsPublicBaseUrl.replace(TRAILING_SLASH_RE, "")}/${storageKey}`
+		: null;
+
 // 목록 카드 커버 이미지의 소스 URI를 고른다(web api-job-mapper의 커버 우선순위 이식).
 // 순수 공고는 공개 버킷 base + storageKey로 URL을 조립하고, 수집 공고는 base64 data URI를
 // 그대로 쓴다. base가 없거나(개발) 이미지가 아예 없으면 null → 카드가 업소명 타일로 폴백한다.
@@ -414,11 +484,13 @@ export const resolveJobCoverUri = (
 	job: Pick<NativeSeekerJob, "coverImage" | "coverImageUrl">,
 	gcsPublicBaseUrl: string | undefined
 ): null | string => {
-	if (job.coverImage?.storageKey && gcsPublicBaseUrl) {
-		return `${gcsPublicBaseUrl.replace(TRAILING_SLASH_RE, "")}/${job.coverImage.storageKey}`;
-	}
+	const storageKey = job.coverImage?.storageKey;
 
-	return job.coverImageUrl ?? null;
+	return (
+		(storageKey ? publicObjectUri(storageKey, gcsPublicBaseUrl) : null) ??
+		job.coverImageUrl ??
+		null
+	);
 };
 
 // bambi-screen.tsx의 formatPay와 같은 규칙. 이 파일은 react-native를 import 하지 않는
@@ -546,3 +618,24 @@ export const groupDetailImageSlices = (
 		})),
 	}));
 };
+
+// 역할 enum 원값을 화면에 내보내지 않는다 — 웹 my-page-shell의 ROLE_LABELS와 같은 표.
+// 미등록 역할은 "구직자"로 폴백(법률자문 등 구직자 계정에 얹는 역할의 자연스러운 기본값).
+const PROFILE_ROLE_LABELS: Record<string, string> = {
+	admin: "관리자",
+	employer: "구인자",
+	job_seeker: "구직자",
+	legal_advisor: "법률자문가",
+};
+
+export const profileRoleLabel = (role: null | string | undefined): string =>
+	PROFILE_ROLE_LABELS[role ?? ""] ?? "구직자";
+
+// 웹 MyPointsSummaryCard의 "다음 등급까지" 문구와 같은 규칙.
+export const pointsToNextLabel = (
+	nextGrade: { minPoints: number; name: string } | null,
+	pointsToNext: null | number
+): string =>
+	nextGrade
+		? `${(pointsToNext ?? 0).toLocaleString("ko-KR")}P 남음`
+		: "최고 등급입니다";

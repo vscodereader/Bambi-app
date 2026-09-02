@@ -6,6 +6,8 @@ import {
 	getNativeHomeRoute,
 	type NativeProfileRole,
 } from "@/src/lib/bambi-native";
+import { readGuestToken } from "@/src/lib/guest-store";
+import { resolveGuestVisitor } from "@/src/lib/guest-token";
 import { orpc } from "@/src/lib/orpc";
 
 export default function IndexRoute() {
@@ -20,6 +22,11 @@ export default function IndexRoute() {
 	}
 
 	if (!session.data?.user) {
+		// 웹 resolve-gate와 같은 축: 세션 없는 방문자 중 게스트(본인인증 토큰 보유)는
+		// 로그인으로 보내지 않고 구직자 루트를 통과시킨다. 토큰이 없거나 만료면 로그인.
+		if (resolveGuestVisitor(readGuestToken(), new Date())) {
+			return <Redirect href={getNativeHomeRoute("job_seeker") as Href} />;
+		}
 		return <Redirect href={"/login" as Href} />;
 	}
 

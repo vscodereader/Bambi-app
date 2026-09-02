@@ -8,6 +8,8 @@ import { Platform } from "react-native";
 
 import { authClient } from "@/lib/auth-client";
 
+import { readGuestToken } from "./guest-store";
+
 export const queryClient = new QueryClient();
 
 export const link = new RPCLink({
@@ -28,6 +30,13 @@ export const link = new RPCLink({
 
 		if (cookies) {
 			headers.set("Cookie", cookies);
+		} else {
+			// 세션 쿠키가 없을 때만 게스트 토큰을 싣는다. 서버 context.ts가 이 헤더를
+			// 읽어 게스트 신원을 해석하고, cors.ts도 x-bambi-guest를 이미 허용한다.
+			const guestToken = readGuestToken();
+			if (guestToken) {
+				headers.set("x-bambi-guest", guestToken);
+			}
 		}
 
 		return Object.fromEntries(headers);

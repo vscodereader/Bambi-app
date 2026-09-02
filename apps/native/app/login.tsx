@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, Redirect } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
+import { type Href, Redirect, router } from "expo-router";
 import {
 	Alert,
 	Button,
@@ -15,25 +16,32 @@ import {
 import { useEffect, useRef, useState } from "react";
 import {
 	AccessibilityInfo,
-	Alert as NativeAlert,
 	Pressable,
 	Text,
 	type TextInput,
 	View,
 } from "react-native";
 import { authClient } from "@/lib/auth-client";
+import { AccountRecoveryDialog } from "@/src/components/account-recovery-dialog";
 import { BambiLogo } from "@/src/components/bambi-logo";
 import {
+	AdultNotice,
 	BambiHeader,
 	BambiScreen,
 	LoadingState,
+	notifyWebOnly,
+	Pill,
 } from "@/src/components/bambi-screen";
 import {
 	isEmailLoginId,
 	type NativeLoginErrors,
 	validateNativeLoginInput,
 } from "@/src/lib/bambi-native";
-import { queryClient } from "@/src/lib/orpc";
+import { clearGuestToken } from "@/src/lib/guest-store";
+import { orpc, queryClient } from "@/src/lib/orpc";
+import { useAccountRecovery } from "@/src/lib/use-account-recovery";
+import { useGuestVerification } from "@/src/lib/use-identity-verification";
+import { isSignupAvailable } from "@/src/lib/use-signup";
 
 type LoginStatus = "handoff" | "idle" | "submitting";
 type NoticeStatus = "danger" | "warning";
@@ -46,13 +54,6 @@ const ctaLabels: Record<LoginStatus, string> = {
 
 // 200 응답 뒤 /get-session 왕복이 끝나지 않는 경우(배포 cookiePrefix 불일치 등) 탈출용.
 const handoffTimeoutMs = 8000;
-
-// 미구현 진입점 안내는 OS 알럿으로 띄운다 — 인라인 Alert 슬롯은 비밀번호 필드와
-// CTA 사이에 있어서, 그 아래 버튼(회원가입·비회원 인증)을 누르면 안내가 화면 밖
-// 위쪽에 꽂히고 버튼만 아래로 밀린다. 안내 문구가 이 버튼들의 전부라 못 읽으면
-// 고장으로 보인다. logout-button.tsx와 같은 Alert.alert 패턴.
-const notifyWebOnly = (title: string) =>
-	NativeAlert.alert(title, "앱에서는 준비 중이에요. 웹에서 이용해 주세요.");
 
 export default function LoginScreen() {
 	const [loginId, setLoginId] = useState("");
@@ -67,8 +68,33 @@ export default function LoginScreen() {
 	const passwordRef = useRef<TextInput>(null);
 	const handoffTimerRef = useRef<null | ReturnType<typeof setTimeout>>(null);
 	const session = authClient.useSession();
+	const {
+		isAvailable: isGuestVerifyAvailable,
+		isPending: isGuestVerifyPending,
+		startGuestVerification,
+		verification,
+	} = useGuestVerification();
+	const {
+		closeScreen: closeRecovery,
+		isAvailable: isRecoveryAvailable,
+		isPending: isRecoveryPending,
+		isResetPending,
+		resetErrorText,
+		screen: recoveryScreen,
+		startFindId,
+		startResetPassword,
+		submitNewPassword,
+		verification: recoveryVerification,
+	} = useAccountRecovery();
 	const [accentForegroundColor, defaultForegroundColor, mutedColor] =
 		useThemeColor(["accent-foreground", "default-foreground", "muted"]);
+
+	// 가입 보너스 안내(웹 SignupBonusCallout) — 웹은 로그인 모드의 회원가입 링크 밑에만
+	// 그린다. 0이거나 로딩 중이면 숨긴다. session.isPending early return 위에서 부른다.
+	const signupBonusQuery = useQuery(
+		orpc.bambi.pointSettings.getPublicSignupBonus.queryOptions()
+	);
+	const bonusPoints = signupBonusQuery.data?.signupPoints ?? 0;
 
 	useEffect(
 		() => () => {
@@ -142,6 +168,9 @@ export default function LoginScreen() {
 				// 거치지 않는다. invalidate는 이전 계정 데이터를 캐시에 남기므로(비활성
 				// 쿼리는 재요청도 안 함) 로그아웃과 같은 방식으로 캐시를 비운다.
 				queryClient.clear();
+				// 게스트로 둘러보다 회원 전환하는 경로에서는 게스트 토큰이 남아 있다. 세션이
+				// 생기면 더는 게스트가 아니므로 웹 clearGuestCookie와 같은 이유로 지운다(실패 무시).
+				clearGuestToken().catch(() => undefined);
 			},
 		};
 
@@ -196,10 +225,15 @@ export default function LoginScreen() {
 			/>
 			<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 				<TextField isInvalid={Boolean(errors.loginId)}>
-					{/* ponytail: 아이디 찾기·비밀번호 재설정은 웹에서 포트원(KCP) 본인인증
-					    창으로만 도는 흐름이라 네이티브 대응 라우트가 없다. 링크를 감추면
-					    사용자가 복구 수단 자체를 모르므로, 자리는 두고 안내만 띄운다.
-					    네이티브 복구 흐름이 생기면 notifyWebOnly를 router.push로 바꾼다.
+					{/* 아이디 찾기·비밀번호 재설정은 useAccountRecovery로 실배선됐다 — 포트원
+					    KCP 인증창을 앱 안 WebView로 열어 본인인증을 마치면 계정을 조회하고,
+					    아래 AccountRecoveryDialog가 결과(아이디 노출·비밀번호 재설정 폼·계정
+					    없음)를 그린다. EXPO_PUBLIC_PORTONE_STORE_ID/CHANNEL_KEY 미설정이면
+					    isAvailable=false라 기존 웹 안내로 폴백한다.
+					    로그인 제출 중(status !== "idle")에도 막는다 — 세션이 잡히면 이 화면이
+					    Redirect로 언마운트돼 진행 중인 인증 모달이 그대로 사라진다. 계정 조회와 비회원
+					    인증은 서로의 진행 중 상태로 양쪽 다 막는다 — 한쪽만 막으면 인증 모달 두 개가
+					    동시에 뜨거나, 게스트 전환의 화면 이동이 진행 중인 인증 모달을 날린다.
 					    링크 색은 --link(#2969ff)를 일부러 안 쓴다 — surface-secondary 위에서
 					    4.41:1이라 본문 크기 AA(4.5:1)에 미달한다. 웹과 같은 muted 계열에
 					    hover가 없는 네이티브용으로 상시 underline을 얹어 탭 가능함을 알린다.
@@ -213,8 +247,15 @@ export default function LoginScreen() {
 						<Pressable
 							accessibilityRole="button"
 							className="shrink active:opacity-75"
+							disabled={
+								isGuestVerifyPending || isRecoveryPending || status !== "idle"
+							}
 							hitSlop={12}
-							onPress={() => notifyWebOnly("아이디 찾기")}
+							onPress={
+								isRecoveryAvailable
+									? startFindId
+									: () => notifyWebOnly("아이디 찾기")
+							}
 						>
 							<Text className="font-semibold text-muted text-xs underline">
 								아이디 찾기
@@ -245,8 +286,15 @@ export default function LoginScreen() {
 						<Pressable
 							accessibilityRole="button"
 							className="shrink active:opacity-75"
+							disabled={
+								isGuestVerifyPending || isRecoveryPending || status !== "idle"
+							}
 							hitSlop={12}
-							onPress={() => notifyWebOnly("비밀번호 재설정")}
+							onPress={
+								isRecoveryAvailable
+									? startResetPassword
+									: () => notifyWebOnly("비밀번호 재설정")
+							}
 						>
 							<Text className="font-semibold text-muted text-xs underline">
 								비밀번호를 잊으셨나요?
@@ -303,11 +351,14 @@ export default function LoginScreen() {
 					)}
 					<Button.Label>{ctaLabels[status]}</Button.Label>
 				</Button>
-				{/* ponytail: 네이티브엔 회원가입 라우트도, 비회원 인증(웹은 포트원 KCP 팝업으로
-				    게스트 쿠키를 발급받는다) 배선도 아직 없다. 진입점을 감추면 사용자가 경로
-				    자체를 모르므로 자리는 두고 안내만 띄운다. 라우트가 생기면 notifyWebOnly를
-				    router.push로 바꾼다. 안내를 인라인 Alert이 아니라 OS 알럿으로 띄우는 이유는
-				    notifyWebOnly 주석 참고 — 이 두 버튼은 Alert 슬롯보다 아래에 있다.
+				{/* 비회원 인증은 useGuestVerification으로 실배선됐다 — 포트원 KCP 인증창을
+				    앱 안 WebView(<IdentityVerification/>)로 열어 본인인증을 마치고, 서버가
+				    발급한 게스트 토큰을 SecureStore에 저장한 뒤 구직자 탭으로 전환한다.
+				    EXPO_PUBLIC_PORTONE_STORE_ID/CHANNEL_KEY 미설정(포트원 콘솔 발급 전)이면
+				    isAvailable=false라 기존 웹 안내로 폴백한다.
+				    회원가입은 /signup(웹과 같은 2단계 — 본인인증 → 가입 폼)으로 보낸다. 안내를
+				    인라인 Alert이 아니라 OS 알럿으로 띄우는 이유는 notifyWebOnly 주석 참고 — 이 두
+				    버튼은 Alert 슬롯보다 아래에 있다.
 				    위계는 로그인(primary) > 비회원 인증(secondary) > 회원가입(ghost) —
 				    tertiary는 secondary와 배경이 같은 bg-default라 두 버튼이 같은 무게로
 				    보였다. 웹처럼 텍스트 링크가 되는 ghost(bg-transparent)가 진짜 3단계다.
@@ -319,7 +370,14 @@ export default function LoginScreen() {
 				    코드포인트까지 라벨에 합쳐 읽는다(비밀번호 보기 토글과 같은 이유). */}
 				<Button
 					accessibilityLabel="비회원으로 인증하기"
-					onPress={() => notifyWebOnly("비회원 인증")}
+					isDisabled={
+						isGuestVerifyPending || isRecoveryPending || status !== "idle"
+					}
+					onPress={
+						isGuestVerifyAvailable
+							? startGuestVerification
+							: () => notifyWebOnly("비회원 인증")
+					}
 					size="lg"
 					variant="secondary"
 				>
@@ -329,34 +387,58 @@ export default function LoginScreen() {
 						size={20}
 					/>
 					<Button.Label className="text-default-foreground">
-						비회원으로 인증하기
+						{isGuestVerifyPending ? "인증 중" : "비회원으로 인증하기"}
 					</Button.Label>
 				</Button>
-				{/* 좁은 화면에서 안내 문구와 버튼이 한 줄에 못 들어가면 접히게 둔다. */}
+				{verification}
+				{recoveryVerification}
+				<AccountRecoveryDialog
+					isResetPending={isResetPending}
+					onClose={closeRecovery}
+					onSubmitPassword={submitNewPassword}
+					// setLoginId가 아니라 handleLoginIdChange를 쓴다 — 값을 채우면서 직전
+					// 오류·Alert까지 지워야 아이디가 다 찬 뒤에도 "입력해 주세요"가 남지 않는다.
+					onUseLoginId={(foundLoginId) => {
+						handleLoginIdChange(foundLoginId);
+						closeRecovery();
+						passwordRef.current?.focus();
+					}}
+					resetErrorText={resetErrorText}
+					screen={recoveryScreen}
+				/>
+				{/* 좁은 화면에서 안내 문구와 버튼이 한 줄에 못 들어가면 접히게 둔다.
+				    형제 버튼(비회원 인증·아이디 찾기)과 같은 진행 중 가드를 건다 — 비회원
+				    인증 발급 대기 중 signup으로 빠지면 완료 시 게스트 화면 전환이 signup을
+				    날린다. env 미설정이면 형제 버튼과 같은 타이밍에 즉시 안내로 폴백한다. */}
 				<View className="flex-row flex-wrap items-center justify-center gap-1">
 					<Text className="text-muted text-sm">밤비알바가 처음이신가요?</Text>
 					<Button
-						onPress={() => notifyWebOnly("회원가입")}
+						isDisabled={
+							isGuestVerifyPending || isRecoveryPending || status !== "idle"
+						}
+						onPress={
+							isSignupAvailable
+								? () => router.push("/signup" as Href)
+								: () => notifyWebOnly("회원가입")
+						}
 						size="sm"
 						variant="ghost"
 					>
 						<Button.Label>회원가입</Button.Label>
 					</Button>
 				</View>
-				{/* 청소년유해매체물 고지. 웹 AdultNotice와 같은 표현을 쓴다 — 색은 muted
-				    계열로만 둔다(코럴을 쓰면 주 액션인 로그인 CTA와 위계가 뒤집힌다).
-				    role="alert"를 달지 않는다: 상시 노출되는 법정 고지를 매 렌더마다
-				    스크린리더가 경보로 읽어버린다. */}
-				<View className="flex-row items-start gap-3">
-					<View className="h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-muted">
-						<Text className="font-extrabold text-muted text-sm">19</Text>
+				{/* 가입 보너스 안내(웹 SignupBonusCallout) — 회원가입 링크 밑에만 둔다.
+				    Pill이 self-start라 items-center로는 왼쪽에 붙는다(자식 alignSelf가
+				    부모 alignItems를 덮는다). flex-row+justify-center로 가운데에 둔다. */}
+				{bonusPoints > 0 ? (
+					<View className="flex-row justify-center">
+						<Pill tone="accent">
+							지금 회원가입 시, {bonusPoints.toLocaleString("ko-KR")}포인트
+							지급!
+						</Pill>
 					</View>
-					<Text className="flex-1 text-muted text-xs leading-5" selectable>
-						본 정보내용은 청소년 유해매체물로서 정보통신망 이용촉진 및 정보보호
-						등에 관한 법률 및 청소년 보호법의 규정에 의하여 만 19세 미만의
-						청소년이 이용할 수 없습니다.
-					</Text>
-				</View>
+				) : null}
+				<AdultNotice />
 			</Surface>
 		</BambiScreen>
 	);

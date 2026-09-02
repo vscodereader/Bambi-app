@@ -96,6 +96,8 @@ export const GUEST_VERIFY_RATE_LIMIT_SCOPE = "guest-verify";
 // 라우터 구조가 바뀌어도 따라오도록 프로시저 이름(경로의 마지막 조각)으로 찾는다.
 const RATE_LIMIT_OVERRIDES: Record<string, number> = {
 	[GUEST_VERIFY_RATE_LIMIT_SCOPE]: IDENTITY_RATE_LIMIT,
+	// native 게스트 흐름의 앞 단계(startIdentityVerification 30/h)·웹 /api/guest(guest-verify 30/h)와 티어를 맞춘다.
+	issueGuestToken: IDENTITY_RATE_LIMIT,
 	startIdentityVerification: IDENTITY_RATE_LIMIT,
 };
 
