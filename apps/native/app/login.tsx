@@ -22,6 +22,7 @@ import {
 	View,
 } from "react-native";
 import { authClient } from "@/lib/auth-client";
+import { AccountRecoveryDialog } from "@/src/components/account-recovery-dialog";
 import { BambiLogo } from "@/src/components/bambi-logo";
 import {
 	BambiHeader,
@@ -35,6 +36,7 @@ import {
 } from "@/src/lib/bambi-native";
 import { clearGuestToken } from "@/src/lib/guest-store";
 import { queryClient } from "@/src/lib/orpc";
+import { useAccountRecovery } from "@/src/lib/use-account-recovery";
 import { useGuestVerification } from "@/src/lib/use-identity-verification";
 
 type LoginStatus = "handoff" | "idle" | "submitting";
@@ -75,6 +77,18 @@ export default function LoginScreen() {
 		startGuestVerification,
 		verification,
 	} = useGuestVerification();
+	const {
+		closeScreen: closeRecovery,
+		isAvailable: isRecoveryAvailable,
+		isPending: isRecoveryPending,
+		isResetPending,
+		resetErrorText,
+		screen: recoveryScreen,
+		startFindId,
+		startResetPassword,
+		submitNewPassword,
+		verification: recoveryVerification,
+	} = useAccountRecovery();
 	const [accentForegroundColor, defaultForegroundColor, mutedColor] =
 		useThemeColor(["accent-foreground", "default-foreground", "muted"]);
 
@@ -207,10 +221,15 @@ export default function LoginScreen() {
 			/>
 			<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 				<TextField isInvalid={Boolean(errors.loginId)}>
-					{/* ponytail: 아이디 찾기·비밀번호 재설정은 웹에서 포트원(KCP) 본인인증
-					    창으로만 도는 흐름이라 네이티브 대응 라우트가 없다. 링크를 감추면
-					    사용자가 복구 수단 자체를 모르므로, 자리는 두고 안내만 띄운다.
-					    네이티브 복구 흐름이 생기면 notifyWebOnly를 router.push로 바꾼다.
+					{/* 아이디 찾기·비밀번호 재설정은 useAccountRecovery로 실배선됐다 — 포트원
+					    KCP 인증창을 앱 안 WebView로 열어 본인인증을 마치면 계정을 조회하고,
+					    아래 AccountRecoveryDialog가 결과(아이디 노출·비밀번호 재설정 폼·계정
+					    없음)를 그린다. EXPO_PUBLIC_PORTONE_STORE_ID/CHANNEL_KEY 미설정이면
+					    isAvailable=false라 기존 웹 안내로 폴백한다.
+					    로그인 제출 중(status !== "idle")에도 막는다 — 세션이 잡히면 이 화면이
+					    Redirect로 언마운트돼 진행 중인 인증 모달이 그대로 사라진다. 계정 조회와 비회원
+					    인증은 서로의 진행 중 상태로 양쪽 다 막는다 — 한쪽만 막으면 인증 모달 두 개가
+					    동시에 뜨거나, 게스트 전환의 화면 이동이 진행 중인 인증 모달을 날린다.
 					    링크 색은 --link(#2969ff)를 일부러 안 쓴다 — surface-secondary 위에서
 					    4.41:1이라 본문 크기 AA(4.5:1)에 미달한다. 웹과 같은 muted 계열에
 					    hover가 없는 네이티브용으로 상시 underline을 얹어 탭 가능함을 알린다.
@@ -224,8 +243,15 @@ export default function LoginScreen() {
 						<Pressable
 							accessibilityRole="button"
 							className="shrink active:opacity-75"
+							disabled={
+								isGuestVerifyPending || isRecoveryPending || status !== "idle"
+							}
 							hitSlop={12}
-							onPress={() => notifyWebOnly("아이디 찾기")}
+							onPress={
+								isRecoveryAvailable
+									? startFindId
+									: () => notifyWebOnly("아이디 찾기")
+							}
 						>
 							<Text className="font-semibold text-muted text-xs underline">
 								아이디 찾기
@@ -256,8 +282,15 @@ export default function LoginScreen() {
 						<Pressable
 							accessibilityRole="button"
 							className="shrink active:opacity-75"
+							disabled={
+								isGuestVerifyPending || isRecoveryPending || status !== "idle"
+							}
 							hitSlop={12}
-							onPress={() => notifyWebOnly("비밀번호 재설정")}
+							onPress={
+								isRecoveryAvailable
+									? startResetPassword
+									: () => notifyWebOnly("비밀번호 재설정")
+							}
 						>
 							<Text className="font-semibold text-muted text-xs underline">
 								비밀번호를 잊으셨나요?
@@ -335,7 +368,9 @@ export default function LoginScreen() {
 				    코드포인트까지 라벨에 합쳐 읽는다(비밀번호 보기 토글과 같은 이유). */}
 				<Button
 					accessibilityLabel="비회원으로 인증하기"
-					isDisabled={isGuestVerifyPending || status !== "idle"}
+					isDisabled={
+						isGuestVerifyPending || isRecoveryPending || status !== "idle"
+					}
 					onPress={
 						isGuestVerifyAvailable
 							? startGuestVerification
@@ -354,6 +389,21 @@ export default function LoginScreen() {
 					</Button.Label>
 				</Button>
 				{verification}
+				{recoveryVerification}
+				<AccountRecoveryDialog
+					isResetPending={isResetPending}
+					onClose={closeRecovery}
+					onSubmitPassword={submitNewPassword}
+					// setLoginId가 아니라 handleLoginIdChange를 쓴다 — 값을 채우면서 직전
+					// 오류·Alert까지 지워야 아이디가 다 찬 뒤에도 "입력해 주세요"가 남지 않는다.
+					onUseLoginId={(foundLoginId) => {
+						handleLoginIdChange(foundLoginId);
+						closeRecovery();
+						passwordRef.current?.focus();
+					}}
+					resetErrorText={resetErrorText}
+					screen={recoveryScreen}
+				/>
 				{/* 좁은 화면에서 안내 문구와 버튼이 한 줄에 못 들어가면 접히게 둔다. */}
 				<View className="flex-row flex-wrap items-center justify-center gap-1">
 					<Text className="text-muted text-sm">밤비알바가 처음이신가요?</Text>

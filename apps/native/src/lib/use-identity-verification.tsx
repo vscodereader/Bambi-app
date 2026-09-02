@@ -28,24 +28,23 @@ const IDENTITY_ERROR_MESSAGES: Record<string, string> = {
 	UNAUTHORIZED: "로그인 후 다시 시도해 주세요.",
 };
 
-const identityErrorMessage = (
+export const identityErrorMessage = (
 	error: unknown,
-	messages: Record<string, string> = IDENTITY_ERROR_MESSAGES
+	messages: Record<string, string> = IDENTITY_ERROR_MESSAGES,
+	fallback = "본인인증을 마치지 못했어요. 잠시 후 다시 시도해 주세요."
 ): string => {
 	const code =
 		typeof error === "object" && error !== null && "code" in error
 			? String(error.code)
 			: "";
 
-	return (
-		messages[code] ?? "본인인증을 마치지 못했어요. 잠시 후 다시 시도해 주세요."
-	);
+	return messages[code] ?? fallback;
 };
 
-// 두 훅이 공유하는 모달 부분: 인증 건 발급 → 성공 시 모달을 열고, onComplete에서 PG
-// 실패면 서버를 부르지 않고 PG 문구를 그대로 보여준다. 성공(code 없음)일 때만 onVerified에
-// 확정된 인증 건 ID를 넘겨, 최종 mutate(verify / issueGuest)만 호출부가 얹는다.
-function useIdentityModal({
+// 세 훅이 공유하는(계정복구 포함) 모달 부분: 인증 건 발급 → 성공 시 모달을 열고,
+// onComplete에서 PG 실패면 서버를 부르지 않고 PG 문구를 그대로 보여준다. 성공(code 없음)일
+// 때만 onVerified에 확정된 인증 건 ID를 넘겨, 최종 mutate만 호출부가 얹는다.
+export function useIdentityModal({
 	messages,
 	onVerified,
 }: {
