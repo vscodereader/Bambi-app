@@ -17,7 +17,8 @@
           "cameraPermission": false,
           "microphonePermission": false
         }
-      ]
+      ],
+      "@portone/react-native-sdk"
     ],
     "experiments": {
       "typedRoutes": true,

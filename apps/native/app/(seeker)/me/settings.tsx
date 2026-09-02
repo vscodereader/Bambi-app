@@ -262,8 +262,8 @@ function ProfileImageCard() {
 	);
 }
 
-// 본인인증. 포트원 KCP 인증창이 브라우저 SDK 전용이라 웹 릴레이(/app-verify)를 시스템
-// 브라우저로 열어 처리한다 — EXPO_PUBLIC_WEB_URL이 없으면 릴레이 주소를 만들 수 없어
+// 본인인증. 포트원 KCP 인증창을 @portone/react-native-sdk의 인앱 WebView로 앱 안에서
+// 연다 — EXPO_PUBLIC_PORTONE_STORE_ID/CHANNEL_KEY가 하나라도 없으면 인증창을 열 수 없어
 // 기존 "웹사이트에서" 안내로 폴백한다. 이 화면의 primary는 표시 이름 저장이라 인증
 // 버튼은 secondary로 둔다.
 function PhoneVerificationCard({
@@ -273,7 +273,7 @@ function PhoneVerificationCard({
 	isPhoneVerified: boolean;
 	phoneNumber: null | string | undefined;
 }) {
-	const { isAvailable, isPending, startIdentityVerification } =
+	const { isAvailable, isPending, startIdentityVerification, verification } =
 		useIdentityVerification();
 
 	let description =
@@ -282,7 +282,7 @@ function PhoneVerificationCard({
 	if (isAvailable) {
 		description = isPhoneVerified
 			? "번호가 바뀌었다면 다시 인증해 주세요."
-			: "브라우저 창이 열리고, 인증을 마치면 앱으로 돌아와요.";
+			: "인증 화면이 앱 안에서 열려요.";
 	} else if (isPhoneVerified) {
 		description = "휴대폰 본인인증이 완료됐어요.";
 	}
@@ -320,6 +320,7 @@ function PhoneVerificationCard({
 					<Button.Label>{label}</Button.Label>
 				</Button>
 			) : null}
+			{verification}
 		</Surface>
 	);
 }

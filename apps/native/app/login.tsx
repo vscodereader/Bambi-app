@@ -73,6 +73,7 @@ export default function LoginScreen() {
 		isAvailable: isGuestVerifyAvailable,
 		isPending: isGuestVerifyPending,
 		startGuestVerification,
+		verification,
 	} = useGuestVerification();
 	const [accentForegroundColor, defaultForegroundColor, mutedColor] =
 		useThemeColor(["accent-foreground", "default-foreground", "muted"]);
@@ -313,10 +314,11 @@ export default function LoginScreen() {
 					)}
 					<Button.Label>{ctaLabels[status]}</Button.Label>
 				</Button>
-				{/* 비회원 인증은 useGuestVerification으로 실배선됐다 — 릴레이 브라우저(웹
-				    /app-verify)를 열어 포트원 KCP 본인인증을 마치고, 서버가 발급한 게스트
-				    토큰을 SecureStore에 저장한 뒤 구직자 탭으로 전환한다. EXPO_PUBLIC_WEB_URL
-				    미설정(웹 선배포 전)이면 isAvailable=false라 기존 웹 안내로 폴백한다.
+				{/* 비회원 인증은 useGuestVerification으로 실배선됐다 — 포트원 KCP 인증창을
+				    앱 안 WebView(<IdentityVerification/>)로 열어 본인인증을 마치고, 서버가
+				    발급한 게스트 토큰을 SecureStore에 저장한 뒤 구직자 탭으로 전환한다.
+				    EXPO_PUBLIC_PORTONE_STORE_ID/CHANNEL_KEY 미설정(포트원 콘솔 발급 전)이면
+				    isAvailable=false라 기존 웹 안내로 폴백한다.
 				    ponytail: 회원가입만 아직 네이티브 라우트가 없어 웹 전용으로 남는다. 진입점을
 				    감추면 사용자가 경로 자체를 모르므로 자리는 두고 안내만 띄운다. 라우트가
 				    생기면 notifyWebOnly를 router.push로 바꾼다. 안내를 인라인 Alert이 아니라 OS
@@ -351,6 +353,7 @@ export default function LoginScreen() {
 						{isGuestVerifyPending ? "인증 중" : "비회원으로 인증하기"}
 					</Button.Label>
 				</Button>
+				{verification}
 				{/* 좁은 화면에서 안내 문구와 버튼이 한 줄에 못 들어가면 접히게 둔다. */}
 				<View className="flex-row flex-wrap items-center justify-center gap-1">
 					<Text className="text-muted text-sm">밤비알바가 처음이신가요?</Text>
