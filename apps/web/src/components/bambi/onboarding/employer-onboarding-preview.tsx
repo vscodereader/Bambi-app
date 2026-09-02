@@ -19,11 +19,14 @@ import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Textarea } from "@bambi-app/ui/components/textarea";
+import { GiftIcon } from "lucide-react";
 import type { StaticImageData } from "next/image";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import {
 	ONBOARDING_AUTO_SWIPE_PAUSE_MS,
+	ONBOARDING_POINT_SHOP_DIALOG_MS,
+	ONBOARDING_POINT_SHOP_HISTORY_MS,
 	ONBOARDING_REVIEW_SUBMIT_PRESS_MS,
 	ONBOARDING_REVIEW_TYPING_INTERVAL_MS,
 	ONBOARDING_SEQUENCE_ITEM_INTERVAL_MS,
@@ -51,6 +54,7 @@ export type OnboardingCodePreviewKind =
 	| "common-safety"
 	| "interview-contact"
 	| "job-create"
+	| "point-shop"
 	| "seeker-chat"
 	| "seeker-interview"
 	| "seeker-marketplace";
@@ -1267,6 +1271,254 @@ const SafetySheetPreview = ({ visibleCount }: { visibleCount: number }) => (
 	</>
 );
 
+const PointItemCard = ({
+	className,
+	image,
+	name,
+	price,
+}: {
+	className?: string;
+	image?: string;
+	name: string;
+	price: string;
+}) => (
+	<div
+		className={`flex aspect-square w-full flex-col overflow-hidden rounded-xl border border-border bg-card ${className ?? ""}`}
+	>
+		<div className="relative min-h-0 w-full flex-1 bg-secondary">
+			{image ? (
+				<Image
+					alt=""
+					className="object-contain"
+					fill
+					sizes="175px"
+					src={image}
+				/>
+			) : (
+				<span className="flex size-full items-center justify-center text-coral-300">
+					<GiftIcon className="size-10" />
+				</span>
+			)}
+			<Badge className="absolute top-2 right-2 h-7 px-3 font-extrabold text-sm">
+				{price}
+			</Badge>
+		</div>
+		<div className="border-border border-t px-3 py-2.5">
+			<p className="m-0 truncate font-extrabold text-sm">{name}</p>
+		</div>
+	</div>
+);
+
+type PointShopDemoPhase =
+	| "dialog"
+	| "history"
+	| "item-pressing"
+	| "purchase-pressing"
+	| "shop";
+
+const NEXT_POINT_SHOP_PHASE: Record<PointShopDemoPhase, PointShopDemoPhase> = {
+	dialog: "purchase-pressing",
+	history: "shop",
+	"item-pressing": "dialog",
+	"purchase-pressing": "history",
+	shop: "item-pressing",
+};
+
+const PointPurchaseHistory = () => (
+	<>
+		<SeekerHeader />
+		<div className="flex h-[717px] flex-col gap-4 overflow-hidden px-5 py-6">
+			<h2 className="m-0 font-extrabold text-2xl">포인트 내역</h2>
+			<Card>
+				<CardHeader>
+					<CardTitle>내 아이템</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<p className="m-0 text-muted-foreground text-sm">
+						사용할 수 있는 혜택 0건
+					</p>
+				</CardContent>
+			</Card>
+			<Card>
+				<CardHeader>
+					<CardTitle>구매 내역</CardTitle>
+					<p className="m-0 text-muted-foreground text-sm">
+						포인트몰에서 신청한 아이템 1건
+					</p>
+				</CardHeader>
+				<CardContent>
+					<div className="rounded-xl border border-border p-4">
+						<div className="flex items-center justify-between gap-3">
+							<div>
+								<p className="m-0 font-bold">배민 5만원 상품권</p>
+								<p className="m-0 mt-1 text-muted-foreground text-xs">
+									주문 2026. 9. 2. 오후 3:56
+								</p>
+							</div>
+							<div className="text-right">
+								<Badge variant="secondary">주문완료</Badge>
+								<p className="m-0 mt-1 font-bold">-50,000P</p>
+							</div>
+						</div>
+						<p className="m-0 mt-4 text-muted-foreground text-sm">
+							본인인증 휴대폰 번호로 발송돼요.
+						</p>
+						<div className="mt-4 flex justify-end">
+							<Button size="sm" variant="outline">
+								취소·환불
+							</Button>
+						</div>
+					</div>
+				</CardContent>
+			</Card>
+		</div>
+		<SeekerBottomNav />
+	</>
+);
+
+const PointPurchaseDialog = ({ pressing }: { pressing: boolean }) => (
+	<div className="absolute inset-0 flex items-end bg-ink-900/40">
+		<div className="w-full rounded-t-2xl bg-background p-5 shadow-[var(--shadow-lg)]">
+			<div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-secondary">
+				<Image
+					alt=""
+					className="object-contain"
+					fill
+					sizes="350px"
+					src="/bambi/onboarding/point-shop/baemin-50000.jpg"
+				/>
+			</div>
+			<div className="mt-4 flex items-center gap-2">
+				<h2 className="m-0 font-bold text-xl">배민 5만원 상품권</h2>
+				<Badge variant="secondary">쿠폰 발송</Badge>
+			</div>
+			<p className="mt-2 mb-0 text-muted-foreground text-sm">
+				배달의민족 5만원 상품권을 본인인증 휴대폰 번호로 발송해요.
+			</p>
+			<dl className="mt-4 flex flex-col gap-2 rounded-lg bg-secondary px-4 py-3 text-sm">
+				<div className="flex justify-between">
+					<dt>필요 포인트</dt>
+					<dd className="m-0 font-bold">50,000P</dd>
+				</div>
+				<div className="flex justify-between">
+					<dt>내 포인트</dt>
+					<dd className="m-0 font-bold">50,000P</dd>
+				</div>
+			</dl>
+			<Alert className="mt-4" variant="brand">
+				<AlertDescription>
+					본인인증 시 등록된 휴대폰 번호로 발송돼요. 지급완료 전에는 취소·환불할
+					수 있어요.
+				</AlertDescription>
+			</Alert>
+			<div className="mt-4 flex justify-end gap-2">
+				<Button variant="outline">닫기</Button>
+				<Button
+					className={
+						pressing
+							? "[animation:bambiReviewSubmitPress_var(--dur-slow)_var(--ease-in-out)] motion-reduce:animate-none"
+							: undefined
+					}
+				>
+					구매하기
+				</Button>
+			</div>
+		</div>
+	</div>
+);
+
+const PointShopPreview = () => {
+	const [phase, setPhase] = useState<PointShopDemoPhase>("shop");
+	const itemRef = useRef<HTMLDivElement | null>(null);
+	const scrollRef = useRef<HTMLDivElement | null>(null);
+	useEffect(() => {
+		if (phase === "shop") {
+			scrollRef.current?.scrollTo({
+				behavior: "smooth",
+				top:
+					(itemRef.current?.offsetTop ?? 0) -
+					(scrollRef.current?.clientHeight ?? 0) / 3,
+			});
+		}
+		let delay = ONBOARDING_SEQUENCE_ITEM_INTERVAL_MS;
+		if (phase === "item-pressing" || phase === "purchase-pressing") {
+			delay = ONBOARDING_REVIEW_SUBMIT_PRESS_MS;
+		} else if (phase === "dialog") {
+			delay = ONBOARDING_POINT_SHOP_DIALOG_MS;
+		} else if (phase === "history") {
+			delay = ONBOARDING_POINT_SHOP_HISTORY_MS;
+		}
+		const timer = window.setTimeout(
+			() => setPhase((current) => NEXT_POINT_SHOP_PHASE[current]),
+			delay
+		);
+		return () => window.clearTimeout(timer);
+	}, [phase]);
+	if (phase === "history") {
+		return <PointPurchaseHistory />;
+	}
+	return (
+		<>
+			<SeekerHeader />
+			<div
+				className="h-[717px] overflow-hidden"
+				data-point-shop-phase={phase}
+				ref={scrollRef}
+			>
+				<div className="flex flex-col gap-6 px-5 py-6">
+					<section className="flex flex-col gap-3" ref={itemRef}>
+						<div className="flex items-center gap-2">
+							<Badge variant="secondary">프리미엄</Badge>
+							<h2 className="m-0 font-extrabold text-base">프리미엄 광고</h2>
+						</div>
+						<div className="grid gap-3">
+							<Image
+								alt=""
+								className="aspect-[16/9] w-full rounded-lg object-cover"
+								height={197}
+								src="/bambi/sample-thumbnails/sample-20.png"
+								width={350}
+							/>
+							<Image
+								alt=""
+								className="aspect-[16/9] w-full rounded-lg object-cover"
+								height={197}
+								src="/bambi/sample-thumbnails/sample-18.jpg"
+								width={350}
+							/>
+						</div>
+					</section>
+					<section className="flex flex-col gap-3">
+						<div className="flex flex-col gap-1">
+							<h2 className="m-0 font-extrabold text-lg">포인트 아이템</h2>
+							<p className="m-0 text-muted-foreground text-sm">
+								출석·글쓰기로 모은 포인트로 교환해요. 신청하면 운영자가 확인 후
+								지급해요.
+							</p>
+						</div>
+						<div className="grid grid-cols-2 gap-3">
+							<PointItemCard
+								className={
+									phase === "item-pressing"
+										? "[animation:bambiReviewSubmitPress_var(--dur-slow)_var(--ease-in-out)] motion-reduce:animate-none"
+										: undefined
+								}
+								image="/bambi/onboarding/point-shop/baemin-50000.jpg"
+								name="배민 5만원 상품권"
+								price="50,000P"
+							/>
+						</div>
+					</section>
+				</div>
+			</div>
+			<SeekerBottomNav />
+			{phase === "dialog" || phase === "purchase-pressing" ? (
+				<PointPurchaseDialog pressing={phase === "purchase-pressing"} />
+			) : null}
+		</>
+	);
+};
+
 const getPreviewSequenceLength = (kind: OnboardingCodePreviewKind): number => {
 	if (kind === "common-notifications") {
 		return 4;
@@ -1328,6 +1580,8 @@ export function OnboardingCodePreview({
 		content = <NotificationsPreview visibleCount={visibleCount} />;
 	} else if (kind === "common-safety") {
 		content = <SafetySheetPreview visibleCount={visibleCount} />;
+	} else if (kind === "point-shop") {
+		content = <PointShopPreview />;
 	}
 	return (
 		<div className="relative h-full min-h-0 w-auto max-w-full lg:h-auto">

@@ -5,12 +5,14 @@ import {
 	CalendarCheck,
 	FileCheck2,
 	FileText,
+	Gift,
 	Inbox,
 	MapPin,
 	MessageCircle,
 	Paperclip,
 	ShieldCheck,
 	Star,
+	Store,
 	UserRoundCheck,
 } from "lucide-react";
 import type { StaticImageData } from "next/image";
@@ -112,6 +114,19 @@ export const ONBOARDING_CONTENT: Readonly<
 			secondaryIcon: ShieldCheck,
 			title: "면접 경험을 후기로 남겨주세요",
 		},
+		{
+			codePreview: "point-shop",
+			description: "다양한 활동으로 번 포인트를 사용해 상품을 구매하세요!",
+			icon: Gift,
+			id: "seeker-point-shop",
+			mobileDescription:
+				"다양한 활동으로 번 포인트를\n사용해 상품을 구매하세요!",
+			mobileTitle: "포인트로 실제\n상품권 구매까지!",
+			screen: commonNotificationMessage,
+			screenAlt: "포인트몰 상품 목록 화면",
+			secondaryIcon: Store,
+			title: "포인트로 실제 상품권 구매까지!",
+		},
 	],
 	employer: [
 		{
@@ -167,6 +182,19 @@ export const ONBOARDING_CONTENT: Readonly<
 			secondaryIcon: UserRoundCheck,
 			title: "면접 제안부터 지원자 관리까지",
 		},
+		{
+			codePreview: "point-shop",
+			description: "다양한 활동으로 번 포인트를 사용해 상품을 구매하세요!",
+			icon: Gift,
+			id: "employer-point-shop",
+			mobileDescription:
+				"다양한 활동으로 번 포인트를\n사용해 상품을 구매하세요!",
+			mobileTitle: "포인트로 실제\n상품권 구매까지!",
+			screen: commonNotificationMessage,
+			screenAlt: "포인트몰 상품 목록 화면",
+			secondaryIcon: Store,
+			title: "포인트로 실제 상품권 구매까지!",
+		},
 	],
 	common: [
 		{
@@ -220,6 +248,19 @@ export const ONBOARDING_CONTENT: Readonly<
 			screenAlt: "신고·차단과 고객센터 화면",
 			secondaryIcon: MessageCircle,
 			title: "불편한 상황은 밤비가 도와드려요!",
+		},
+		{
+			codePreview: "point-shop",
+			description: "다양한 활동으로 번 포인트를 사용해 상품을 구매하세요!",
+			icon: Gift,
+			id: "common-point-shop",
+			mobileDescription:
+				"다양한 활동으로 번 포인트를\n사용해 상품을 구매하세요!",
+			mobileTitle: "포인트로 실제\n상품권 구매까지!",
+			screen: commonNotificationMessage,
+			screenAlt: "포인트몰 상품 목록 화면",
+			secondaryIcon: Store,
+			title: "포인트로 실제 상품권 구매까지!",
 		},
 	],
 };

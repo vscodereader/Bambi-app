@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { ONBOARDING_CONTENT } from "@/lib/bambi/onboarding-content";
 
 const EXPECTED_AUDIENCES = ["common", "employer", "job_seeker"] as const;
-const EXPECTED_SLIDE_COUNT = 4;
+const EXPECTED_SLIDE_COUNT = 5;
 describe("onboarding content", () => {
-	it("defines four complete slides for every audience", () => {
+	it("defines five complete slides for every audience", () => {
 		for (const audience of EXPECTED_AUDIENCES) {
 			const slides = ONBOARDING_CONTENT[audience];
 			expect(slides).toHaveLength(EXPECTED_SLIDE_COUNT);
@@ -63,7 +63,13 @@ describe("onboarding content", () => {
 	it("renders every employer slide with a code preview", () => {
 		expect(
 			ONBOARDING_CONTENT.employer.map((slide) => slide.codePreview)
-		).toEqual(["business-info", "job-create", "chat", "interview-contact"]);
+		).toEqual([
+			"business-info",
+			"job-create",
+			"chat",
+			"interview-contact",
+			"point-shop",
+		]);
 	});
 
 	it("renders the first three seeker slides with shared code previews", () => {
@@ -81,6 +87,7 @@ describe("onboarding content", () => {
 				"seeker-interview",
 				"common-notifications",
 				"common-safety",
+				"point-shop",
 			]
 		);
 	});
@@ -107,6 +114,10 @@ describe("onboarding content", () => {
 				description:
 					"신고와 차단 기능을 이용하고,\n고객센터에 빠르게 문의하세요!",
 				title: "불편한 상황은\n밤비가 도와드려요!",
+			},
+			{
+				description: "다양한 활동으로 번 포인트를\n사용해 상품을 구매하세요!",
+				title: "포인트로 실제\n상품권 구매까지!",
 			},
 		]);
 	});
@@ -138,6 +149,10 @@ describe("onboarding content", () => {
 					"별점과 후기를 남겨 다른 구직자가\n업체를 판단하는데 도움을 줄 수 있어요!",
 				title: "면접 경험을\n후기로 남겨주세요!",
 			},
+			{
+				description: "다양한 활동으로 번 포인트를\n사용해 상품을 구매하세요!",
+				title: "포인트로 실제\n상품권 구매까지!",
+			},
 		]);
 
 		expect(ONBOARDING_CONTENT.job_seeker.map((slide) => slide.title)).toEqual([
@@ -145,6 +160,7 @@ describe("onboarding content", () => {
 			"궁금한 내용은 채팅으로 바로 확인하세요",
 			"면접과 연락처를 안전하게 관리해요",
 			"면접 경험을 후기로 남겨주세요",
+			"포인트로 실제 상품권 구매까지!",
 		]);
 	});
 
@@ -171,6 +187,10 @@ describe("onboarding content", () => {
 				title: undefined,
 			},
 			{ description: undefined, title: "면접 제안부터\n지원자 관리까지!" },
+			{
+				description: "다양한 활동으로 번 포인트를\n사용해 상품을 구매하세요!",
+				title: "포인트로 실제\n상품권 구매까지!",
+			},
 		]);
 
 		expect(ONBOARDING_CONTENT.employer.map((slide) => slide.title)).toEqual([
@@ -178,6 +198,7 @@ describe("onboarding content", () => {
 			"우리 업체의 공고를 쉽고 자세하게",
 			"지원자와 바로 대화하세요",
 			"면접 제안부터 지원자 관리까지",
+			"포인트로 실제 상품권 구매까지!",
 		]);
 	});
 });
