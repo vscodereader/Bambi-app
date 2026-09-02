@@ -1,5 +1,10 @@
 "use client";
 
+import {
+	DISPLAY_NAME_MIN_LENGTH,
+	displayNameMinimumMessage,
+} from "@bambi-app/auth/display-name-policy";
+
 // 계정 설정 — 표시 이름(프로필) 수정, 기본 정보(성별·생년월일) 표시, 휴대폰 본인인증,
 // 로그아웃. 본인인증은 포트원 인증창(PhoneVerifyDialog)으로 진행하고, 성공 시
 // verifyMyPhone이 포트원 조회 결과(번호·성별·생년월일·CI 해시)를 프로필에 저장한다.
@@ -27,6 +32,8 @@ import { authClient } from "@/lib/auth-client";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import type { MockPhoneVerifyInput } from "@/lib/bambi/guest";
+import type { OnboardingRole } from "@/lib/bambi/onboarding";
+import { buildOnboardingReplayPath } from "@/lib/bambi/onboarding-route";
 import { formatPhone } from "@/lib/bambi-format";
 import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
@@ -56,6 +63,50 @@ const formatBirthDate = (birth: string | null | undefined): string => {
 	}
 	return `${birth.slice(0, 4)}.${birth.slice(4, 6)}.${birth.slice(6, 8)}`;
 };
+
+function OnboardingReplayCard({ role }: { role: OnboardingRole }) {
+	const router = useRouter();
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>이용 안내</CardTitle>
+				<CardDescription>
+					밤비의 역할별 기능과 공통 기능을 다시 확인할 수 있어요.
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="flex flex-wrap gap-2">
+				<Button
+					onClick={() => router.push(buildOnboardingReplayPath(role))}
+					type="button"
+					variant="outline"
+				>
+					{role === "employer" ? "구인자" : "구직자"} 이용 안내
+				</Button>
+				<Button
+					onClick={() => router.push(buildOnboardingReplayPath("common"))}
+					type="button"
+					variant="outline"
+				>
+					공통 기능 안내
+				</Button>
+			</CardContent>
+		</Card>
+	);
+}
+
+const getOnboardingRole = (
+	role: string | null | undefined
+): OnboardingRole | null =>
+	role === "employer" || role === "job_seeker" ? role : null;
+
+function OnboardingReplaySection({
+	role,
+}: {
+	role: string | null | undefined;
+}) {
+	const onboardingRole = getOnboardingRole(role);
+	return onboardingRole ? <OnboardingReplayCard role={onboardingRole} /> : null;
+}
 
 export function AccountSettingsScreen() {
 	const router = useRouter();
@@ -138,7 +189,7 @@ export function AccountSettingsScreen() {
 
 	const trimmedName = displayName.trim();
 	const canSave =
-		trimmedName.length >= 2 &&
+		trimmedName.length >= DISPLAY_NAME_MIN_LENGTH &&
 		trimmedName !== currentName &&
 		!updateMutation.isPending;
 
@@ -229,7 +280,7 @@ export function AccountSettingsScreen() {
 								value={displayName}
 							/>
 							<p className="m-0 text-muted-foreground text-xs">
-								2자 이상 입력해 주세요.
+								{displayNameMinimumMessage()}
 							</p>
 						</div>
 						<Button
@@ -304,6 +355,8 @@ export function AccountSettingsScreen() {
 					/>
 				</CardContent>
 			</Card>
+
+			<OnboardingReplaySection role={profile?.role} />
 
 			{/* 데스크톱은 마이페이지 사이드바에 로그아웃이 있어 본문에서는 감춘다. */}
 			<Card>

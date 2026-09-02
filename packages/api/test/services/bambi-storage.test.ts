@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { describe, expect, it } from "vitest";
+import { isLocalJobPostMediaStorageKey } from "@/services/bambi-storage-policy";
 
 // bambi-storage는 gcs(=env/server)를 거쳐 오므로 순수 함수만 검증해도 env가 필요하다.
 dotenv.config({
@@ -8,6 +9,9 @@ dotenv.config({
 
 const {
 	createBusinessDocumentUploadIntent,
+	createChatAttachmentUploadIntent,
+	createEditorMediaUploadIntent,
+	createJobPostMediaUploadIntent,
 	getBusinessDocumentViewPath,
 	isOwnedBusinessDocumentKey,
 	isOwnedChatAttachmentKey,
@@ -18,6 +22,19 @@ const OWNER_ID = "user_owner";
 const ROOM_ID = "11111111-1111-4111-8111-111111111111";
 
 describe("bambi editor media key ownership", () => {
+	it("비프로덕션에서는 원본을 보존하는 로컬 업로드 URL을 발급한다", async () => {
+		const intent = await createEditorMediaUploadIntent({
+			byteSize: 1024,
+			fileName: "본문 이미지.png",
+			mimeType: "image/png",
+			userId: OWNER_ID,
+		});
+		expect(
+			intent.storageKey.startsWith(`bambi-editor-media/${OWNER_ID}/`)
+		).toBe(true);
+		expect(intent.uploadUrl).toContain("/bambi/local-editor-media?");
+	});
+
 	it("본인 네임스페이스의 키만 소유로 인정한다", () => {
 		expect(
 			isOwnedEditorMediaKey({
@@ -55,7 +72,48 @@ describe("bambi editor media key ownership", () => {
 	});
 });
 
+describe("job post media upload intent (비프로덕션 = 로컬 원본)", () => {
+	it("기존 GCS 키와 새 로컬 키를 명확히 구분한다", () => {
+		expect(
+			isLocalJobPostMediaStorageKey(
+				`bambi-job-post-media/org_1/${OWNER_ID}/old.jpg`
+			)
+		).toBe(false);
+		expect(
+			isLocalJobPostMediaStorageKey(
+				`bambi-job-post-media/org_1/local/${OWNER_ID}/new.jpg`
+			)
+		).toBe(true);
+	});
+
+	it("공고 이미지도 GCS 서명 대신 로컬 PUT URL을 발급한다", async () => {
+		const intent = await createJobPostMediaUploadIntent({
+			actorUserId: OWNER_ID,
+			byteSize: 1024,
+			fileName: "공고 이미지.png",
+			mimeType: "image/png",
+			organizationId: "org_1",
+		});
+		expect(intent.storageKey).toContain(
+			`bambi-job-post-media/org_1/local/${OWNER_ID}/`
+		);
+		expect(intent.uploadUrl).toContain("/bambi/local-job-media?");
+	});
+});
+
 describe("bambi chat attachment key ownership", () => {
+	it("비프로덕션 채팅 첨부는 실제 원본용 로컬 PUT URL을 발급한다", async () => {
+		const intent = await createChatAttachmentUploadIntent({
+			byteSize: 1024,
+			category: "image",
+			chatRoomId: ROOM_ID,
+			createdByUserId: OWNER_ID,
+			fileName: "채팅 이미지.png",
+			mimeType: "image/png",
+		});
+		expect(intent.uploadUrl).toContain("/bambi/local-chat-attachments?");
+	});
+
 	it("발급 규칙(방·업로더)에 맞는 키만 소유로 인정한다", () => {
 		expect(
 			isOwnedChatAttachmentKey({

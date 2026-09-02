@@ -29,7 +29,9 @@ const [
 
 const { user } = authSchema;
 const {
+	adminModerationAction,
 	bambiAttendance,
+	bambiMemberGrade,
 	bambiNotification,
 	bambiPointTransaction,
 	bambiProfile,
@@ -55,6 +57,9 @@ const createUser = async (role: "admin" | "employer" | "job_seeker") => {
 };
 
 const cleanup = async (userIds: string[]) => {
+	await db
+		.delete(adminModerationAction)
+		.where(inArray(adminModerationAction.targetId, userIds));
 	await db
 		.delete(bambiNotification)
 		.where(inArray(bambiNotification.recipientUserId, userIds));
@@ -350,6 +355,63 @@ describe("bambi attendance router", () => {
 			).rejects.toThrow();
 		} finally {
 			await cleanup([seekerUserId]);
+		}
+	});
+
+	it("수동 등급 변경은 포인트 원장을 건드리지 않고 기준점과 감사 로그만 저장한다", async () => {
+		const adminUserId = await createUser("admin");
+		const seekerUserId = await createUser("job_seeker");
+		try {
+			await db.insert(bambiPointTransaction).values({
+				amount: 50_000,
+				reason: "attendance-test-grade",
+				userId: seekerUserId,
+			});
+			const [lowestGrade] = await db
+				.select()
+				.from(bambiMemberGrade)
+				.orderBy(bambiMemberGrade.minPoints)
+				.limit(1);
+			if (!lowestGrade) {
+				throw new Error("등급 fixture가 필요합니다.");
+			}
+			const setGrade = createProcedureClient(
+				attendanceRouter.adminSetGradeAnchor,
+				{ context: createContextForUser(adminUserId) }
+			);
+			const result = await setGrade({
+				gradeId: lowestGrade.id,
+				reason: "약관 위반에 따른 등급 재설정",
+				userId: seekerUserId,
+			});
+			expect(result).toMatchObject({
+				basisPoints: 50_000,
+				gradeId: lowestGrade.id,
+				startPoints: lowestGrade.minPoints,
+			});
+			const [profile] = await db
+				.select()
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, seekerUserId));
+			expect(profile).toMatchObject({
+				gradeAnchorBasisPoints: 50_000,
+				gradeAnchorGradeId: lowestGrade.id,
+				gradeAnchorStartPoints: lowestGrade.minPoints,
+			});
+			expect(
+				await db
+					.select()
+					.from(bambiPointTransaction)
+					.where(eq(bambiPointTransaction.userId, seekerUserId))
+			).toHaveLength(1);
+			expect(
+				await db
+					.select()
+					.from(adminModerationAction)
+					.where(eq(adminModerationAction.targetId, seekerUserId))
+			).toHaveLength(1);
+		} finally {
+			await cleanup([seekerUserId, adminUserId]);
 		}
 	});
 });

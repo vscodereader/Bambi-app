@@ -28,6 +28,20 @@ export interface GradeBadge {
 	name: string;
 }
 
+export interface GradeAnchor {
+	basisPoints: number | null;
+	gradeId: string | null;
+	startPoints: number | null;
+}
+
+export const resolveEffectiveGradeBasis = (
+	currentBasisPoints: number,
+	anchor: GradeAnchor
+): number =>
+	anchor.gradeId && anchor.basisPoints !== null && anchor.startPoints !== null
+		? anchor.startPoints + (currentBasisPoints - anchor.basisPoints)
+		: currentBasisPoints;
+
 // 원장 reason(현재 text). 미래의 채팅/채용 적립도 여기 키만 추가해 재사용한다.
 export const POINT_REASONS = {
 	post: { award: "community_post", revoke: "community_post_revoke" },
@@ -427,12 +441,20 @@ export async function loadGradeBadges(
 		return badges;
 	}
 	const eligibleRows = await db
-		.select({ userId: bambiProfile.userId })
+		.select({
+			anchorBasisPoints: bambiProfile.gradeAnchorBasisPoints,
+			anchorGradeId: bambiProfile.gradeAnchorGradeId,
+			anchorStartPoints: bambiProfile.gradeAnchorStartPoints,
+			userId: bambiProfile.userId,
+		})
 		.from(bambiProfile)
 		.where(
 			and(inArray(bambiProfile.userId, unique), ne(bambiProfile.role, "admin"))
 		);
 	const eligibleUserIds = eligibleRows.map((row) => row.userId);
+	const eligibleByUserId = new Map(
+		eligibleRows.map((row) => [row.userId, row] as const)
+	);
 	if (eligibleUserIds.length === 0) {
 		return badges;
 	}
@@ -453,7 +475,16 @@ export async function loadGradeBadges(
 		return badges;
 	}
 	for (const userId of eligibleUserIds) {
-		const grade = resolveGrade(basisPoints.get(userId) ?? 0, grades);
+		const profile = eligibleByUserId.get(userId);
+		const effectiveBasis = resolveEffectiveGradeBasis(
+			basisPoints.get(userId) ?? 0,
+			{
+				basisPoints: profile?.anchorBasisPoints ?? null,
+				gradeId: profile?.anchorGradeId ?? null,
+				startPoints: profile?.anchorStartPoints ?? null,
+			}
+		);
+		const grade = resolveGrade(effectiveBasis, grades);
 		if (grade) {
 			badges.set(userId, {
 				color: grade.color,

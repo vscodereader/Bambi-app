@@ -3,6 +3,7 @@
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, type ReactNode, useContext, useState } from "react";
+import { COACHMARK_TARGETS } from "@/lib/bambi/coachmark";
 import { SEEKER_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import {
 	DEFAULT_MARKETPLACE_FILTERS,
@@ -41,21 +42,23 @@ export function SeekerHeaderSearch({
 	const { isGuest } = useBambiAuth();
 
 	return (
-		<JobSearchCommand
-			onSelectJob={(job) => {
-				// 마켓플레이스 카드 클릭과 같은 규칙: 게스트는 가입 유도, 수집 공고는 수집 상세로.
-				if (isGuest) {
-					router.push("/seeker?auth=signup");
-					return;
-				}
-				if (job.crawled) {
-					router.push(`/seeker/jobs/crawled/${job.id}` as Route);
-					return;
-				}
-				router.push(`/seeker/jobs/${job.id}` as Route);
-			}}
-			withHotkey={withHotkey}
-		/>
+		<div data-onboarding-target={COACHMARK_TARGETS.seekerSearch}>
+			<JobSearchCommand
+				onSelectJob={(job) => {
+					// 마켓플레이스 카드 클릭과 같은 규칙: 게스트는 가입 유도, 수집 공고는 수집 상세로.
+					if (isGuest) {
+						router.push("/seeker?auth=signup");
+						return;
+					}
+					if (job.crawled) {
+						router.push(`/seeker/jobs/crawled/${job.id}` as Route);
+						return;
+					}
+					router.push(`/seeker/jobs/${job.id}` as Route);
+				}}
+				withHotkey={withHotkey}
+			/>
+		</div>
 	);
 }
 

@@ -1,37 +1,47 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+	ALLOWED_CHAT_MEDIA_MIME_TYPES,
+	CHAT_MEDIA_MAX_BYTES,
+} from "@bambi-app/api/services/bambi-media-policy";
+import {
+	CHAT_ATTACHMENT_KEY_ROOT,
+	EMPLOYER_PRIVATE_KEY_ROOT,
+} from "@bambi-app/api/services/bambi-storage-policy";
 import type { NextRequest } from "next/server";
+import { hasExpectedImageSignature } from "@/lib/server/local-image-storage";
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
-// 비공개 버킷 키 규칙의 구인자 루트(employer/{orgId}/{userId}/…)를 따른다.
-const BUSINESS_DOCUMENT_KEY_PREFIX = "employer/";
-const ALLOWED_MIME_TYPES = new Set([
-	"application/pdf",
-	"image/jpeg",
-	"image/png",
-	"image/webp",
+const ALLOWED_MIME_TYPES = new Set(ALLOWED_CHAT_MEDIA_MIME_TYPES);
+const STORAGE_DIRECTORY_BY_KEY_ROOT = new Map([
+	[CHAT_ATTACHMENT_KEY_ROOT, "chat-attachments"],
+	[EMPLOYER_PRIVATE_KEY_ROOT, "business-documents"],
 ]);
-const LOCAL_STORAGE_ROOT = path.resolve(
-	process.cwd(),
-	".local-storage",
-	"business-documents"
-);
 
 const getLocalFilePath = (storageKey: string): string | null => {
-	if (
-		!storageKey.startsWith(BUSINESS_DOCUMENT_KEY_PREFIX) ||
-		storageKey.includes("..") ||
-		storageKey.includes("\\")
-	) {
+	if (storageKey.includes("..") || storageKey.includes("\\")) {
 		return null;
 	}
-
-	const relativeKey = storageKey.slice(BUSINESS_DOCUMENT_KEY_PREFIX.length);
-	const filePath = path.resolve(LOCAL_STORAGE_ROOT, relativeKey);
-	return filePath.startsWith(`${LOCAL_STORAGE_ROOT}${path.sep}`)
+	const keyRoot = storageKey.split("/", 1)[0] ?? "";
+	const storageDirectory = STORAGE_DIRECTORY_BY_KEY_ROOT.get(keyRoot);
+	if (!storageDirectory) {
+		return null;
+	}
+	const localStorageRoot = path.resolve(
+		process.cwd(),
+		".local-storage",
+		storageDirectory
+	);
+	const relativeKey = storageKey.slice(keyRoot.length + 1);
+	const filePath = path.resolve(localStorageRoot, relativeKey);
+	return filePath.startsWith(`${localStorageRoot}${path.sep}`)
 		? filePath
 		: null;
 };
+
+const hasExpectedSignature = (bytes: Buffer, mimeType: string): boolean =>
+	mimeType === "application/pdf"
+		? bytes.subarray(0, 4).toString("ascii") === "%PDF"
+		: hasExpectedImageSignature(bytes, mimeType);
 
 const getMimeType = (fileName: string): string => {
 	switch (path.extname(fileName).toLowerCase()) {
@@ -66,18 +76,22 @@ export async function PUT(request: NextRequest) {
 	const mimeType = request.headers.get("content-type")?.split(";", 1)[0] ?? "";
 	const contentLength = Number(request.headers.get("content-length") ?? "0");
 	if (!filePath) {
-		return new Response("Invalid business document", { status: 400 });
+		return new Response("Invalid local media", { status: 400 });
 	}
 	if (!ALLOWED_MIME_TYPES.has(mimeType)) {
-		return new Response("Invalid business document", { status: 400 });
+		return new Response("Invalid local media", { status: 400 });
 	}
-	if (!Number.isFinite(contentLength) || contentLength > MAX_FILE_BYTES) {
-		return new Response("Invalid business document", { status: 400 });
+	if (!Number.isFinite(contentLength) || contentLength > CHAT_MEDIA_MAX_BYTES) {
+		return new Response("Invalid local media size", { status: 400 });
 	}
 
 	const bytes = Buffer.from(await request.arrayBuffer());
-	if (bytes.byteLength === 0 || bytes.byteLength > MAX_FILE_BYTES) {
-		return new Response("Invalid business document size", { status: 400 });
+	if (
+		bytes.byteLength === 0 ||
+		bytes.byteLength > CHAT_MEDIA_MAX_BYTES ||
+		!hasExpectedSignature(bytes, mimeType)
+	) {
+		return new Response("Invalid local media", { status: 400 });
 	}
 
 	await mkdir(path.dirname(filePath), { recursive: true });

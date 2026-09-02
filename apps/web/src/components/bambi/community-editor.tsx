@@ -3,6 +3,11 @@
 // 수다방 글 본문 에디터. Tiptap StarterKit + 최소 툴바(굵게/기울임/취소선/리스트/링크).
 // 확장 세트(communityEditorExtensions)는 T11 읽기 전용 뷰어가 그대로 재사용한다.
 
+import {
+	ALLOWED_JOB_POST_IMAGE_MIME_TYPES,
+	JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH,
+	JOB_POST_IMAGE_MAX_BYTES,
+} from "@bambi-app/api/services/bambi-job-media-policy";
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import {
@@ -38,7 +43,10 @@ import {
 	detectImageSignature,
 	isSignatureMismatch,
 } from "@/lib/bambi/image-signature";
-import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
+import {
+	uploadedEditorMediaUrl,
+	uploadFileToSignedUrl,
+} from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
 
 // 공유 확장 세트 — 편집기와 읽기 전용 뷰어(T11)가 동일 스키마로 렌더하도록 export.
@@ -228,9 +236,10 @@ function LinkPopover({ editor }: { editor: Editor }) {
 // 아래 세 값은 서버 정책(bambi-job-media-policy를 usage 없이 호출 = 가장 좁은 집합)의 사본이다.
 // 클라이언트 필터는 왕복 한 번과 헛된 대기를 줄이는 편의일 뿐 정본은 서버이며, 어긋나도
 // 서버가 BAD_REQUEST로 거절해 에러 문구로 드러난다.
-const UPLOAD_ACCEPT = "image/jpeg,image/png,image/webp";
-const UPLOAD_MAX_MB = 10;
-const ALT_TEXT_MAX_LENGTH = 120;
+const BYTES_PER_MEGABYTE = 1024 * 1024;
+const UPLOAD_ACCEPT = ALLOWED_JOB_POST_IMAGE_MIME_TYPES.join(",");
+const UPLOAD_MAX_MB = JOB_POST_IMAGE_MAX_BYTES / BYTES_PER_MEGABYTE;
+const ALT_TEXT_MAX_LENGTH = JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH;
 
 // 이미지 팝오버 — 파일 업로드(GCS)와 외부 URL 삽입을 함께 제공한다.
 // URL 삽입을 남겨 두는 이유: 기존 글 본문에 이미 외부 URL 이미지가 들어 있어 수정 모드에서
@@ -303,7 +312,9 @@ function ImagePopover({
 				mimeType: file.type,
 			});
 			await uploadFileToSignedUrl({ file, uploadIntent: intent });
-			insertImage(jobMediaPublicUrl(intent.storageKey));
+			insertImage(
+				uploadedEditorMediaUrl(intent) ?? jobMediaPublicUrl(intent.storageKey)
+			);
 		} catch (caught) {
 			// 서버 정책 위반(용량·타입)도 전송 실패도 여기로 모인다 — 문구는 서버가 준 걸 우선한다.
 			setError(

@@ -12,6 +12,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import type { ComponentType } from "react";
 import { useEmployerApproval } from "@/components/bambi/employer-approval-context";
+import { COACHMARK_TARGETS } from "@/lib/bambi/coachmark";
 
 type GateStatus = "none" | "pending" | "rejected" | "changes_unsubmitted";
 
@@ -78,6 +79,7 @@ export function EmployerGateBanner({ action }: { action: string }) {
 	return (
 		<Alert
 			className="items-center gap-x-3 px-3.5 py-3 text-sm"
+			data-onboarding-target={COACHMARK_TARGETS.employerBusiness}
 			variant={variant}
 		>
 			<Icon />

@@ -515,6 +515,16 @@ export const bambiProfile = pgTable(
 		// 광고(프로모션) 중인 업소(owner/admin) 표시 캐시. 진실값은 조회 시 캠페인 조인으로
 		// 파생 계산하며(bambi-advertiser), 이 컬럼은 activate/pause 이벤트에서 동기화된다.
 		isAdvertiser: boolean("is_advertiser").default(false).notNull(),
+		// 운영자가 포인트 원장을 바꾸지 않고 등급 출발점만 재설정한 경우의 기준점.
+		// 유효 등급 포인트 = grade_anchor_start_points + (현재 등급기준 누적 - grade_anchor_basis_points).
+		// 등급 행이 삭제되면 FK set null로 자동 산정에 복귀하고 스냅샷 숫자는 무시한다.
+		gradeAnchorGradeId: uuid("grade_anchor_grade_id").references(
+			(): AnyPgColumn => bambiMemberGrade.id,
+			{ onDelete: "set null" }
+		),
+		gradeAnchorBasisPoints: integer("grade_anchor_basis_points"),
+		gradeAnchorStartPoints: integer("grade_anchor_start_points"),
+		gradeAnchorSetAt: timestamp("grade_anchor_set_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()

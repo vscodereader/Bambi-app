@@ -271,7 +271,7 @@ const expectOrpcCode = async (
 };
 
 describe("bambi community router — 조회", () => {
-	it("남성 구직자는 목록 조회가 FORBIDDEN으로 거부된다", async () => {
+	it("남성 구직자는 허용 범위 밖 게시판 목록 조회가 FORBIDDEN으로 거부된다", async () => {
 		const fixture = await createCommunityFixture();
 		try {
 			const listPosts = clientFor(
@@ -2182,7 +2182,7 @@ describe("bambi community router — 본문 이미지 업로드 인텐트", () =
 		}
 	});
 
-	it("수다방 자격이 없는 남성 구직자는 FORBIDDEN으로 거부된다", async () => {
+	it("인증된 남성 구직자는 허용 게시판용 미디어 업로드 인텐트를 발급받는다", async () => {
 		const fixture = await createCommunityFixture();
 		try {
 			const createMediaUpload = clientFor(
@@ -2191,7 +2191,8 @@ describe("bambi community router — 본문 이미지 업로드 인텐트", () =
 				["createMediaUpload"]
 			);
 
-			await expectOrpcCode(createMediaUpload(imageInput), "FORBIDDEN");
+			const intent = await createMediaUpload(imageInput);
+			expect(intent.storageKey).toContain(fixture.maleUserId);
 		} finally {
 			await cleanupCommunityFixture(fixture);
 		}

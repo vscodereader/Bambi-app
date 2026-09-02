@@ -7,6 +7,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
+import { COACHMARK_TARGETS } from "@/lib/bambi/coachmark";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { useMobileKeyboardState } from "@/lib/bambi/use-mobile-keyboard-state";
 import { useBambiAuth } from "./auth-client-provider";
@@ -132,12 +133,18 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 					<BottomNav
 						items={[
 							{ value: "postings", label: "내 공고", icon: ClipboardListIcon },
-							{ value: "business", label: "업체 정보", icon: StoreIcon },
+							{
+								value: "business",
+								label: "업체 정보",
+								icon: StoreIcon,
+								onboardingTarget: COACHMARK_TARGETS.employerBusiness,
+							},
 							{
 								disabled: isRegistrationDisabled,
 								value: "post",
 								label: "공고 등록",
 								icon: PlusIcon,
+								onboardingTarget: COACHMARK_TARGETS.employerPost,
 							},
 							{ value: "settings", label: "조직 설정", icon: ShieldIcon },
 							{ value: "me", label: "내 정보", icon: UserIcon },

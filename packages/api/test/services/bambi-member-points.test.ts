@@ -14,6 +14,7 @@ const {
 	POINT_SHOP_REASONS,
 	reconcilePoints,
 	resolveCommentAward,
+	resolveEffectiveGradeBasis,
 	resolveGrade,
 	rollCommentBonus,
 } = await import("@/services/bambi-member-points");
@@ -93,6 +94,42 @@ describe("resolveGrade", () => {
 	});
 	it("등급이 없으면 null", () => {
 		expect(resolveGrade(100, [])).toBeNull();
+	});
+});
+
+describe("resolveEffectiveGradeBasis", () => {
+	it("올려준 등급 기준점부터 이후 적립분으로 자동 승급한다", () => {
+		const effective = resolveEffectiveGradeBasis(5600, {
+			basisPoints: 600,
+			gradeId: "silver",
+			startPoints: 5000,
+		});
+		expect(effective).toBe(10_000);
+	});
+
+	it("내린 등급 기준점부터 높은 등급까지 다시 적립하게 한다", () => {
+		const unchanged = resolveEffectiveGradeBasis(50_000, {
+			basisPoints: 50_000,
+			gradeId: "bronze",
+			startPoints: 0,
+		});
+		const afterEarning = resolveEffectiveGradeBasis(55_000, {
+			basisPoints: 50_000,
+			gradeId: "bronze",
+			startPoints: 0,
+		});
+		expect(unchanged).toBe(0);
+		expect(afterEarning).toBe(5000);
+	});
+
+	it("기준점이 없으면 기존 누적 등급 포인트를 그대로 사용한다", () => {
+		expect(
+			resolveEffectiveGradeBasis(7400, {
+				basisPoints: null,
+				gradeId: null,
+				startPoints: null,
+			})
+		).toBe(7400);
 	});
 });
 
