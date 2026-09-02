@@ -10,7 +10,6 @@
 //   대신 여기서 signUp → createProfile → recordLegalConsent를 순차 await로 끝낸 뒤
 //   마지막에 명시적으로 router.replace("/")를 부른다(index.tsx가 role 홈을 계산).
 
-import { env } from "@bambi-app/env/native";
 import { useMutation } from "@tanstack/react-query";
 import { type Href, router } from "expo-router";
 import { useRef, useState } from "react";
@@ -26,11 +25,9 @@ import {
 	useIdentityModal,
 } from "./use-identity-verification";
 
-// 회원가입은 본인인증(포트원)과 약관·처리방침 링크용 웹 base URL이 둘 다 있어야 연다 —
-// WEB_URL이 없으면 사용자가 못 읽는 법적 문서에 동의시키게 되므로 진입 자체를 막는다.
-// 모듈 상수다(env는 빌드 타임 인라인): 로그인 화면의 진입 분기·signup 진입 폴백이 공유한다.
-export const isSignupAvailable =
-	isIdentityVerificationConfigured && Boolean(env.EXPO_PUBLIC_WEB_URL);
+// 회원가입은 본인인증(포트원) env가 있어야 연다. 모듈 상수다(env는 빌드 타임 인라인):
+// 로그인 화면의 진입 분기·signup 진입 폴백이 공유한다.
+export const isSignupAvailable = isIdentityVerificationConfigured;
 
 // 역할에 맞는 프로필을 만든다. verifiedId를 넘기면 서버가 성별 등을 인증 건에서 파생 저장한다.
 async function createProfileForRole(
