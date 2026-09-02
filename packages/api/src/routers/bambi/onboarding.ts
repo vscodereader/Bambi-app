@@ -36,6 +36,7 @@ import {
 	requireActiveBambiProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
+import { MAX_BUSINESS_DOCUMENTS } from "../../services/bambi-business-document-policy";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import {
@@ -313,8 +314,6 @@ const requireEmployerBambiProfile = async (userId: string) => {
 
 	return profile;
 };
-
-const MAX_BUSINESS_DOCUMENTS = 5;
 
 const requireBusinessDocumentOrganization = async ({
 	allowPending = false,

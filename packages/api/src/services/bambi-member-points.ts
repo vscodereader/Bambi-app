@@ -8,13 +8,11 @@ import {
 	bambiSiteSettings,
 	communityBoard,
 } from "@bambi-app/db/schema/bambi";
-import { and, asc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { lockMemberPoints } from "./bambi-point-ledger";
+import { SITE_SETTINGS_ROW_ID } from "./bambi-point-settings";
 import { resolveGradeIconUrl } from "./bambi-storage";
-
-// site_settings 단일 행 고정 키(site-settings.ts SETTINGS_ROW_ID와 같은 값).
-const SITE_SETTINGS_ROW_ID = "default";
 
 export interface MemberGrade {
 	color: string | null;
@@ -29,6 +27,20 @@ export interface GradeBadge {
 	iconUrl: string | null;
 	name: string;
 }
+
+export interface GradeAnchor {
+	basisPoints: number | null;
+	gradeId: string | null;
+	startPoints: number | null;
+}
+
+export const resolveEffectiveGradeBasis = (
+	currentBasisPoints: number,
+	anchor: GradeAnchor
+): number =>
+	anchor.gradeId && anchor.basisPoints !== null && anchor.startPoints !== null
+		? anchor.startPoints + (currentBasisPoints - anchor.basisPoints)
+		: currentBasisPoints;
 
 // 원장 reason(현재 text). 미래의 채팅/채용 적립도 여기 키만 추가해 재사용한다.
 export const POINT_REASONS = {
@@ -51,10 +63,56 @@ export const POINT_SHOP_REASONS = {
 	refund: "point_shop_refund",
 } as const;
 
-const GRADE_EXCLUDED_REASONS = [
+const JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX = "공고 취소 포인트 환급";
+const JOB_PAYMENT_POINT_REASON_PREFIXES = {
+	refund: `${JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX}: `,
+	refundForfeited: `${JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX} 완료(상한 소멸): `,
+	use: "공고 등록 포인트 사용: ",
+} as const;
+
+export const JOB_PAYMENT_POINT_REASONS = {
+	refund: (jobPostId: string): string =>
+		`${JOB_PAYMENT_POINT_REASON_PREFIXES.refund}${jobPostId}`,
+	refundForfeited: (jobPostId: string): string =>
+		`${JOB_PAYMENT_POINT_REASON_PREFIXES.refundForfeited}${jobPostId}`,
+	use: (jobPostId: string): string =>
+		`${JOB_PAYMENT_POINT_REASON_PREFIXES.use}${jobPostId}`,
+} as const;
+
+export const JOB_PAYMENT_POINT_REASON_PATTERNS = {
+	refund: `${JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX}%`,
+	use: `${JOB_PAYMENT_POINT_REASON_PREFIXES.use}%`,
+} as const;
+
+export const isJobPaymentPointRefundReason = (reason: string): boolean =>
+	reason.startsWith(JOB_PAYMENT_POINT_REFUND_REASON_FAMILY_PREFIX);
+
+export const isJobPaymentPointUseReason = (reason: string): boolean =>
+	reason.startsWith(JOB_PAYMENT_POINT_REASON_PREFIXES.use);
+
+const GRADE_EXCLUDED_EXACT_REASONS = [
 	POINT_SHOP_REASONS.purchase,
 	POINT_SHOP_REASONS.refund,
-];
+] as const;
+
+const GRADE_EXCLUDED_REASON_PREFIXES = Object.values(
+	JOB_PAYMENT_POINT_REASON_PREFIXES
+);
+
+export function isGradeExcludedPointReason(reason: string): boolean {
+	return (
+		GRADE_EXCLUDED_EXACT_REASONS.some((excluded) => excluded === reason) ||
+		GRADE_EXCLUDED_REASON_PREFIXES.some((prefix) => reason.startsWith(prefix))
+	);
+}
+
+// 잔액과 달리 등급은 소비에 중립이다. 포인트몰은 고정 reason, 공고 결제는 기존 원장과의
+// 호환을 위해 공고 ID가 뒤에 붙는 접두사로 제외한다. 본인 요약과 여러 회원 배지가 같은 SQL을
+// 재사용해야 화면별 등급이 갈리지 않는다.
+export const gradeBasisPointsSql = sql<number>`coalesce(sum(${bambiPointTransaction.amount}) filter (where ${bambiPointTransaction.reason} not in (${sql.join(
+	GRADE_EXCLUDED_EXACT_REASONS.map((reason) => sql`${reason}`),
+	sql`, `
+)}) and ${bambiPointTransaction.reason} not like ${`${JOB_PAYMENT_POINT_REASON_PREFIXES.use}%`} and ${bambiPointTransaction.reason} not like ${`${JOB_PAYMENT_POINT_REASON_PREFIXES.refund}%`} and ${bambiPointTransaction.reason} not like ${`${JOB_PAYMENT_POINT_REASON_PREFIXES.refundForfeited}%`}), 0)::int`;
 
 // 순수: 현재 적립 스냅샷과 목표 적립액으로 원장 델타·새 스냅샷을 계산한다.
 // 목표는 caller가 (회원 && 게시판 포인트)일 때만 양수로, 그 외엔 0으로 넘긴다.
@@ -362,15 +420,10 @@ export async function getGradeBasisPoints(
 	const rows = await db
 		.select({
 			userId: bambiPointTransaction.userId,
-			basis: sql<number>`coalesce(sum(${bambiPointTransaction.amount}), 0)::int`,
+			basis: gradeBasisPointsSql,
 		})
 		.from(bambiPointTransaction)
-		.where(
-			and(
-				inArray(bambiPointTransaction.userId, unique),
-				notInArray(bambiPointTransaction.reason, GRADE_EXCLUDED_REASONS)
-			)
-		)
+		.where(inArray(bambiPointTransaction.userId, unique))
 		.groupBy(bambiPointTransaction.userId);
 	for (const row of rows) {
 		map.set(row.userId, row.basis);
@@ -388,12 +441,20 @@ export async function loadGradeBadges(
 		return badges;
 	}
 	const eligibleRows = await db
-		.select({ userId: bambiProfile.userId })
+		.select({
+			anchorBasisPoints: bambiProfile.gradeAnchorBasisPoints,
+			anchorGradeId: bambiProfile.gradeAnchorGradeId,
+			anchorStartPoints: bambiProfile.gradeAnchorStartPoints,
+			userId: bambiProfile.userId,
+		})
 		.from(bambiProfile)
 		.where(
 			and(inArray(bambiProfile.userId, unique), ne(bambiProfile.role, "admin"))
 		);
 	const eligibleUserIds = eligibleRows.map((row) => row.userId);
+	const eligibleByUserId = new Map(
+		eligibleRows.map((row) => [row.userId, row] as const)
+	);
 	if (eligibleUserIds.length === 0) {
 		return badges;
 	}
@@ -414,7 +475,16 @@ export async function loadGradeBadges(
 		return badges;
 	}
 	for (const userId of eligibleUserIds) {
-		const grade = resolveGrade(basisPoints.get(userId) ?? 0, grades);
+		const profile = eligibleByUserId.get(userId);
+		const effectiveBasis = resolveEffectiveGradeBasis(
+			basisPoints.get(userId) ?? 0,
+			{
+				basisPoints: profile?.anchorBasisPoints ?? null,
+				gradeId: profile?.anchorGradeId ?? null,
+				startPoints: profile?.anchorStartPoints ?? null,
+			}
+		);
+		const grade = resolveGrade(effectiveBasis, grades);
 		if (grade) {
 			badges.set(userId, {
 				color: grade.color,

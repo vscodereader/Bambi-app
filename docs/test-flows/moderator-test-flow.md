@@ -329,6 +329,17 @@
 
 ## 4. 사용자 관리·제재
 
+### 4.0 운영자 가계정 생성
+
+- **경로**: `/moderator/users/create` (`회원 관리 → 계정 생성`).
+- 이름은 필수 입력이지만 API payload와 DB에 남지 않고, 닉네임은 `user.name`에 저장된다.
+- 생년월일은 유효한 만 19세 이상 날짜, 가번호는 `010-0000-0000`, 역할은 구직자·구인자만 허용한다.
+- 성공 시 `user` + Better Auth `credential account` + 인증 완료 `bambi_profile` + `create_test_account` 감사 로그가 함께 생성되고, 입력한 ID/PW로 실제 로그인된다.
+- CI·DI는 계정별 가상 원문을 해시해 저장하며 기존 회원 CI·DI, 실제 인증 티켓, 인증 로그를 변경하지 않는다.
+- 여성 구직자는 일반 수다방, 남성 구직자는 공지사항·비밀게시판 범위, 구인자는 업체 제출·승인 전 공고 등록 거부를 확인한다.
+- 같은 ID, 금지 닉네임, 미성년, 잘못된 날짜·가번호, 비운영자 호출은 거부되고 반쪽 계정이 남지 않는다.
+- 구인자 가계정에는 조직·멤버십·업체 프로필을 자동 생성하지 않는다.
+
 ### 4.1 계정 목록 조회·필터·검색
 
 - **경로**: `/moderator/users` (파일: `apps/web/src/app/moderator/users/page.tsx`,
@@ -447,7 +458,7 @@
 - **관련 API**: `bambi.moderation.purgeWithdrawnAccounts`(`adminProcedure`) — 자동 실행과 동일한
   서비스 `purgeWithdrawnAccountsBatch`(`packages/api/src/services/bambi-withdrawal-purge.ts`)를 호출한다.
 
-### 4.8 출석 관리 · 포인트 지급·차감
+### 4.8 출석 관리 · 포인트 지급·차감 · 등급 기준 변경
 
 - **경로**: `/moderator/attendance` (파일: `apps/web/src/app/moderator/attendance/page.tsx`)
 - **목록**: `bambi.attendance.adminList`(`adminProcedure`) — `useInfiniteQuery`, `limit=20`, offset 커서(`nextCursor = cursor + limit`).
@@ -484,7 +495,8 @@
   - 확인 모달이 **없다** — [적용]이 곧 실행이고 되돌리기 버튼도 없다. 되돌리려면 반대 방향으로 재조정해야 하며 그 행도 원장에 남는다.
   - 잔액 집계 select에 `FOR UPDATE`를 걸 수 없어 **두 운영자가 동시에 차감하면 둘 다 통과해 음수가 될 수 있다**(코드에 `ponytail:` 주석으로 명시된 알려진 한계, 승급 경로는 advisory lock). 동시 조작 QA는 범위 밖.
   - 페이지 사이에 출석이 끼어들어 오프셋이 밀릴 수 있어 화면이 `userId`로 중복을 걸러낸다.
-- **관련 API**: `bambi.attendance.adminList` / `bambi.attendance.adminAdjustPoints` (`adminProcedure`) — `packages/api/src/routers/bambi/attendance.ts`
+- **등급 변경**: 행 점 3개 → `등급 변경` → 등급+사유 → `adminSetGradeAnchor`. 포인트 원장은 추가·수정하지 않고 프로필에 변경 당시 등급기준 누적·선택 등급 minPoints 스냅샷을 저장한다. 이후 유효 등급 포인트는 `선택 minPoints + (현재 누적 - 변경 당시 누적)`이며 다음 기준 도달 시 자동 승급한다.
+- **관련 API**: `bambi.attendance.adminList` / `bambi.attendance.adminAdjustPoints` / `bambi.attendance.adminSetGradeAnchor` (`adminProcedure`) — `packages/api/src/routers/bambi/attendance.ts`
 - > ⚠ **회원용 출석 기록 자체는 운영자가 손댈 수 없다.** 출석일 추가·삭제 프로시저가 없고, 이 화면이 바꿀 수 있는 것은 포인트 잔액뿐이다.
 
 ---

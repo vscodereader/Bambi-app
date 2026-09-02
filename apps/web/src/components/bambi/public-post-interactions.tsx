@@ -1,5 +1,10 @@
 "use client";
 
+import {
+	COMMUNITY_PASSWORD_MAX_LENGTH,
+	COMMUNITY_PASSWORD_MIN_LENGTH,
+} from "@bambi-app/api/services/bambi-community-post-policy";
+
 // 비회원 참여 UI — 추천·댓글 목록/작성·본인 글·댓글 수정/삭제. 공개 상세
 // (/board/[boardSlug]/[postId])와 회원 수다방 상세(/seeker/community, 여성 인증 게스트로
 // 들어온 경우)가 함께 쓴다. 회원에게는 마운트하지 않는다(회원 전용 UI가 따로 있다).
@@ -49,8 +54,8 @@ import { orpc } from "@/utils/orpc";
 import { showWarningRestrictionDialogForError } from "./warning-restriction-guard";
 
 const COMMENT_MAX = 1000;
-const PASSWORD_MIN = 4;
-const PASSWORD_MAX = 30;
+const PASSWORD_MIN = COMMUNITY_PASSWORD_MIN_LENGTH;
+const PASSWORD_MAX = COMMUNITY_PASSWORD_MAX_LENGTH;
 
 // 서버(getPublicPost)가 내려주는 댓글 모양. 인증 전에는 이 값이 그대로 화면이 된다.
 export interface PublicCommentSeed {

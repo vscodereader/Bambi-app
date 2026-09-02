@@ -117,6 +117,7 @@ describe("resolveGate", () => {
 			"/manual",
 			"/moderator",
 			"/moderator/x",
+			"/onboarding",
 			"/preview",
 			"/support",
 		]) {

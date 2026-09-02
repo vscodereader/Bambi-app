@@ -3,6 +3,14 @@
 // 글 작성/수정 공용 폼. 컨트롤드 필드 + Tiptap 본문 에디터, 서버 검증에 위임한다.
 
 import {
+	COMMUNITY_AUTHOR_NAME_MAX_LENGTH,
+	COMMUNITY_BODY_TEXT_MIN_LENGTH,
+	COMMUNITY_PASSWORD_MAX_LENGTH,
+	COMMUNITY_PASSWORD_MIN_LENGTH,
+	COMMUNITY_TITLE_MAX_LENGTH,
+	COMMUNITY_TITLE_MIN_LENGTH,
+} from "@bambi-app/api/services/bambi-community-post-policy";
+import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
@@ -18,6 +26,7 @@ import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Switch } from "@bambi-app/ui/components/switch";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LockIcon } from "lucide-react";
 import type { Route } from "next";
@@ -36,12 +45,11 @@ import {
 import { useCommunityAreaPaths } from "@/lib/bambi/community-paths";
 import { orpc } from "@/utils/orpc";
 
-const TITLE_MAX = 100;
-const AUTHOR_MAX = 30;
+const TITLE_MAX = COMMUNITY_TITLE_MAX_LENGTH;
+const AUTHOR_MAX = COMMUNITY_AUTHOR_NAME_MAX_LENGTH;
 const CONTACT_PHONE_MAX = 20;
-const PASSWORD_MIN = 4;
-const PASSWORD_MAX = 30;
-const MIN_TEXT = 2;
+const PASSWORD_MIN = COMMUNITY_PASSWORD_MIN_LENGTH;
+const PASSWORD_MAX = COMMUNITY_PASSWORD_MAX_LENGTH;
 
 // 비회원 글의 작성인 기본값. 서버 zod가 빈 문자열을 거부하므로 화면이 값을 채워 보낸다
 // (자유 수정 가능 — 금칙어 검사는 회원과 동일하게 서버가 한다).
@@ -126,8 +134,8 @@ const canSubmitPost = ({
 	title: string;
 }): boolean =>
 	authorName.trim().length >= 1 &&
-	title.trim().length >= MIN_TEXT &&
-	(bodyText.trim().length >= MIN_TEXT || bodyHasImage) &&
+	title.trim().length >= COMMUNITY_TITLE_MIN_LENGTH &&
+	(bodyText.trim().length >= COMMUNITY_BODY_TEXT_MIN_LENGTH || bodyHasImage) &&
 	(!requiresPassword || password.length >= PASSWORD_MIN) &&
 	!isSubmitting;
 
@@ -512,6 +520,25 @@ const useNoticeBoards = (boardKey: string, role: string | undefined) => {
 const isAdminNoticeBoard = (boardKey: string, role: string | undefined) =>
 	boardKey === "notice" && role === "admin";
 
+function CommunityTitleHelp({ tooShort }: { tooShort: boolean }) {
+	return (
+		<p
+			className={cn(
+				"m-0 text-xs",
+				tooShort ? "text-destructive" : "text-muted-foreground"
+			)}
+			id="community-post-title-help"
+		>
+			{tooShort
+				? `제목을 ${COMMUNITY_TITLE_MIN_LENGTH}자 이상 입력해야 등록할 수 있어요.`
+				: `제목은 ${COMMUNITY_TITLE_MIN_LENGTH}자 이상 입력해 주세요.`}
+		</p>
+	);
+}
+
+const isTitleTooShort = (title: string): boolean =>
+	title.length > 0 && title.trim().length < COMMUNITY_TITLE_MIN_LENGTH;
+
 export function CommunityPostForm({
 	board,
 	editPassword,
@@ -648,6 +675,7 @@ export function CommunityPostForm({
 		requiresPassword,
 		title,
 	});
+	const titleTooShort = isTitleTooShort(title);
 
 	const submitEdit = (postId: string) => {
 		const trimmedPassword = password.trim();
@@ -778,12 +806,15 @@ export function CommunityPostForm({
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="community-post-title">제목</Label>
 				<Input
+					aria-describedby="community-post-title-help"
+					aria-invalid={titleTooShort}
 					id="community-post-title"
 					maxLength={TITLE_MAX}
 					onChange={(event) => setTitle(event.target.value)}
-					placeholder="제목을 입력해 주세요 (2자 이상)"
+					placeholder={`제목을 입력해 주세요 (${COMMUNITY_TITLE_MIN_LENGTH}자 이상)`}
 					value={title}
 				/>
+				<CommunityTitleHelp tooShort={titleTooShort} />
 			</div>
 
 			<div className="flex flex-col gap-2">

@@ -2,6 +2,7 @@
 // 그대로 렌더되지 않도록 표시는 전부 여기를 거친다 — 모르는 값에도 중립 폴백이 있어
 // 서버가 먼저 새 값을 내려도 원값이 화면에 새지 않는다(report-labels.ts와 같은 관례).
 
+import { buildChatRoomPath, CHAT_LIST_PATH } from "./chat-paths";
 import {
 	COMMUNITY_BOARDS,
 	communityCrawledPath,
@@ -399,8 +400,8 @@ export function notificationHref(item: BambiNotificationView): null | string {
 		case "chat_room":
 		case "contact_reveal":
 			return item.chatRoomId
-				? `/seeker/chats/${item.chatRoomId}`
-				: "/seeker/chats";
+				? buildChatRoomPath(item.chatRoomId)
+				: CHAT_LIST_PATH;
 		// 면접은 채팅방이 아니라 예정된 면접 화면으로 보낸다 — 방이 삭제되면 착지할 곳이
 		// 없어지고, 구인자·구직자가 같은 화면에서 일정을 본다.
 		case "interview_schedule":

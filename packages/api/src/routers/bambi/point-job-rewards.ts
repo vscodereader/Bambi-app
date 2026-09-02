@@ -32,22 +32,22 @@ import { notifyBambiNotification } from "../../services/bambi-notifications";
 import {
 	isPointJobRewardEligible,
 	isPointJobSelectionActive,
+	POINT_JOB_REWARD_CATEGORIES,
 	pickPointJobCandidate,
 	pointJobRewardNextEligibleAt,
 } from "../../services/bambi-point-job-rewards";
 import { awardMemberPoints } from "../../services/bambi-point-ledger";
+import { SITE_SETTINGS_ROW_ID } from "../../services/bambi-point-settings";
 import {
 	DEFAULT_RECOMMENDED_CAPACITY,
 	DEFAULT_SPECIAL_CAPACITY,
 	hasActiveOrgResponderFilter,
 } from "../../services/bambi-premium-capacity";
 
-const CATEGORIES = ["premium", "special", "recommended"] as const;
-type Category = (typeof CATEGORIES)[number];
+type Category = (typeof POINT_JOB_REWARD_CATEGORIES)[number];
 type TargetSource = "crawled_job_post" | "job_post";
-const SETTINGS_ID = "default";
 
-const categorySchema = z.enum(CATEGORIES);
+const categorySchema = z.enum(POINT_JOB_REWARD_CATEGORIES);
 const targetSourceSchema = z.enum(["job_post", "crawled_job_post"]);
 
 interface Candidate {
@@ -73,7 +73,7 @@ const loadRewardConfig = async (category: Category): Promise<RewardConfig> => {
 			specialRotation: bambiSiteSettings.specialPointJobRotationHours,
 		})
 		.from(bambiSiteSettings)
-		.where(eq(bambiSiteSettings.id, SETTINGS_ID))
+		.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 		.limit(1);
 	if (category === "premium") {
 		return {
@@ -113,7 +113,7 @@ const loadCandidates = async (
 				specialCapacity: bambiSiteSettings.specialCapacity,
 			})
 			.from(bambiSiteSettings)
-			.where(eq(bambiSiteSettings.id, SETTINGS_ID))
+			.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 			.limit(1),
 		db
 			.select({
@@ -278,7 +278,9 @@ export const pointJobRewardsRouter = {
 		}
 		const selections = (
 			await Promise.all(
-				CATEGORIES.map((category) => resolveSelection(category, now))
+				POINT_JOB_REWARD_CATEGORIES.map((category) =>
+					resolveSelection(category, now)
+				)
 			)
 		).filter((item): item is NonNullable<typeof item> => item !== null);
 		const rewards = await db
@@ -293,7 +295,7 @@ export const pointJobRewardsRouter = {
 					eq(bambiPointJobReward.userId, profile.userId),
 					inArray(
 						bambiPointJobReward.category,
-						CATEGORIES as unknown as Category[]
+						POINT_JOB_REWARD_CATEGORIES as unknown as Category[]
 					)
 				)
 			)

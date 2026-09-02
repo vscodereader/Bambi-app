@@ -1,6 +1,11 @@
 "use client";
 
+import {
+	DISPLAY_NAME_MIN_LENGTH,
+	displayNameMinimumMessage,
+} from "@bambi-app/auth/display-name-policy";
 import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
+import { PASSWORD_MIN_LENGTH } from "@bambi-app/auth/password-policy";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
@@ -23,6 +28,8 @@ import {
 	popupAuthTransitionStorageKey,
 	popupLoginTargetStorageKey,
 } from "@/lib/bambi/main-popup";
+import { writeSignupOnboardingIntent } from "@/lib/bambi/onboarding";
+import { ONBOARDING_PATH } from "@/lib/bambi/onboarding-route";
 import { client, orpc, queryClient } from "@/utils/orpc";
 import { Button, Card, Logo } from "../ds";
 import { PhoneVerifyDialog } from "../phone-verify-dialog";
@@ -67,16 +74,19 @@ const getValidationError = (
 	isSignUp: boolean
 ): Notice | null => {
 	if (!isSignUp) {
-		if (values.username.trim().length === 0 || values.password.length < 8) {
+		if (
+			values.username.trim().length === 0 ||
+			values.password.length < PASSWORD_MIN_LENGTH
+		) {
 			return {
-				text: "아이디(이메일)와 8자 이상 비밀번호를 확인해 주세요.",
+				text: `아이디(이메일)와 ${PASSWORD_MIN_LENGTH}자 이상 비밀번호를 확인해 주세요.`,
 				tone: "error",
 			};
 		}
 		return null;
 	}
-	if (values.nickname.trim().length < 2) {
-		return { text: "닉네임을 2자 이상 입력해 주세요.", tone: "error" };
+	if (values.nickname.trim().length < DISPLAY_NAME_MIN_LENGTH) {
+		return { text: displayNameMinimumMessage(), tone: "error" };
 	}
 	// 아이디 규칙은 서버(better-auth username 플러그인)와 같은 공용 함수로 본다 —
 	// 여기서 통과한 값은 서버도 통과한다(규칙이 갈리면 폼은 보내는데 서버가 막는다).
@@ -84,9 +94,12 @@ const getValidationError = (
 	if (loginIdError) {
 		return { text: loginIdError, tone: "error" };
 	}
-	if (!values.email.includes("@") || values.password.length < 8) {
+	if (
+		!values.email.includes("@") ||
+		values.password.length < PASSWORD_MIN_LENGTH
+	) {
 		return {
-			text: "이메일과 8자 이상 비밀번호를 확인해 주세요.",
+			text: `이메일과 ${PASSWORD_MIN_LENGTH}자 이상 비밀번호를 확인해 주세요.`,
 			tone: "error",
 		};
 	}
@@ -299,23 +312,29 @@ export function AuthPanel() {
 			...(gender ? { gender } : {}),
 			...(verifiedId ? { identityVerificationId: verifiedId } : {}),
 		};
-		if (signupRole === "employer") {
-			await client.bambi.onboarding.createEmployerProfile(profilePayload);
-		} else {
-			await client.bambi.onboarding.createJobSeekerProfile(profilePayload);
+		const createdProfile =
+			signupRole === "employer"
+				? await client.bambi.onboarding.createEmployerProfile(profilePayload)
+				: await client.bambi.onboarding.createJobSeekerProfile(profilePayload);
+		if (!createdProfile) {
+			throw new Error("생성된 프로필을 확인하지 못했어요. 다시 시도해 주세요.");
 		}
 		// 이용약관·개인정보 처리방침 동의 이력을 저장한다(체크박스로 이미 동의를 받았다).
 		// 감사 로그 성격이라 저장 실패가 가입 완료를 막지 않도록 오류는 삼킨다.
 		await client.bambi.onboarding.recordLegalConsent().catch(() => undefined);
 		queryClient.invalidateQueries();
-		// 역할과 무관하게 구직자 홈으로 진입한다. 구인자는 헤더/탭바의 "구인 관리"
-		// 버튼으로 /employer에 들어가고, 대시보드가 업체정보 입력을 유도한다.
+		writeSignupOnboardingIntent({
+			role: signupRole,
+			userId: createdProfile.userId,
+		});
+		// 역할별 온보딩으로 하드 내비게이션한다. 성공한 가입 폼은 history에서 제거해
+		// 메인에서 뒤로가기로 이미 끝난 가입 화면에 돌아오지 않게 한다.
 		// 로그인과 같은 이유로 하드 내비게이션이다: 지금 이 화면(/seeker?auth=signup)은
 		// 세션이 없던 시점에 anon으로 렌더된 트리라, router.push는 Router Cache에 남은
 		// 그 엔트리를 재생해 갓 만들어진 세션이 반영되지 않은 화면(가입 직후 404)을 낸다.
 		// 브라우저가 세션 쿠키를 달고 /seeker를 새로 요청하게 하면 "새로고침하면 정상"과
 		// 같은 상태가 되고, 첫 내비게이션만 깨지는 문제가 사라진다.
-		window.location.assign("/seeker");
+		window.location.replace(ONBOARDING_PATH);
 	};
 
 	const handleAuthSuccess = async () => {

@@ -19,6 +19,10 @@ function DialogPortal(props: DialogPrimitive.Portal.Props) {
 	return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
 }
 
+function DialogPopup(props: DialogPrimitive.Popup.Props) {
+	return <DialogPrimitive.Popup data-slot="dialog-popup" {...props} />;
+}
+
 function DialogBackdrop({
 	className,
 	...props
@@ -92,6 +96,7 @@ export {
 	DialogClose,
 	DialogContent,
 	DialogDescription,
+	DialogPopup,
 	DialogPortal,
 	DialogTitle,
 	DialogTrigger,

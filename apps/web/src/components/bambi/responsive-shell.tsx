@@ -16,6 +16,8 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { CHAT_LIST_PATH, CHAT_ROOM_PATH_PATTERN } from "@/lib/bambi/chat-paths";
+import { COACHMARK_TARGETS } from "@/lib/bambi/coachmark";
 import { useUnreadMessageCount } from "@/lib/bambi/use-unread-message-count";
 import { useBambiAuth } from "./auth-client-provider";
 import { Logo } from "./ds";
@@ -24,11 +26,10 @@ import { NotificationBell } from "./notification-bell";
 import { SiteFooter } from "./site-footer";
 
 // 채팅 상세는 <md에서 카카오톡식 풀스크린이라 셸의 모바일 헤더를 숨긴다(md+ 데스크톱 헤더는 유지).
-const CHAT_ROOM_PATH_RE = /^\/seeker\/chats\/[^/]+$/;
-
 export interface NavItem {
 	href: Route;
 	label: string;
+	onboardingTarget?: string;
 }
 
 // 여러 하위 링크를 하나의 드롭다운으로 접는 nav 그룹.
@@ -126,6 +127,7 @@ function NavGroupItem({
 									"font-bold text-sm",
 									item.href === activeHref && "bg-muted/50"
 								)}
+								data-onboarding-target={item.onboardingTarget}
 								render={<Link href={item.href} />}
 							>
 								{item.label}
@@ -166,7 +168,13 @@ function RoleSwitchLink() {
 // 알림 벨과 동일한 형태의 헤더 채팅 아이콘 버튼(아이콘은 모바일 탭바 채팅 탭과 같다).
 // 로그인 셸에서는 안 읽은 메시지 총합을 숫자 배지로 표시하고, 비로그인 public 셸은
 // 버튼만 노출한다.
-function ChatNavButton({ withPin }: { withPin: boolean }) {
+function ChatNavButton({
+	onboardingTarget,
+	withPin,
+}: {
+	onboardingTarget?: string;
+	withPin: boolean;
+}) {
 	const unreadMessageCount = useUnreadMessageCount();
 	const showBadge = withPin && unreadMessageCount > 0;
 	return (
@@ -176,8 +184,9 @@ function ChatNavButton({ withPin }: { withPin: boolean }) {
 					showBadge ? `채팅, 읽지 않은 메시지 ${unreadMessageCount}개` : "채팅"
 				}
 				className="bg-card"
+				data-onboarding-target={onboardingTarget}
 				nativeButton={false}
-				render={<Link href={"/seeker/chats" as Route} />}
+				render={<Link href={CHAT_LIST_PATH} />}
 				size="icon-lg"
 				variant="outline"
 			>
@@ -229,10 +238,12 @@ function ModeratorHeaderActions() {
 
 // 헤더 우측 액션 묶음. 운영자는 전용 액션, 그 외에는 채팅·알림·역할 전환·내 정보/시작하기.
 function HeaderRightActions({
+	chatTarget,
 	isModerator,
 	isPublic,
 	showChatButton,
 }: {
+	chatTarget?: string;
 	isModerator: boolean;
 	isPublic: boolean;
 	showChatButton: boolean;
@@ -242,7 +253,9 @@ function HeaderRightActions({
 	}
 	return (
 		<>
-			{showChatButton ? <ChatNavButton withPin={!isPublic} /> : null}
+			{showChatButton ? (
+				<ChatNavButton onboardingTarget={chatTarget} withPin={!isPublic} />
+			) : null}
 			{/* 벨은 스스로 로그인 여부로 게이트한다 — public 라우트를 보는 로그인 사용자에게도
 			    모바일 헤더와 똑같이 노출한다(폭에 따라 벨이 사라지지 않게). */}
 			<NotificationBell />
@@ -252,6 +265,9 @@ function HeaderRightActions({
 					buttonVariants({ variant: isPublic ? "dark" : "outline" }),
 					"h-10 px-4 font-bold text-sm no-underline"
 				)}
+				data-onboarding-target={
+					isPublic ? undefined : COACHMARK_TARGETS.seekerMe
+				}
 				href={(isPublic ? "/seeker?auth=login" : "/seeker/me") as Route}
 			>
 				{isPublic ? "시작하기" : "내 정보"}
@@ -276,7 +292,13 @@ export function ResponsiveAppShell({
 	const isModerator = variant === "moderator";
 	// 채팅 버튼은 기존 nav "채팅"이 뜨던 셸(구직자·고객센터=seeker, 공개 마켓)에만
 	// 노출한다. 구인자·운영자 셸에는 넣지 않는다.
-	const showChatButton = variant === "seeker" || variant === "public";
+	const showChatButton =
+		variant === "seeker" || variant === "employer" || variant === "public";
+	const showMobileChatButton = variant === "employer";
+	const chatTarget =
+		variant === "employer"
+			? COACHMARK_TARGETS.employerChat
+			: COACHMARK_TARGETS.seekerChat;
 	// 모바일 포인트몰 진입점은 nav에 포인트몰 링크가 있는 셸(구직자·공개)에만 둔다 —
 	// 데스크톱 헤더 nav와 같은 범위. 구인자·운영자 셸엔 넣지 않는다.
 	const showPointShopEntry = variant === "seeker" || variant === "public";
@@ -285,7 +307,7 @@ export function ResponsiveAppShell({
 		variant === "seeker" || variant === "employer" || variant === "moderator";
 	const activeHref = findActiveHref(pathname, navItems);
 	// 채팅방은 모바일 헤더를 숨기고 자체 뷰포트 높이(fixed 오버레이/고정 높이)를 쓴다.
-	const isChatRoom = CHAT_ROOM_PATH_RE.test(pathname);
+	const isChatRoom = CHAT_ROOM_PATH_PATTERN.test(pathname);
 	return (
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
@@ -347,6 +369,7 @@ export function ResponsiveAppShell({
 														isDisabledEmployerRegistration &&
 															"cursor-not-allowed opacity-40"
 													)}
+													data-onboarding-target={entry.onboardingTarget}
 													render={
 														isDisabledEmployerRegistration ? (
 															<span />
@@ -366,6 +389,7 @@ export function ResponsiveAppShell({
 						<div className="ml-auto flex items-center gap-2">
 							{headerSlot}
 							<HeaderRightActions
+								chatTarget={chatTarget}
 								isModerator={isModerator}
 								isPublic={isPublic}
 								showChatButton={showChatButton}
@@ -393,6 +417,9 @@ export function ResponsiveAppShell({
 					<div className="flex items-center gap-2">
 						{mobileHeaderSlot}
 						{showPointShopEntry ? <PointShopNavButton /> : null}
+						{showMobileChatButton ? (
+							<ChatNavButton onboardingTarget={chatTarget} withPin />
+						) : null}
 						{isModerator ? <ModeratorHeaderActions /> : <NotificationBell />}
 					</div>
 				</div>

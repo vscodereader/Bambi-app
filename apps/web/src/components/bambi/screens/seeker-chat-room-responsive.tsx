@@ -1,6 +1,10 @@
 "use client";
 
 import { generateChatMessageId } from "@bambi-app/api/services/bambi-chat-message-id";
+import {
+	ALLOWED_CHAT_MEDIA_MIME_TYPES,
+	CHAT_MEDIA_MAX_BYTES,
+} from "@bambi-app/api/services/bambi-media-policy";
 import { Button as UiButton } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import {
@@ -109,15 +113,8 @@ const getRealtimeErrorMessage = (error: unknown): string =>
 // 앞으로 붙인다(예전처럼 limit을 키우지 않는다 — 상한도, 전량 재전송도 없다).
 const CHAT_MESSAGE_PAGE_SIZE = 50;
 
-const ACCEPTED_ATTACHMENT_MIME_TYPES = [
-	"image/jpeg",
-	"image/png",
-	"image/webp",
-	"application/pdf",
-] as const;
-// 서버 정책(bambi-media-policy.ts)과 같은 값이어야 한다. 8MB로 두던 이미지 상한이 서버보다
-// 좁아 서버가 받아 줄 파일을 화면이 먼저 막았다.
-const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const ACCEPTED_ATTACHMENT_MIME_TYPES = ALLOWED_CHAT_MEDIA_MIME_TYPES;
+const ATTACHMENT_MAX_BYTES = CHAT_MEDIA_MAX_BYTES;
 
 type AttachmentDraftStatus = "error" | "selected" | "uploading";
 

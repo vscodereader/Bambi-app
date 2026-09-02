@@ -8,6 +8,8 @@ import {
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+export const USER_LOGIN_ID_UNIQUE_CONSTRAINT = "user_login_id_unique";
+
 export const user = pgTable("user", {
 	id: text("id").primaryKey(),
 	name: text("name").notNull(),
@@ -21,7 +23,7 @@ export const user = pgTable("user", {
 	// drizzle adapter가 논리 필드 `username`을 플러그인 schema 매핑으로 fieldName
 	// "login_id"로 바꾼 뒤 `schemaModel["login_id"]`로 컬럼을 찾기 때문(property key
 	// 불일치 시 signup/로그인 런타임에서 "field does not exist" 예외).
-	login_id: text("login_id").unique(),
+	login_id: text("login_id").unique(USER_LOGIN_ID_UNIQUE_CONSTRAINT),
 	// 플러그인 `displayUsername` 논리 필드의 미러. displayUsernameNormalization을
 	// 소문자로 걸어 항상 login_id와 동일한 소문자로 채워진다. nullable.
 	// property 이름 = SQL 컬럼명(login_id_display) 규칙은 위와 동일.

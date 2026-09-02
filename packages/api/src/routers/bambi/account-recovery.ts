@@ -11,6 +11,7 @@
 // onboarding.ts에 붙이지 않고 파일을 나눈 이유는 그쪽이 이미 1000줄이 넘어서다.
 
 import { auth } from "@bambi-app/auth";
+import { PASSWORD_MIN_LENGTH } from "@bambi-app/auth/password-policy";
 import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
 import {
@@ -43,7 +44,10 @@ const identityInput = z.object({
 const resetPasswordInput = identityInput.extend({
 	newPassword: z
 		.string()
-		.min(8, "비밀번호는 8자 이상이어야 해요.")
+		.min(
+			PASSWORD_MIN_LENGTH,
+			`비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 해요.`
+		)
 		.max(128, "비밀번호는 128자 이하여야 해요."),
 });
 

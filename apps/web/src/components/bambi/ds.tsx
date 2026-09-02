@@ -818,6 +818,7 @@ interface NavItem {
 	disabled?: boolean;
 	icon: IconComp;
 	label: string;
+	onboardingTarget?: string;
 	value: string;
 }
 interface BottomNavProps {
@@ -862,6 +863,7 @@ export function BottomNav({
 							on ? "text-primary" : "text-[color:var(--text-subtle)]",
 							it.disabled && "cursor-not-allowed opacity-40"
 						)}
+						data-onboarding-target={it.onboardingTarget}
 						disabled={it.disabled}
 						key={it.value}
 						onClick={() => onChange?.(it.value)}

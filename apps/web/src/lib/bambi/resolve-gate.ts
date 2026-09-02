@@ -63,6 +63,7 @@ const GATED_ROOTS = [
 	"employer",
 	"manual",
 	"moderator",
+	"onboarding",
 	"preview",
 	"seeker",
 	"support",

@@ -7,13 +7,39 @@ dotenv.config({ path: "../../apps/server/.env" });
 const {
 	applyPointsCap,
 	assertGradeDeletable,
+	isGradeExcludedPointReason,
 	isPointsCapAllowed,
+	JOB_PAYMENT_POINT_REASONS,
 	nextGrade,
+	POINT_SHOP_REASONS,
 	reconcilePoints,
 	resolveCommentAward,
+	resolveEffectiveGradeBasis,
 	resolveGrade,
 	rollCommentBonus,
 } = await import("@/services/bambi-member-points");
+
+describe("isGradeExcludedPointReason", () => {
+	it.each([
+		POINT_SHOP_REASONS.purchase,
+		POINT_SHOP_REASONS.refund,
+		JOB_PAYMENT_POINT_REASONS.use("job-1"),
+		JOB_PAYMENT_POINT_REASONS.refund("job-1"),
+		JOB_PAYMENT_POINT_REASONS.refundForfeited("job-1"),
+	])("소비와 대응 환급은 등급 기준에서 제외한다: %s", (reason) => {
+		expect(isGradeExcludedPointReason(reason)).toBe(true);
+	});
+
+	it.each([
+		"attendance",
+		"signup_bonus",
+		"community_post",
+		"community_post_revoke",
+		"공고 등록 포인트 사용",
+	])("적립·회수와 접두사가 불완전한 거래는 등급 기준에 포함한다: %s", (reason) => {
+		expect(isGradeExcludedPointReason(reason)).toBe(false);
+	});
+});
 
 // 순차 random 스텁: rollCommentBonus는 최대 두 번(확률 판정→금액) 부른다. 값이 떨어지면 마지막 값을 반복.
 function seq(...values: number[]): () => number {
@@ -68,6 +94,42 @@ describe("resolveGrade", () => {
 	});
 	it("등급이 없으면 null", () => {
 		expect(resolveGrade(100, [])).toBeNull();
+	});
+});
+
+describe("resolveEffectiveGradeBasis", () => {
+	it("올려준 등급 기준점부터 이후 적립분으로 자동 승급한다", () => {
+		const effective = resolveEffectiveGradeBasis(5600, {
+			basisPoints: 600,
+			gradeId: "silver",
+			startPoints: 5000,
+		});
+		expect(effective).toBe(10_000);
+	});
+
+	it("내린 등급 기준점부터 높은 등급까지 다시 적립하게 한다", () => {
+		const unchanged = resolveEffectiveGradeBasis(50_000, {
+			basisPoints: 50_000,
+			gradeId: "bronze",
+			startPoints: 0,
+		});
+		const afterEarning = resolveEffectiveGradeBasis(55_000, {
+			basisPoints: 50_000,
+			gradeId: "bronze",
+			startPoints: 0,
+		});
+		expect(unchanged).toBe(0);
+		expect(afterEarning).toBe(5000);
+	});
+
+	it("기준점이 없으면 기존 누적 등급 포인트를 그대로 사용한다", () => {
+		expect(
+			resolveEffectiveGradeBasis(7400, {
+				basisPoints: null,
+				gradeId: null,
+				startPoints: null,
+			})
+		).toBe(7400);
 	});
 });
 

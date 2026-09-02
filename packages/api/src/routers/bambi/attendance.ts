@@ -1,6 +1,7 @@
 import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
 import {
+	adminModerationAction,
 	bambiAttendance,
 	bambiMemberGrade,
 	bambiPointTransaction,
@@ -32,9 +33,14 @@ import {
 	type SessionLike,
 } from "../../services/bambi-authz";
 import {
+	MEMBER_GRADE_ANCHOR_ACTION,
+	MEMBER_GRADE_CHANGE_REASON_MAX_LENGTH,
+} from "../../services/bambi-member-grade-policy";
+import {
+	gradeBasisPointsSql,
 	loadGradeBadges,
 	nextGrade,
-	POINT_SHOP_REASONS,
+	resolveEffectiveGradeBasis,
 	resolveGrade,
 } from "../../services/bambi-member-points";
 import { notifyBambiNotification } from "../../services/bambi-notifications";
@@ -42,6 +48,7 @@ import {
 	adjustMemberPoints,
 	awardMemberPoints,
 } from "../../services/bambi-point-ledger";
+import { SITE_SETTINGS_ROW_ID } from "../../services/bambi-point-settings";
 import { acquirePointShopUserLock } from "../../services/bambi-point-shop";
 import { resolveGradeIconUrl } from "../../services/bambi-storage";
 
@@ -51,9 +58,6 @@ const ATTENDANCE_ROLES = new Set<string>(["job_seeker", "employer"]);
 
 // 잔액은 원장 합산이다(잔액 컬럼 없음). 행이 없으면 0.
 const pointBalanceSql = sql<number>`coalesce(sum(${bambiPointTransaction.amount}), 0)::int`;
-
-// 등급 기준 합계 — 포인트몰 구매·환불 제외(bambi-member-points GRADE_EXCLUDED_REASONS와 동일 규칙).
-const gradeBasisSql = sql<number>`coalesce(sum(${bambiPointTransaction.amount}) filter (where ${bambiPointTransaction.reason} not in (${POINT_SHOP_REASONS.purchase}, ${POINT_SHOP_REASONS.refund})), 0)::int`;
 
 const getMineInput = z.object({
 	// YYYY-MM. 생략하면 서버 KST 기준 이번 달.
@@ -85,6 +89,12 @@ const adminAdjustPointsInput = z.object({
 		.refine((value) => value !== 0, {
 			message: "0 포인트는 조정할 수 없습니다.",
 		}),
+	reason: z.string().trim().min(1).max(MEMBER_GRADE_CHANGE_REASON_MAX_LENGTH),
+	userId: z.string().min(1),
+});
+
+const adminSetGradeAnchorInput = z.object({
+	gradeId: z.string().uuid(),
 	reason: z.string().trim().min(1).max(200),
 	userId: z.string().min(1),
 });
@@ -104,6 +114,83 @@ const requireAttendanceProfile = async (
 };
 
 export const attendanceRouter = {
+	adminSetGradeAnchor: adminProcedure
+		.input(adminSetGradeAnchorInput)
+		.handler(async ({ context, input }) =>
+			db.transaction(async (tx) => {
+				const [target] = await tx
+					.select({
+						deletedAt: user.deletedAt,
+						previousGradeId: bambiProfile.gradeAnchorGradeId,
+						role: bambiProfile.role,
+					})
+					.from(user)
+					.innerJoin(bambiProfile, eq(bambiProfile.userId, user.id))
+					.where(eq(user.id, input.userId))
+					.limit(1);
+				if (!target || target.deletedAt) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "등급을 변경할 회원을 찾을 수 없습니다.",
+					});
+				}
+				if (!ATTENDANCE_ROLES.has(target.role)) {
+					throw new ORPCError("FORBIDDEN", {
+						message: "구직자·구인자 등급만 변경할 수 있습니다.",
+					});
+				}
+				const [grade] = await tx
+					.select({
+						id: bambiMemberGrade.id,
+						minPoints: bambiMemberGrade.minPoints,
+						name: bambiMemberGrade.name,
+					})
+					.from(bambiMemberGrade)
+					.where(eq(bambiMemberGrade.id, input.gradeId))
+					.limit(1);
+				if (!grade) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "변경할 등급을 찾을 수 없습니다.",
+					});
+				}
+				const [basis] = await tx
+					.select({ gradeBasis: gradeBasisPointsSql })
+					.from(bambiPointTransaction)
+					.where(eq(bambiPointTransaction.userId, input.userId));
+				const currentBasis = basis?.gradeBasis ?? 0;
+				const changedAt = new Date();
+				await tx
+					.update(bambiProfile)
+					.set({
+						gradeAnchorBasisPoints: currentBasis,
+						gradeAnchorGradeId: grade.id,
+						gradeAnchorSetAt: changedAt,
+						gradeAnchorStartPoints: grade.minPoints,
+					})
+					.where(eq(bambiProfile.userId, input.userId));
+				await tx.insert(adminModerationAction).values({
+					action: MEMBER_GRADE_ANCHOR_ACTION,
+					adminUserId: context.session.user.id,
+					metadata: {
+						basisPoints: currentBasis,
+						gradeId: grade.id,
+						gradeName: grade.name,
+						previousGradeId: target.previousGradeId,
+						startPoints: grade.minPoints,
+					},
+					reason: input.reason,
+					targetId: input.userId,
+					targetType: "user",
+				});
+				return {
+					basisPoints: currentBasis,
+					changedAt,
+					gradeId: grade.id,
+					gradeName: grade.name,
+					startPoints: grade.minPoints,
+				};
+			})
+		),
+
 	adminAdjustPoints: adminProcedure
 		.input(adminAdjustPointsInput)
 		.handler(async ({ context, input }) => {
@@ -300,7 +387,7 @@ export const attendanceRouter = {
 			const [settings] = await tx
 				.select({ points: bambiSiteSettings.attendancePoints })
 				.from(bambiSiteSettings)
-				.where(eq(bambiSiteSettings.id, "default"))
+				.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 				.limit(1);
 			const configuredPoints = settings?.points ?? 10;
 			const award =
@@ -346,9 +433,12 @@ export const attendanceRouter = {
 
 			// 패널 초기 렌더에 잔액이 함께 필요하다(출석 전에도 보여야 해서 checkIn 응답만으론 부족).
 			// 등급표는 잔액과 병렬로 읽는다 — 서로 의존하지 않는 조회다.
-			const [[balance], grades] = await Promise.all([
+			const [[balance], grades, [anchor]] = await Promise.all([
 				db
-					.select({ gradeBasis: gradeBasisSql, pointBalance: pointBalanceSql })
+					.select({
+						gradeBasis: gradeBasisPointsSql,
+						pointBalance: pointBalanceSql,
+					})
 					.from(bambiPointTransaction)
 					.where(eq(bambiPointTransaction.userId, profile.userId)),
 				db
@@ -361,11 +451,23 @@ export const attendanceRouter = {
 					})
 					.from(bambiMemberGrade)
 					.orderBy(asc(bambiMemberGrade.minPoints)),
+				db
+					.select({
+						basisPoints: bambiProfile.gradeAnchorBasisPoints,
+						gradeId: bambiProfile.gradeAnchorGradeId,
+						startPoints: bambiProfile.gradeAnchorStartPoints,
+					})
+					.from(bambiProfile)
+					.where(eq(bambiProfile.userId, profile.userId))
+					.limit(1),
 			]);
 
 			const pointBalance = balance?.pointBalance ?? 0;
 			// 표시 잔액은 전체 합계, 등급 판정만 포인트몰 제외 합계를 쓴다.
-			const gradeBasis = balance?.gradeBasis ?? 0;
+			const gradeBasis = resolveEffectiveGradeBasis(
+				balance?.gradeBasis ?? 0,
+				anchor ?? { basisPoints: null, gradeId: null, startPoints: null }
+			);
 			const current = resolveGrade(gradeBasis, grades);
 			const upcoming = nextGrade(gradeBasis, grades);
 
@@ -378,7 +480,7 @@ export const attendanceRouter = {
 						await db
 							.select({ points: bambiSiteSettings.attendancePoints })
 							.from(bambiSiteSettings)
-							.where(eq(bambiSiteSettings.id, "default"))
+							.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 							.limit(1)
 					)[0]?.points ?? 10,
 				checkedInToday: attendedDatesDesc[0] === today,

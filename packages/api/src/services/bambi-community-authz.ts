@@ -9,6 +9,7 @@ import {
 } from "./bambi-authz";
 import { resolveCommunityAccess } from "./bambi-community-access";
 import { verifyCommunityPassword } from "./bambi-community-password";
+import { COMMUNITY_PASSWORD_MIN_LENGTH } from "./bambi-community-post-policy";
 import {
 	hasFreshGuestVerifiedIdentity,
 	hasMemberVerifiedIdentity,
@@ -282,8 +283,7 @@ export const assertLegalAdvisorBoardScope = (
 // 비로그인에게 닫혀 있다.
 // 게시판 이름은 화면 라벨(COMMUNITY_BOARDS)과 같은 말을 쓴다 — work_talk의 라벨은
 // "밤문화 이야기"다.
-const GUEST_PASSWORD_ERROR =
-	"비회원 글·댓글은 4자 이상의 비밀번호가 필요합니다.";
+const GUEST_PASSWORD_ERROR = `비회원 글·댓글은 ${COMMUNITY_PASSWORD_MIN_LENGTH}자 이상의 비밀번호가 필요합니다.`;
 export const GUEST_LOCKED_ERROR = "비회원은 비밀글을 작성할 수 없어요.";
 const GUEST_LOCKED_FOREIGN_ERROR =
 	"비밀글에는 글쓴이 본인만 댓글·추천을 남길 수 있어요.";
@@ -355,7 +355,7 @@ export const assertLegalAdvisorRoleSwitch = (
 // 비회원 글·댓글의 필수 비밀번호(잠금글과 같은 4자 이상). 회원과 달리 세션이 없어
 // 이 값이 유일한 소유권 증명 수단이다.
 export const requireGuestPassword = (password: string | undefined): string => {
-	if (!password || password.length < 4) {
+	if (!password || password.length < COMMUNITY_PASSWORD_MIN_LENGTH) {
 		throw new ORPCError("BAD_REQUEST", { message: GUEST_PASSWORD_ERROR });
 	}
 	return password;

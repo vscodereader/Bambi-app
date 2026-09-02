@@ -1,5 +1,11 @@
 "use client";
 
+import { MAX_BUSINESS_DOCUMENTS } from "@bambi-app/api/services/bambi-business-document-policy";
+import {
+	ALLOWED_CHAT_MEDIA_MIME_TYPES,
+	CHAT_MEDIA_MAX_BYTES,
+} from "@bambi-app/api/services/bambi-media-policy";
+
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -36,14 +42,10 @@ import {
 import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
 
-const ACCEPTED_MIME_TYPES = new Set([
-	"image/jpeg",
-	"image/png",
-	"image/webp",
-	"application/pdf",
-]);
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const MAX_DOCUMENT_COUNT = 5;
+const ACCEPTED_MIME_TYPES = new Set(ALLOWED_CHAT_MEDIA_MIME_TYPES);
+const MAX_FILE_BYTES = CHAT_MEDIA_MAX_BYTES;
+const BYTES_PER_MEGABYTE = 1024 * 1024;
+const MAX_FILE_MEGABYTES = CHAT_MEDIA_MAX_BYTES / BYTES_PER_MEGABYTE;
 
 export interface BusinessDocument {
 	byteSize: number;
@@ -147,9 +149,11 @@ export function BusinessDocumentUploader({
 		selectedFiles: File[],
 		targetOrganizationId: string
 	) => {
-		const remainingCount = MAX_DOCUMENT_COUNT - documents.length;
+		const remainingCount = MAX_BUSINESS_DOCUMENTS - documents.length;
 		if (selectedFiles.length > remainingCount) {
-			toast.error(`서류는 최대 ${MAX_DOCUMENT_COUNT}개까지 올릴 수 있습니다.`);
+			toast.error(
+				`서류는 최대 ${MAX_BUSINESS_DOCUMENTS}개까지 올릴 수 있습니다.`
+			);
 			return;
 		}
 
@@ -202,9 +206,11 @@ export function BusinessDocumentUploader({
 	}));
 	const stageFiles = (files: File[]) => {
 		const remainingCount =
-			MAX_DOCUMENT_COUNT - documents.length - stagedFiles.length;
+			MAX_BUSINESS_DOCUMENTS - documents.length - stagedFiles.length;
 		if (files.length > remainingCount) {
-			toast.error(`서류는 최대 ${MAX_DOCUMENT_COUNT}개까지 올릴 수 있습니다.`);
+			toast.error(
+				`서류는 최대 ${MAX_BUSINESS_DOCUMENTS}개까지 올릴 수 있습니다.`
+			);
 			return;
 		}
 		setStagedFiles((current) => [...current, ...files]);
@@ -239,11 +245,11 @@ export function BusinessDocumentUploader({
 							사업자 인증 서류
 						</h3>
 						<p className="mt-1 text-muted-foreground text-xs">
-							JPG, PNG, WEBP, PDF · 파일당 10MB · 최대 5개
+							{`JPG, PNG, WEBP, PDF · 파일당 ${MAX_FILE_MEGABYTES}MB · 최대 ${MAX_BUSINESS_DOCUMENTS}개`}
 						</p>
 					</div>
 					<Badge variant="secondary">
-						{documents.length + stagedFiles.length}/{MAX_DOCUMENT_COUNT}
+						{documents.length + stagedFiles.length}/{MAX_BUSINESS_DOCUMENTS}
 					</Badge>
 				</div>
 
@@ -351,7 +357,7 @@ export function BusinessDocumentUploader({
 				) : null}
 
 				<input
-					accept="image/jpeg,image/png,image/webp,application/pdf"
+					accept={ALLOWED_CHAT_MEDIA_MIME_TYPES.join(",")}
 					className="sr-only"
 					multiple
 					onChange={handleFileInputChange}
@@ -361,7 +367,7 @@ export function BusinessDocumentUploader({
 				<Button
 					disabled={
 						isUploading ||
-						documents.length + stagedFiles.length >= MAX_DOCUMENT_COUNT
+						documents.length + stagedFiles.length >= MAX_BUSINESS_DOCUMENTS
 					}
 					onClick={() => inputRef.current?.click()}
 					type="button"
