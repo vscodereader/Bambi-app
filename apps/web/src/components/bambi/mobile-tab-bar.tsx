@@ -6,6 +6,8 @@
 
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
+import { CHAT_LIST_PATH } from "@/lib/bambi/chat-paths";
+import { COACHMARK_TARGETS } from "@/lib/bambi/coachmark";
 import { useUnreadMessageCount } from "@/lib/bambi/use-unread-message-count";
 import { useBambiAuth } from "./auth-client-provider";
 import { BottomNavShell } from "./bottom-nav-shell";
@@ -29,7 +31,7 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 	let value = "home";
 	if (path === "/seeker/me" || path.startsWith("/seeker/me/")) {
 		value = "me";
-	} else if (path === "/seeker/chats") {
+	} else if (path === CHAT_LIST_PATH) {
 		value = "chat";
 	} else if (path.startsWith("/seeker/community")) {
 		value = "community";
@@ -45,7 +47,7 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 	}
 	const go = (v: string) => {
 		if (v === "chat") {
-			router.push("/seeker/chats");
+			router.push(CHAT_LIST_PATH);
 		} else if (v === "employer") {
 			router.push("/employer");
 		} else if (v === "moderator") {
@@ -64,7 +66,12 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 				badges={unreadMessageCount > 0 ? { chat: unreadMessageCount } : {}}
 				items={[
 					{ value: "home", label: "탐색", icon: Search2 },
-					{ value: "chat", label: "채팅", icon: Message },
+					{
+						value: "chat",
+						label: "채팅",
+						icon: Message,
+						onboardingTarget: COACHMARK_TARGETS.seekerChat,
+					},
 					...(isEmployer
 						? [{ value: "employer", label: "구인 관리", icon: BriefcaseIcon }]
 						: []),
@@ -72,7 +79,12 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 					...(isModerator
 						? [{ value: "moderator", label: "운영자 모드", icon: ShieldIcon }]
 						: []),
-					{ value: "me", label: "내 정보", icon: UserIcon },
+					{
+						value: "me",
+						label: "내 정보",
+						icon: UserIcon,
+						onboardingTarget: COACHMARK_TARGETS.seekerMe,
+					},
 				]}
 				onChange={go}
 				value={value}

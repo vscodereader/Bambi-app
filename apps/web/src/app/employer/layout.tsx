@@ -7,17 +7,26 @@ import {
 	type NavEntry,
 	ResponsiveAppShell,
 } from "@/components/bambi/responsive-shell";
+import { COACHMARK_TARGETS } from "@/lib/bambi/coachmark";
 import { APP_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import { resolveEmployerAccess } from "@/lib/bambi/require-role";
 
 const EMPLOYER_NAV_ITEMS: NavEntry[] = [
 	{ href: "/employer", label: "내 공고" },
-	{ href: "/employer/new", label: "공고 등록" },
+	{
+		href: "/employer/new",
+		label: "공고 등록",
+		onboardingTarget: COACHMARK_TARGETS.employerPost,
+	},
 	{ href: "/employer/ad-guide" as Route, label: "광고 안내" },
 	{
 		label: "업체 관리",
 		items: [
-			{ href: "/employer/me", label: "업체 정보" },
+			{
+				href: "/employer/me",
+				label: "업체 정보",
+				onboardingTarget: COACHMARK_TARGETS.employerBusiness,
+			},
 			{ href: "/employer/settings" as Route, label: "조직 설정" },
 		],
 	},

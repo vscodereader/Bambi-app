@@ -20,6 +20,7 @@ import {
 	isLoginPopupScreen,
 	resolveMainPopupPageId,
 } from "@/lib/bambi/main-popup-pages";
+import { isOnboardingPath } from "@/lib/bambi/onboarding-route";
 import { useCommunityBoards } from "@/lib/bambi/use-community-boards";
 import { orpc } from "@/utils/orpc";
 import { PopupTextViewer } from "./popup-text-editor";
@@ -63,6 +64,7 @@ export function MainPopupLayer() {
 	const { boards } = useCommunityBoards();
 	const session = authClient.useSession();
 	const { isAuthenticated, isGuest, isPending } = useBambiAuth();
+	const isOnboarding = isOnboardingPath(pathname);
 	const isLogin = isLoginPopupScreen({
 		authParam: searchParams.get("auth"),
 		isAuthenticated,
@@ -72,7 +74,7 @@ export function MainPopupLayer() {
 	const pageId = isLogin ? "login" : resolveMainPopupPageId(pathname, boards);
 	const query = useQuery({
 		...orpc.bambi.mainPopups.listPublic.queryOptions(),
-		enabled: !isPending && (isAuthenticated || isLogin),
+		enabled: !(isOnboarding || isPending) && (isAuthenticated || isLogin),
 		refetchInterval: 15_000,
 	});
 	const [closed, setClosed] = useState<Set<string>>(new Set());
@@ -138,6 +140,7 @@ export function MainPopupLayer() {
 		() =>
 			ready &&
 			pageReady &&
+			!isOnboarding &&
 			!authTransition &&
 			!isPending &&
 			(isAuthenticated || isLogin)
@@ -153,6 +156,7 @@ export function MainPopupLayer() {
 			closed,
 			isAuthenticated,
 			isLogin,
+			isOnboarding,
 			isPending,
 			pageId,
 			pageReady,

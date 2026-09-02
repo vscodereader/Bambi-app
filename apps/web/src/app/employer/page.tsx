@@ -55,10 +55,12 @@ import {
 	isPubliclyViewable,
 } from "@/components/bambi/employer-jobs-columns";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { RoleCoachmarkRunner } from "@/components/bambi/onboarding/role-coachmark-runner";
 import { PageControls } from "@/components/bambi/page-controls";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { authClient } from "@/lib/auth-client";
+import { COACHMARK_TARGETS } from "@/lib/bambi/coachmark";
 import { getJobDisplayStatus } from "@/lib/bambi/exposure";
 import { formatNullable, formatPay } from "@/lib/bambi-format";
 import { verificationStatusLabels } from "@/lib/bambi-options";
@@ -213,14 +215,22 @@ function NewJobButton({ verified }: { verified: boolean }) {
 
 	if (verified && !isPending && accountStatus !== "suspended") {
 		return (
-			<Link className={buttonVariants()} href="/employer/new">
+			<Link
+				className={buttonVariants()}
+				data-onboarding-target={COACHMARK_TARGETS.employerPost}
+				href="/employer/new"
+			>
 				새 공고 등록
 			</Link>
 		);
 	}
 
 	return (
-		<Button disabled type="button">
+		<Button
+			data-onboarding-target={COACHMARK_TARGETS.employerPost}
+			disabled
+			type="button"
+		>
 			새 공고 등록
 		</Button>
 	);
@@ -725,6 +735,7 @@ export default function EmployerPage() {
 			description="조직과 팀 프로필 상태를 확인하고 소유한 공고를 관리합니다."
 			title="내 공고"
 		>
+			<RoleCoachmarkRunner audienceRole="employer" />
 			<EmployerGateBanner action="공고를 등록" />
 			{jobs.length > 0 ? (
 				<section aria-labelledby="job-overview" className="flex flex-col gap-3">
