@@ -1350,14 +1350,14 @@ const PointPurchaseHistory = () => (
 					<div className="rounded-xl border border-border p-4">
 						<div className="flex items-center justify-between gap-3">
 							<div>
-								<p className="m-0 font-bold">배민 5만원 상품권</p>
+								<p className="m-0 font-bold">배민 1만원 상품권</p>
 								<p className="m-0 mt-1 text-muted-foreground text-xs">
 									주문 2026. 9. 2. 오후 3:56
 								</p>
 							</div>
 							<div className="text-right">
 								<Badge variant="secondary">주문완료</Badge>
-								<p className="m-0 mt-1 font-bold">-50,000P</p>
+								<p className="m-0 mt-1 font-bold">-10,000P</p>
 							</div>
 						</div>
 						<p className="m-0 mt-4 text-muted-foreground text-sm">
@@ -1385,20 +1385,20 @@ const PointPurchaseDialog = ({ pressing }: { pressing: boolean }) => (
 					className="object-contain"
 					fill
 					sizes="350px"
-					src="/bambi/onboarding/point-shop/baemin-50000.jpg"
+					src="/bambi/onboarding/point-shop/baemin-10000.jpg"
 				/>
 			</div>
 			<div className="mt-4 flex items-center gap-2">
-				<h2 className="m-0 font-bold text-xl">배민 5만원 상품권</h2>
+				<h2 className="m-0 font-bold text-xl">배민 1만원 상품권</h2>
 				<Badge variant="secondary">쿠폰 발송</Badge>
 			</div>
 			<p className="mt-2 mb-0 text-muted-foreground text-sm">
-				배달의민족 5만원 상품권을 본인인증 휴대폰 번호로 발송해요.
+				배달의 민족 1만원 상품권을 본인인증한 휴대폰으로 보내드려요.
 			</p>
 			<dl className="mt-4 flex flex-col gap-2 rounded-lg bg-secondary px-4 py-3 text-sm">
 				<div className="flex justify-between">
 					<dt>필요 포인트</dt>
-					<dd className="m-0 font-bold">50,000P</dd>
+					<dd className="m-0 font-bold">10,000P</dd>
 				</div>
 				<div className="flex justify-between">
 					<dt>내 포인트</dt>
@@ -1503,9 +1503,9 @@ const PointShopPreview = () => {
 										? "[animation:bambiReviewSubmitPress_var(--dur-slow)_var(--ease-in-out)] motion-reduce:animate-none"
 										: undefined
 								}
-								image="/bambi/onboarding/point-shop/baemin-50000.jpg"
-								name="배민 5만원 상품권"
-								price="50,000P"
+								image="/bambi/onboarding/point-shop/baemin-10000.jpg"
+								name="배민 1만원 상품권"
+								price="10,000P"
 							/>
 						</div>
 					</section>

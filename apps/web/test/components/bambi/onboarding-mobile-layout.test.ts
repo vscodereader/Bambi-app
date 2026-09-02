@@ -144,7 +144,7 @@ describe("onboarding mobile viewport layout", () => {
 		expect(EMPLOYER_PREVIEW_SOURCE).toContain("menuPressing");
 		expect(EMPLOYER_PREVIEW_SOURCE).not.toContain("뽑기권");
 		expect(EMPLOYER_PREVIEW_SOURCE).not.toContain("출석복구권");
-		expect(EMPLOYER_PREVIEW_SOURCE).toContain("배민 5만원 상품권");
+		expect(EMPLOYER_PREVIEW_SOURCE).toContain("배민 1만원 상품권");
 		expect(EMPLOYER_PREVIEW_SOURCE).toContain("PointPurchaseDialog");
 		expect(EMPLOYER_PREVIEW_SOURCE).toContain("PointPurchaseHistory");
 		expect(EMPLOYER_PREVIEW_SOURCE).toContain("NEXT_POINT_SHOP_PHASE");
@@ -154,7 +154,7 @@ describe("onboarding mobile viewport layout", () => {
 		expect(EMPLOYER_PREVIEW_SOURCE).toContain(
 			"ONBOARDING_POINT_SHOP_HISTORY_MS"
 		);
-		expect(EMPLOYER_PREVIEW_SOURCE).toContain("-50,000P");
+		expect(EMPLOYER_PREVIEW_SOURCE).toContain("-10,000P");
 		expect(EMPLOYER_PREVIEW_SOURCE).toContain("취소·환불");
 		expect(EMPLOYER_PREVIEW_SOURCE).not.toContain("pointShop.purchase");
 	});
