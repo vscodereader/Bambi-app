@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Alert } from "react-native";
 
 import { authClient } from "@/lib/auth-client";
+import { clearGuestToken } from "@/src/lib/guest-store";
 import { queryClient } from "@/src/lib/orpc";
 
 export function LogoutButton() {
@@ -15,6 +16,8 @@ export function LogoutButton() {
 		// @better-auth/expo는 요청을 보내는 시점에 SecureStore 쿠키와 세션 캐시를 비운다.
 		// 서버 응답이 실패해도 로컬 세션은 이미 해제되므로 실패 알림은 띄우지 않는다.
 		await authClient.signOut().catch(() => undefined);
+		// 게스트로 둘러보다 회원 로그인했다면 남은 게스트 토큰까지 지워야 완전 로그아웃이다(실패 무시).
+		await clearGuestToken().catch(() => undefined);
 		// invalidateQueries는 stale 표시만 하고 데이터를 남기며, 기본 refetchType "active"라
 		// 비활성 쿼리는 재요청도 하지 않는다. 이전 계정의 role·목록이 캐시에 남으면 다음
 		// 사용자가 그 값으로 잘못 라우팅되므로 캐시를 실제로 비운다.

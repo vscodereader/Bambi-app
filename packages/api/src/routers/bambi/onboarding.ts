@@ -39,6 +39,11 @@ import {
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import {
+	createGuestToken,
+	GUEST_TOKEN_MAX_AGE_SECONDS,
+	resolveGuestTokenSecret,
+} from "../../services/bambi-guest-token";
+import {
 	resolveVerifiedIdentity,
 	type VerifiedIdentity,
 } from "../../services/bambi-identity";
@@ -1169,6 +1174,52 @@ export const onboardingRouter = {
 				gender: identity.gender,
 				hasAccount: await findIdentityCollision(identity),
 			};
+		}),
+
+	// 게스트 토큰 발급 — 앱(native) 전용. 웹은 /api/guest 라우트가 인증을 확인하고
+	// 서명 토큰을 쿠키로 내려주지만, 앱은 그 Set-Cookie를 읽을 수 없어 토큰 문자열을
+	// 직접 받아 x-bambi-guest 헤더로 실어 보낸다. 동작은 웹 /api/guest의
+	// handleRealVerification + checkIdentityForSignup(source:"guest")을 서버 안에서
+	// 합친 것이다. 계정이 없는 방문자가 부르므로 rateLimitedPublicProcedure다 —
+	// 무인증 포트원 단건조회·수집 로그 삽입이라 남용되면 표가 부풀 수 있어 IP
+	// 레이트리밋을 건다. 인증 건은 여기서 소진(consume)하지 않는다(웹과 동일 —
+	// 최종 소비자는 가입이다).
+	issueGuestToken: rateLimitedPublicProcedure
+		.input(phoneVerificationInput)
+		.handler(async ({ input }) => {
+			const apiSecret = env.PORTONE_API_SECRET;
+			if (!apiSecret) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "본인인증이 아직 구성되지 않았습니다.",
+				});
+			}
+			await assertIdentityVerificationUsable(input.identityVerificationId);
+			// 미성년(FORBIDDEN)·미완료(BAD_REQUEST) 등은 resolveVerifiedIdentity가
+			// 던진다 — 성인 판정도 이 안에서 끝난다.
+			const identity = await resolveVerifiedIdentity(
+				apiSecret,
+				input.identityVerificationId,
+				identityChannelOptions
+			);
+			const guestId = randomUUID();
+			await recordIdentityVerification({
+				guestId,
+				identity,
+				identityVerificationId: input.identityVerificationId,
+				kind: "guest",
+			});
+			const token = await createGuestToken({
+				gender: identity.gender,
+				gid: guestId,
+				maxAgeSeconds: GUEST_TOKEN_MAX_AGE_SECONDS,
+				now: new Date(),
+				secret: resolveGuestTokenSecret(
+					env.BAMBI_GUEST_TOKEN_SECRET,
+					process.env.NODE_ENV
+				),
+			});
+			// 개인정보(이름·번호·생년월일)는 돌려주지 않는다. 성별은 토큰 안에 이미 있다.
+			return { token };
 		}),
 
 	// 실 휴대폰 본인인증(포트원 인증창) — 클라이언트가 보낸 identityVerificationId를

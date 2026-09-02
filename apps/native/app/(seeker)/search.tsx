@@ -184,6 +184,8 @@ function SearchResults({
 	);
 }
 
+// 검색은 게스트에게 열어 둔다: jobs.search는 publicProcedure이고 홈 피드도 이미 게스트에게 열려
+// 있으며, headerShown:false라 차단 카드가 뜨면 뒤로가기 어포던스가 사라진다. 상세 진입은 jobs/[id] 가드가 막는다.
 export default function SeekerSearchScreen() {
 	const insets = useSafeAreaInsets();
 	const foreground = useThemeColor("foreground");

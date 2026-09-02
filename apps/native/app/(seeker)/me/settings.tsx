@@ -16,6 +16,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { MemberOnly } from "@/src/components/member-only";
 import { publicObjectUri } from "@/src/lib/bambi-native";
 import {
 	formatBirthDate8,
@@ -408,7 +409,7 @@ function WithdrawSection({ isSignedIn }: { isSignedIn: boolean }) {
 
 // 뒤로가기는 (seeker)/_layout.tsx의 커스텀 헤더가 그리고 제목은 이 화면이 Stack.Screen으로
 // 직접 등록한다(BambiHeader를 쓰면 이중 제목).
-export default function SeekerAccountSettingsScreen() {
+function SeekerAccountSettingsInner() {
 	const session = authClient.useSession();
 	const mineQuery = useQuery({
 		...orpc.bambi.onboarding.getMine.queryOptions(),
@@ -543,5 +544,13 @@ export default function SeekerAccountSettingsScreen() {
 
 			<WithdrawSection isSignedIn={Boolean(session.data?.user)} />
 		</BambiScreen>
+	);
+}
+
+export default function SeekerAccountSettingsScreen() {
+	return (
+		<MemberOnly>
+			<SeekerAccountSettingsInner />
+		</MemberOnly>
 	);
 }

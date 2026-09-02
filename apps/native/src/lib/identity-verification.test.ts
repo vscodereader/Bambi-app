@@ -2,21 +2,32 @@ import { describe, expect, it } from "vitest";
 
 import {
 	buildIdentityRelayUrl,
+	GUEST_RETURN_URL,
 	IDENTITY_RETURN_URL,
 	parseIdentityReturnUrl,
 } from "./identity-verification";
 
 describe("buildIdentityRelayUrl", () => {
 	it("복귀 스킴만 쿼리로 실어 릴레이 주소를 만든다(인증 건은 싣지 않는다)", () => {
-		expect(buildIdentityRelayUrl("https://bambialba.com")).toBe(
+		expect(
+			buildIdentityRelayUrl("https://bambialba.com", IDENTITY_RETURN_URL)
+		).toBe(
 			"https://bambialba.com/app-verify?redirect=bambi-app%3A%2F%2F%2Fme%2Fsettings"
 		);
 	});
 
-	it("env의 trailing slash를 정리해 // 를 만들지 않는다", () => {
-		expect(buildIdentityRelayUrl("https://bambialba.com/")).toContain(
-			"https://bambialba.com/app-verify?"
+	it("게스트 복귀 주소도 그대로 실어 릴레이 주소를 만든다", () => {
+		expect(
+			buildIdentityRelayUrl("https://bambialba.com", GUEST_RETURN_URL)
+		).toBe(
+			"https://bambialba.com/app-verify?redirect=bambi-app%3A%2F%2F%2Flogin"
 		);
+	});
+
+	it("env의 trailing slash를 정리해 // 를 만들지 않는다", () => {
+		expect(
+			buildIdentityRelayUrl("https://bambialba.com/", IDENTITY_RETURN_URL)
+		).toContain("https://bambialba.com/app-verify?");
 	});
 });
 
@@ -32,39 +43,61 @@ describe("parseIdentityReturnUrl", () => {
 	it("인증 건이 실려 돌아오면 그 ID와 함께 verified다", () => {
 		expect(
 			parseIdentityReturnUrl(
-				`${IDENTITY_RETURN_URL}?identityVerificationId=iv123`
+				`${IDENTITY_RETURN_URL}?identityVerificationId=iv123`,
+				IDENTITY_RETURN_URL
 			)
 		).toEqual({ identityVerificationId: "iv123", status: "verified" });
+	});
+
+	it("게스트 복귀 주소로도 인증 건을 그대로 파싱한다", () => {
+		expect(
+			parseIdentityReturnUrl(
+				`${GUEST_RETURN_URL}?identityVerificationId=iv456`,
+				GUEST_RETURN_URL
+			)
+		).toEqual({ identityVerificationId: "iv456", status: "verified" });
 	});
 
 	it("code가 실리면 실패이고 message를 그대로 쓴다", () => {
 		expect(
 			parseIdentityReturnUrl(
-				`${IDENTITY_RETURN_URL}?code=FAILURE_TYPE_A&message=${encodeURIComponent("취소했어요")}`
+				`${IDENTITY_RETURN_URL}?code=FAILURE_TYPE_A&message=${encodeURIComponent("취소했어요")}`,
+				IDENTITY_RETURN_URL
 			)
 		).toEqual({ message: "취소했어요", status: "failed" });
 	});
 
 	it("code만 있고 message가 비면 기본 문구로 채운다", () => {
 		expect(
-			parseIdentityReturnUrl(`${IDENTITY_RETURN_URL}?code=X&message=`)
+			parseIdentityReturnUrl(
+				`${IDENTITY_RETURN_URL}?code=X&message=`,
+				IDENTITY_RETURN_URL
+			)
 		).toEqual({ message: "인증이 완료되지 않았어요.", status: "failed" });
 	});
 
 	it("identityVerificationId가 2개 이상이면(스머글링 조작) 통째로 버린다", () => {
 		expect(
 			parseIdentityReturnUrl(
-				`${IDENTITY_RETURN_URL}?identityVerificationId=evil&identityVerificationId=real`
+				`${IDENTITY_RETURN_URL}?identityVerificationId=evil&identityVerificationId=real`,
+				IDENTITY_RETURN_URL
 			)
 		).toEqual({ status: "unknown" });
 	});
 
 	it("딥링크가 없거나 다른 주소이거나 파라미터가 없으면 unknown이다", () => {
-		expect(parseIdentityReturnUrl(null)).toEqual({ status: "unknown" });
+		expect(parseIdentityReturnUrl(null, IDENTITY_RETURN_URL)).toEqual({
+			status: "unknown",
+		});
 		expect(
-			parseIdentityReturnUrl("https://evil.example/me/settings?code=1")
+			parseIdentityReturnUrl(
+				"https://evil.example/me/settings?code=1",
+				IDENTITY_RETURN_URL
+			)
 		).toEqual({ status: "unknown" });
-		expect(parseIdentityReturnUrl(IDENTITY_RETURN_URL)).toEqual({
+		expect(
+			parseIdentityReturnUrl(IDENTITY_RETURN_URL, IDENTITY_RETURN_URL)
+		).toEqual({
 			status: "unknown",
 		});
 	});

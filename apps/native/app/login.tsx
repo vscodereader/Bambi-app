@@ -33,7 +33,9 @@ import {
 	type NativeLoginErrors,
 	validateNativeLoginInput,
 } from "@/src/lib/bambi-native";
+import { clearGuestToken } from "@/src/lib/guest-store";
 import { queryClient } from "@/src/lib/orpc";
+import { useGuestVerification } from "@/src/lib/use-identity-verification";
 
 type LoginStatus = "handoff" | "idle" | "submitting";
 type NoticeStatus = "danger" | "warning";
@@ -67,6 +69,11 @@ export default function LoginScreen() {
 	const passwordRef = useRef<TextInput>(null);
 	const handoffTimerRef = useRef<null | ReturnType<typeof setTimeout>>(null);
 	const session = authClient.useSession();
+	const {
+		isAvailable: isGuestVerifyAvailable,
+		isPending: isGuestVerifyPending,
+		startGuestVerification,
+	} = useGuestVerification();
 	const [accentForegroundColor, defaultForegroundColor, mutedColor] =
 		useThemeColor(["accent-foreground", "default-foreground", "muted"]);
 
@@ -142,6 +149,9 @@ export default function LoginScreen() {
 				// 거치지 않는다. invalidate는 이전 계정 데이터를 캐시에 남기므로(비활성
 				// 쿼리는 재요청도 안 함) 로그아웃과 같은 방식으로 캐시를 비운다.
 				queryClient.clear();
+				// 게스트로 둘러보다 회원 전환하는 경로에서는 게스트 토큰이 남아 있다. 세션이
+				// 생기면 더는 게스트가 아니므로 웹 clearGuestCookie와 같은 이유로 지운다(실패 무시).
+				clearGuestToken().catch(() => undefined);
 			},
 		};
 
@@ -303,11 +313,15 @@ export default function LoginScreen() {
 					)}
 					<Button.Label>{ctaLabels[status]}</Button.Label>
 				</Button>
-				{/* ponytail: 네이티브엔 회원가입 라우트도, 비회원 인증(웹은 포트원 KCP 팝업으로
-				    게스트 쿠키를 발급받는다) 배선도 아직 없다. 진입점을 감추면 사용자가 경로
-				    자체를 모르므로 자리는 두고 안내만 띄운다. 라우트가 생기면 notifyWebOnly를
-				    router.push로 바꾼다. 안내를 인라인 Alert이 아니라 OS 알럿으로 띄우는 이유는
-				    notifyWebOnly 주석 참고 — 이 두 버튼은 Alert 슬롯보다 아래에 있다.
+				{/* 비회원 인증은 useGuestVerification으로 실배선됐다 — 릴레이 브라우저(웹
+				    /app-verify)를 열어 포트원 KCP 본인인증을 마치고, 서버가 발급한 게스트
+				    토큰을 SecureStore에 저장한 뒤 구직자 탭으로 전환한다. EXPO_PUBLIC_WEB_URL
+				    미설정(웹 선배포 전)이면 isAvailable=false라 기존 웹 안내로 폴백한다.
+				    ponytail: 회원가입만 아직 네이티브 라우트가 없어 웹 전용으로 남는다. 진입점을
+				    감추면 사용자가 경로 자체를 모르므로 자리는 두고 안내만 띄운다. 라우트가
+				    생기면 notifyWebOnly를 router.push로 바꾼다. 안내를 인라인 Alert이 아니라 OS
+				    알럿으로 띄우는 이유는 notifyWebOnly 주석 참고 — 이 두 버튼은 Alert 슬롯보다
+				    아래에 있다.
 				    위계는 로그인(primary) > 비회원 인증(secondary) > 회원가입(ghost) —
 				    tertiary는 secondary와 배경이 같은 bg-default라 두 버튼이 같은 무게로
 				    보였다. 웹처럼 텍스트 링크가 되는 ghost(bg-transparent)가 진짜 3단계다.
@@ -319,7 +333,12 @@ export default function LoginScreen() {
 				    코드포인트까지 라벨에 합쳐 읽는다(비밀번호 보기 토글과 같은 이유). */}
 				<Button
 					accessibilityLabel="비회원으로 인증하기"
-					onPress={() => notifyWebOnly("비회원 인증")}
+					isDisabled={isGuestVerifyPending || status !== "idle"}
+					onPress={
+						isGuestVerifyAvailable
+							? startGuestVerification
+							: () => notifyWebOnly("비회원 인증")
+					}
 					size="lg"
 					variant="secondary"
 				>
@@ -329,7 +348,7 @@ export default function LoginScreen() {
 						size={20}
 					/>
 					<Button.Label className="text-default-foreground">
-						비회원으로 인증하기
+						{isGuestVerifyPending ? "인증 중" : "비회원으로 인증하기"}
 					</Button.Label>
 				</Button>
 				{/* 좁은 화면에서 안내 문구와 버튼이 한 줄에 못 들어가면 접히게 둔다. */}

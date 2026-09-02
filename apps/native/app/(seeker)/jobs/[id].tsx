@@ -17,13 +17,14 @@ import {
 	Pill,
 } from "@/src/components/bambi-screen";
 import { JobDescriptionSection } from "@/src/components/job-description-section";
+import { MemberOnly } from "@/src/components/member-only";
 import { JobReportDialog } from "@/src/components/report-dialog";
 import { orpc } from "@/src/lib/orpc";
 
 // 상세 이미지는 storageKey만 내려오므로 공개 버킷 base와 합쳐 URL을 만든다(목록 커버와 동일).
 const GCS_PUBLIC_BASE_URL = env.EXPO_PUBLIC_GCS_PUBLIC_BASE_URL;
 
-export default function SeekerJobDetailScreen() {
+function SeekerJobDetailInner() {
 	const insets = useSafeAreaInsets();
 	const foreground = useThemeColor("foreground");
 	const { id } = useLocalSearchParams<{ id: string }>();
@@ -154,5 +155,13 @@ export default function SeekerJobDetailScreen() {
 				</Button>
 			</View>
 		</View>
+	);
+}
+
+export default function SeekerJobDetailScreen() {
+	return (
+		<MemberOnly>
+			<SeekerJobDetailInner />
+		</MemberOnly>
 	);
 }

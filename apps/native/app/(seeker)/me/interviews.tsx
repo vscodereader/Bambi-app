@@ -21,6 +21,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { MemberOnly } from "@/src/components/member-only";
 import {
 	canCancelInterview,
 	canRespondToInterview,
@@ -451,7 +452,7 @@ function InterviewCard({
 // 면접 목록 화면. 구직자는 상대가 제안한 면접의 수락·거절과, 진행 중인 면접의 취소를 한다 —
 // 완료 처리는 서버 canSetInterviewStatus가 구인자 전용이라(chats.ts:293) 이 (seeker) 스택에
 // 두지 않는다. 정렬(진행중 먼저 → 완료 뒤)은 서버가 정하므로 다시 세우지 않는다.
-export default function SeekerMeInterviewsScreen() {
+function SeekerMeInterviewsInner() {
 	const session = authClient.useSession();
 	const sessionUserId = session.data?.user?.id;
 	const query = useQuery(
@@ -550,4 +551,12 @@ export default function SeekerMeInterviewsScreen() {
 			</View>
 		);
 	}
+}
+
+export default function SeekerMeInterviewsScreen() {
+	return (
+		<MemberOnly>
+			<SeekerMeInterviewsInner />
+		</MemberOnly>
+	);
 }

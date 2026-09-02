@@ -5,11 +5,14 @@
 
 import { env } from "@bambi-app/env/native";
 import { useMutation } from "@tanstack/react-query";
+import { type Href, router } from "expo-router";
 import { openAuthSessionAsync } from "expo-web-browser";
 import { Alert } from "react-native";
 
+import { saveGuestToken } from "./guest-store";
 import {
 	buildIdentityRelayUrl,
+	GUEST_RETURN_URL,
 	IDENTITY_RETURN_URL,
 	parseIdentityReturnUrl,
 } from "./identity-verification";
@@ -33,51 +36,59 @@ const IDENTITY_ERROR_MESSAGES: Record<string, string> = {
 	UNAUTHORIZED: "로그인 후 다시 시도해 주세요.",
 };
 
-const identityErrorMessage = (error: unknown): string => {
+const identityErrorMessage = (
+	error: unknown,
+	messages: Record<string, string> = IDENTITY_ERROR_MESSAGES
+): string => {
 	const code =
 		typeof error === "object" && error !== null && "code" in error
 			? String(error.code)
 			: "";
 
 	return (
-		IDENTITY_ERROR_MESSAGES[code] ??
-		"본인인증을 마치지 못했어요. 잠시 후 다시 시도해 주세요."
+		messages[code] ?? "본인인증을 마치지 못했어요. 잠시 후 다시 시도해 주세요."
 	);
+};
+
+// 릴레이 브라우저를 열어 인증 건 ID를 돌려받는 공용 경로. 인증 건은 릴레이가 자기
+// 브라우저에서 발급받아 복귀 딥링크로 돌려준다. 앱이 미리 발급받아 URL로 넘기면 공격자가
+// 자기 인증 건을 남에게 인증시킨 뒤 그 ID로 비밀번호 재설정(public)을 호출하는 경로가
+// 열린다. 딥링크가 유실되면 인증 건도 같이 잃지만, TTL 30분 뒤 자연 만료라 다시 인증하면
+// 그만이다.
+const openIdentityRelay = async (returnUrl: string): Promise<string> => {
+	if (!WEB_URL) {
+		// isAvailable로 버튼을 감추므로 정상 경로에서는 오지 않는다.
+		throw new IdentityFlowError("지금은 앱에서 본인인증을 할 수 없어요.");
+	}
+
+	const result = await openAuthSessionAsync(
+		buildIdentityRelayUrl(WEB_URL, returnUrl),
+		returnUrl
+	);
+	const returned = parseIdentityReturnUrl(
+		result.type === "success" ? result.url : null,
+		returnUrl
+	);
+
+	// cancel·dismiss·딥링크 유실은 전부 unknown이다 — 인증 건이 없어 서버에
+	// 물어볼 수도 없다.
+	if (returned.status !== "verified") {
+		throw new IdentityFlowError(
+			returned.status === "failed"
+				? returned.message
+				: "본인인증을 마치지 못했어요. 다시 시도해 주세요."
+		);
+	}
+
+	return returned.identityVerificationId;
 };
 
 export function useIdentityVerification() {
 	const mutation = useMutation({
 		mutationFn: async () => {
-			if (!WEB_URL) {
-				// isAvailable로 버튼을 감추므로 정상 경로에서는 오지 않는다.
-				throw new IdentityFlowError("지금은 앱에서 본인인증을 할 수 없어요.");
-			}
-
-			// 인증 건은 릴레이가 자기 브라우저에서 발급받아 복귀 딥링크로 돌려준다. 앱이
-			// 미리 발급받아 URL로 넘기면 공격자가 자기 인증 건을 남에게 인증시킨 뒤 그
-			// ID로 비밀번호 재설정(public)을 호출하는 경로가 열린다. 딥링크가 유실되면
-			// 인증 건도 같이 잃지만, TTL 30분 뒤 자연 만료라 다시 인증하면 그만이다.
-			const result = await openAuthSessionAsync(
-				buildIdentityRelayUrl(WEB_URL),
-				IDENTITY_RETURN_URL
-			);
-			const returned = parseIdentityReturnUrl(
-				result.type === "success" ? result.url : null
-			);
-
-			// cancel·dismiss·딥링크 유실은 전부 unknown이다 — 인증 건이 없어 서버에
-			// 물어볼 수도 없다.
-			if (returned.status !== "verified") {
-				throw new IdentityFlowError(
-					returned.status === "failed"
-						? returned.message
-						: "본인인증을 마치지 못했어요. 다시 시도해 주세요."
-				);
-			}
-
-			await client.bambi.onboarding.verifyMyPhone({
-				identityVerificationId: returned.identityVerificationId,
-			});
+			const identityVerificationId =
+				await openIdentityRelay(IDENTITY_RETURN_URL);
+			await client.bambi.onboarding.verifyMyPhone({ identityVerificationId });
 		},
 		onError: (error) => {
 			Alert.alert(
@@ -103,5 +114,45 @@ export function useIdentityVerification() {
 		// 이중 탭 방지 겸 진행 표시.
 		isPending: mutation.isPending,
 		startIdentityVerification: () => mutation.mutate(undefined),
+	};
+}
+
+// 게스트 맥락의 오류 문구. 코드는 같지만 로그인 전 방문자에게 맞게 문구를 덮어쓴다.
+const GUEST_ERROR_MESSAGES: Record<string, string> = {
+	BAD_REQUEST: "본인인증이 완료되지 않았어요. 다시 인증해 주세요.",
+	FORBIDDEN: "만 19세 이상만 이용할 수 있어요.",
+	TOO_MANY_REQUESTS: "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
+};
+
+// 로그인 없이 본인인증만으로 게스트 토큰을 받아 성인 게이트를 통과한다. 서버가 발급한
+// 토큰을 SecureStore에 저장하고 캐시를 비운 뒤 구직자 탭으로 전환한다.
+export function useGuestVerification() {
+	const mutation = useMutation({
+		mutationFn: async () => {
+			const id = await openIdentityRelay(GUEST_RETURN_URL);
+			const { token } = await client.bambi.onboarding.issueGuestToken({
+				identityVerificationId: id,
+			});
+			await saveGuestToken(token);
+			queryClient.clear();
+		},
+		onError: (error) => {
+			Alert.alert(
+				"인증하지 못했어요",
+				error instanceof IdentityFlowError
+					? error.message
+					: identityErrorMessage(error, GUEST_ERROR_MESSAGES)
+			);
+		},
+		onSuccess: () => {
+			// 성공 Alert 없이 바로 화면을 전환한다.
+			router.replace("/(seeker)/(tabs)" as Href);
+		},
+	});
+
+	return {
+		isAvailable: Boolean(WEB_URL),
+		isPending: mutation.isPending,
+		startGuestVerification: () => mutation.mutate(undefined),
 	};
 }

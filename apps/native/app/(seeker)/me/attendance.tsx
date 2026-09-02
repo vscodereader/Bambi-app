@@ -12,6 +12,7 @@ import {
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { GradeBadge } from "@/src/components/grade-badge";
+import { MemberOnly } from "@/src/components/member-only";
 import {
 	buildMonthWeeks,
 	formatPointAmount,
@@ -448,7 +449,7 @@ function MonthNavButton({
 	);
 }
 
-export default function SeekerAttendanceScreen() {
+function SeekerAttendanceInner() {
 	// null이면 서버가 정한 이번 달(KST)을 본다 — 클라이언트가 "이번 달"을 계산하면
 	// 자정 전후 시계 차이로 서버와 다른 달을 요청한다(웹 AttendancePanel과 같은 이유).
 	const [month, setMonth] = useState<null | string>(null);
@@ -668,5 +669,13 @@ export default function SeekerAttendanceScreen() {
 				<PointHistoryCard />
 			</BambiScreen>
 		</>
+	);
+}
+
+export default function SeekerAttendanceScreen() {
+	return (
+		<MemberOnly>
+			<SeekerAttendanceInner />
+		</MemberOnly>
 	);
 }

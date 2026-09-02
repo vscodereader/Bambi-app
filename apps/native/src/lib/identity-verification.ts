@@ -9,13 +9,21 @@
 // 인증을 시작한 화면으로 그대로 돌아오므로 재진입은 사실상 no-op다.
 export const IDENTITY_RETURN_URL = "bambi-app:///me/settings";
 
+// 게스트 본인인증의 복귀 주소. 인증 후 로그인 화면으로 돌려보내 게스트 상태를 반영한다.
+// 웹 릴레이의 isAllowedRedirect(app-verify-relay.tsx)는 스킴 접두어 + 쿼리·프래그먼트·&
+// 없음만 보므로 이 host 없는 절대 경로("bambi-app:///login")는 그대로 통과한다.
+export const GUEST_RETURN_URL = "bambi-app:///login";
+
 const TRAILING_SLASHES = /\/+$/;
 
 // 인증 건은 릴레이(피해자 브라우저)가 직접 발급받아 복귀 딥링크로 돌려준다. 앱이 미리
 // 발급받아 넘기면 공격자가 자기 인증 건을 남에게 인증시킨 뒤 그 ID로 비밀번호 재설정을
 // 호출하는 경로가 열린다 — 그래서 이 URL에는 인증 건을 싣지 않는다.
-export const buildIdentityRelayUrl = (webUrl: string): string => {
-	const query = new URLSearchParams({ redirect: IDENTITY_RETURN_URL });
+export const buildIdentityRelayUrl = (
+	webUrl: string,
+	returnUrl: string
+): string => {
+	const query = new URLSearchParams({ redirect: returnUrl });
 
 	// env가 trailing slash를 달고 올 수 있어 한 번 정리한다.
 	return `${webUrl.replace(TRAILING_SLASHES, "")}/app-verify?${query.toString()}`;
@@ -29,9 +37,10 @@ export type IdentityReturn =
 	| { status: "unknown" };
 
 export const parseIdentityReturnUrl = (
-	url: null | string | undefined
+	url: null | string | undefined,
+	returnUrl: string
 ): IdentityReturn => {
-	if (!url?.startsWith(IDENTITY_RETURN_URL)) {
+	if (!url?.startsWith(returnUrl)) {
 		return { status: "unknown" };
 	}
 

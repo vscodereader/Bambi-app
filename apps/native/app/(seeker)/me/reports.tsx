@@ -13,6 +13,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { MemberOnly } from "@/src/components/member-only";
 import {
 	type ReportTargetSummary,
 	reportReasonLabel,
@@ -151,7 +152,7 @@ function ReportCard({ item }: { item: ReportItem }) {
 	);
 }
 
-export default function SeekerMyReportsScreen() {
+function SeekerMyReportsInner() {
 	const [page, setPage] = useState(1);
 	const query = useQuery({
 		...orpc.bambi.moderation.listMyReports.queryOptions({
@@ -234,5 +235,13 @@ export default function SeekerMyReportsScreen() {
 				) : null}
 			</BambiScreen>
 		</>
+	);
+}
+
+export default function SeekerMyReportsScreen() {
+	return (
+		<MemberOnly>
+			<SeekerMyReportsInner />
+		</MemberOnly>
 	);
 }

@@ -15,6 +15,7 @@ import {
 } from "@/src/components/bambi-screen";
 import { CrawledJobDetailImages } from "@/src/components/crawled-job-detail-images";
 import { CrawledJobReviews } from "@/src/components/crawled-job-reviews";
+import { MemberOnly } from "@/src/components/member-only";
 import { orpc } from "@/src/lib/orpc";
 
 // native는 @orpc/server(InferRouterOutputs)를 의존하지 않으므로 클라이언트 호출 반환형에서
@@ -37,7 +38,7 @@ function formatCrawledPay(job: CrawledJob): string {
 // 하단 고정 바는 두지 않는다 — 수집 공고는 조직·채팅 상대가 없다. 대신 웹 크롤 상세와 같은
 // 자기방어 안내를 스크롤 끝에 남긴다. 검수·인증 배지도 달지 않는다(우리가 확인한 적 없는
 // 공고라 거짓 신호가 된다 — 웹과 동일 판단).
-export default function SeekerCrawledJobDetailScreen() {
+function SeekerCrawledJobDetailInner() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const jobQuery = useQuery(
 		orpc.bambi.crawledJobs.getById.queryOptions({ input: { id } })
@@ -135,5 +136,13 @@ export default function SeekerCrawledJobDetailScreen() {
 				</Text>
 			</Surface>
 		</BambiScreen>
+	);
+}
+
+export default function SeekerCrawledJobDetailScreen() {
+	return (
+		<MemberOnly>
+			<SeekerCrawledJobDetailInner />
+		</MemberOnly>
 	);
 }
