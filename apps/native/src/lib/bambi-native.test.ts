@@ -18,9 +18,11 @@ import {
 	pointsToNextLabel,
 	profileRoleLabel,
 	resolveJobCoverUri,
+	type SignupFormValues,
 	validateNativeJobForm,
 	validateNativeLoginInput,
 	validateNewPassword,
+	validateSignupInput,
 } from "./bambi-native";
 
 const seekerJob = (
@@ -429,5 +431,53 @@ describe("validateNewPassword", () => {
 
 	it("규칙을 모두 만족하면 null을 준다", () => {
 		expect(validateNewPassword("password1", "password1")).toBeNull();
+	});
+});
+
+describe("validateSignupInput", () => {
+	const validSignup = (
+		overrides: Partial<SignupFormValues> = {}
+	): SignupFormValues => ({
+		agreedToTerms: true,
+		email: "seeker@bambi.dev",
+		nickname: "밤비구직",
+		password: "password1",
+		passwordConfirm: "password1",
+		username: "bambi-alba",
+		...overrides,
+	});
+
+	it("웹 규칙을 모두 만족하면 null을 준다", () => {
+		expect(validateSignupInput(validSignup())).toBeNull();
+	});
+
+	it("닉네임이 2자 미만이면 안내한다", () => {
+		expect(validateSignupInput(validSignup({ nickname: "김" }))).toBe(
+			"닉네임을 2자 이상 입력해 주세요."
+		);
+	});
+
+	it("아이디가 규칙에 어긋나면 login-id 문구를 그대로 준다", () => {
+		expect(validateSignupInput(validSignup({ username: "ab" }))).toBe(
+			"아이디는 3자 이상 입력해 주세요."
+		);
+	});
+
+	it("이메일에 @가 없으면 이메일·비밀번호 안내를 준다", () => {
+		expect(validateSignupInput(validSignup({ email: "noatsign" }))).toBe(
+			"이메일과 8자 이상 비밀번호를 확인해 주세요."
+		);
+	});
+
+	it("비밀번호와 확인이 다르면 안내한다", () => {
+		expect(
+			validateSignupInput(validSignup({ passwordConfirm: "password2" }))
+		).toBe("비밀번호가 일치하지 않아요.");
+	});
+
+	it("약관에 동의하지 않으면 안내한다", () => {
+		expect(validateSignupInput(validSignup({ agreedToTerms: false }))).toBe(
+			"이용약관과 개인정보 처리방침에 동의해주세요"
+		);
 	});
 });
