@@ -1,3 +1,5 @@
+import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
+
 const TITLE_MIN_LENGTH = 2;
 const TITLE_MAX_LENGTH = 80;
 // 서버 jobPostInput이 지역 마스터의 법정동코드(10자리)만 받는다.
@@ -287,6 +289,46 @@ export const validateNewPassword = (
 	}
 	if (password !== passwordConfirm) {
 		return "비밀번호가 일치하지 않아요.";
+	}
+	return null;
+};
+
+export type SignupRole = "job_seeker" | "employer";
+
+export interface SignupFormValues {
+	agreedToTerms: boolean;
+	email: string;
+	nickname: string;
+	password: string;
+	passwordConfirm: string;
+	username: string;
+}
+
+export type SignupSubmitValues = SignupFormValues & { role: SignupRole };
+
+// 웹 getValidationError(auth-panel.tsx:65) + 약관 동의 가드와 같은 규칙·문구·순서.
+// username·nickname은 웹과 동일하게 trim해서 검사한다.
+export const validateSignupInput = (
+	values: SignupFormValues
+): null | string => {
+	if (values.nickname.trim().length < 2) {
+		return "닉네임을 2자 이상 입력해 주세요.";
+	}
+	const loginIdError = getLoginIdErrorMessage(values.username.trim());
+	if (loginIdError) {
+		return loginIdError;
+	}
+	if (
+		!values.email.includes("@") ||
+		values.password.length < PASSWORD_MIN_LENGTH
+	) {
+		return "이메일과 8자 이상 비밀번호를 확인해 주세요.";
+	}
+	if (values.password !== values.passwordConfirm) {
+		return "비밀번호가 일치하지 않아요.";
+	}
+	if (!values.agreedToTerms) {
+		return "이용약관과 개인정보 처리방침에 동의해주세요";
 	}
 	return null;
 };
