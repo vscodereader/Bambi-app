@@ -273,6 +273,24 @@ export const validateNativeLoginInput = (
 	return errors;
 };
 
+// 계정복구의 새 비밀번호 검증. 서버 resetPasswordInput(8~128)과 같은 규칙을 클라에서 먼저
+// 걸러 인증 건을 헛되이 소진시키지 않는다. 확인 입력 일치까지 한 함수에서 본다.
+export const validateNewPassword = (
+	password: string,
+	passwordConfirm: string
+): null | string => {
+	if (password.length < PASSWORD_MIN_LENGTH) {
+		return "비밀번호를 8자 이상 입력해 주세요.";
+	}
+	if (password.length > PASSWORD_MAX_LENGTH) {
+		return "비밀번호는 128자까지 입력할 수 있어요.";
+	}
+	if (password !== passwordConfirm) {
+		return "비밀번호가 일치하지 않아요.";
+	}
+	return null;
+};
+
 // 목록 한 행이 쓰는 필드만 좁혀 둔 클라이언트 타입. 서버 응답(bambi.jobs.list)은 더 넓은
 // 객체를 주지만 구조적 타이핑으로 그대로 들어온다. 연락처 계열 필드는 서버 selection에
 // 애초에 없으므로 여기에도 추가하지 않는다.

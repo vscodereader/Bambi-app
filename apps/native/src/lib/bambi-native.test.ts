@@ -20,6 +20,7 @@ import {
 	resolveJobCoverUri,
 	validateNativeJobForm,
 	validateNativeLoginInput,
+	validateNewPassword,
 } from "./bambi-native";
 
 const seekerJob = (
@@ -410,5 +411,23 @@ describe("pointsToNextLabel", () => {
 
 	it("다음 등급이 없으면 최고 등급 문구를 보여준다", () => {
 		expect(pointsToNextLabel(null, null)).toBe("최고 등급입니다");
+	});
+});
+
+describe("validateNewPassword", () => {
+	it("길이·일치 규칙을 순서대로 검사한다", () => {
+		expect(validateNewPassword("short", "short")).toBe(
+			"비밀번호를 8자 이상 입력해 주세요."
+		);
+		expect(validateNewPassword("a".repeat(129), "a".repeat(129))).toBe(
+			"비밀번호는 128자까지 입력할 수 있어요."
+		);
+		expect(validateNewPassword("password1", "password2")).toBe(
+			"비밀번호가 일치하지 않아요."
+		);
+	});
+
+	it("규칙을 모두 만족하면 null을 준다", () => {
+		expect(validateNewPassword("password1", "password1")).toBeNull();
 	});
 });
