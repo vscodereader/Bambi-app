@@ -16,10 +16,6 @@ export const env = createEnv({
 		// (isAvailable). 미설정이면 본인인증 버튼 대신 기존 "웹에서 이용" 안내로 폴백한다.
 		EXPO_PUBLIC_PORTONE_STORE_ID: z.string().min(1).optional(),
 		EXPO_PUBLIC_PORTONE_CHANNEL_KEY: z.string().min(1).optional(),
-		// 웹 사이트 base URL. native에 별도 화면이 없는 법정 문서(이용약관 /terms·
-		// 개인정보 처리방침 /privacy)를 회원가입 동의 행에서 시스템 브라우저로 연다.
-		// 미설정이면 동의 행의 링크 어포던스를 감춘다(일반 텍스트로만 노출).
-		EXPO_PUBLIC_WEB_URL: z.url().optional(),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,

@@ -5,7 +5,6 @@
 // 화면이 언마운트된다. 진입 라우팅과 홈 계산은 훅의 router.replace("/")가 맡는다.
 
 import { LOGIN_ID_HELP_TEXT } from "@bambi-app/auth/login-id";
-import { env } from "@bambi-app/env/native";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useNavigation } from "expo-router";
 import {
@@ -26,7 +25,6 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import {
 	AccessibilityInfo,
-	Linking,
 	Alert as NativeAlert,
 	Pressable,
 	Text,
@@ -43,29 +41,6 @@ import { useSignup } from "@/src/lib/use-signup";
 
 // 웹 SIGNUP_STEPS와 같은 어휘. 인증 → 정보 입력이라는 실제 순서가 있어 단계를 표기한다.
 const SIGNUP_STEPS = ["본인인증", "정보 입력"] as const;
-
-// native엔 약관·처리방침 화면이 없어 웹 문서를 시스템 브라우저로 연다. 회원가입은
-// WEB_URL이 있어야만 열리므로(isSignupAvailable) 여기 도달하면 값이 반드시 있다.
-const WEB_URL = env.EXPO_PUBLIC_WEB_URL;
-
-const openLegalDoc = (path: string) => {
-	Linking.openURL(`${WEB_URL}${path}`).catch(() => {
-		NativeAlert.alert("문서를 열 수 없어요", "잠시 후 다시 시도해 주세요.");
-	});
-};
-
-// 약관·처리방침 링크(탭 시 시스템 브라우저). 색은 로그인 화면 링크와 같은 muted 계열.
-function LegalLink({ label, path }: { label: string; path: string }) {
-	return (
-		<Text
-			accessibilityRole="link"
-			className="font-semibold text-muted text-xs underline"
-			onPress={() => openLegalDoc(path)}
-		>
-			{label}
-		</Text>
-	);
-}
 
 function SignupSteps({ current }: { current: 1 | 2 }) {
 	return (
@@ -424,9 +399,7 @@ export default function SignupScreen() {
 					</View>
 
 					{/* 약관 동의: 행 전체를 Pressable로 감싸 라벨까지 탭 타깃으로 쓴다
-					    (me/interviews의 Checkbox 패턴). 링크는 Pressable 밖 별도 행으로 뺀다 —
-					    accessible=true인 Pressable은 자식을 단일 노드로 접어 안쪽 링크가
-					    스크린리더 포커스를 못 받으므로, 문서 링크는 독립 노드여야 도달 가능하다. */}
+					    (me/interviews의 Checkbox 패턴). */}
 					<Pressable
 						accessibilityLabel="이용약관 및 개인정보 처리방침에 동의합니다."
 						accessibilityRole="checkbox"
@@ -448,12 +421,7 @@ export default function SignupScreen() {
 							이용약관 및 개인정보 처리방침에 동의합니다.
 						</Text>
 					</Pressable>
-					{/* 이용약관·개인정보 처리방침은 native에 별도 화면이 없어 웹 문서(/terms·
-					    /privacy)를 시스템 브라우저로 연다. 체크박스와 독립된 링크 노드다. */}
-					<View className="flex-row gap-3">
-						<LegalLink label="이용약관 보기" path="/terms" />
-						<LegalLink label="개인정보 처리방침 보기" path="/privacy" />
-					</View>
+					{/* 약관·처리방침 문서는 native 전용 페이지 예정 — 생기면 여기서 연결한다. */}
 
 					<Button isDisabled={isSubmitPending} onPress={handleSubmit} size="lg">
 						{isSubmitPending ? (
