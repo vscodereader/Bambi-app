@@ -27,6 +27,7 @@ import {
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { LogoutButton } from "@/src/components/logout-button";
+import { MemberOnly } from "@/src/components/member-only";
 import { pointsToNextLabel, profileRoleLabel } from "@/src/lib/bambi-native";
 import { orpc, queryClient } from "@/src/lib/orpc";
 
@@ -363,7 +364,7 @@ function MeMenu() {
 	);
 }
 
-export default function SeekerMeScreen() {
+function SeekerMeInner() {
 	return (
 		<BambiScreen>
 			<BambiHeader description="내 계정과 활동을 관리합니다." title="내 정보" />
@@ -374,5 +375,13 @@ export default function SeekerMeScreen() {
 				<LogoutButton />
 			</View>
 		</BambiScreen>
+	);
+}
+
+export default function SeekerMeScreen() {
+	return (
+		<MemberOnly>
+			<SeekerMeInner />
+		</MemberOnly>
 	);
 }

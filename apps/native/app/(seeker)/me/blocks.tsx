@@ -9,12 +9,13 @@ import {
 	formatDateTime,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { MemberOnly } from "@/src/components/member-only";
 import { orpc, queryClient } from "@/src/lib/orpc";
 
 // 차단 목록 화면. 차단 "생성"은 채팅방 쪽 몫이라 여기서는 조회와 해제만 한다.
 // name은 서버(resolveVisibleDisplayName)가 이미 "탈퇴한 회원"/"알 수 없는 사용자"까지
 // 처리한 표시값이라 화면에서 가공하지 않는다.
-export default function SeekerBlocksScreen() {
+function SeekerBlocksInner() {
 	const query = useQuery(orpc.bambi.blocks.listMine.queryOptions());
 	const unblock = useMutation(
 		orpc.bambi.blocks.unblockUser.mutationOptions({
@@ -145,4 +146,12 @@ export default function SeekerBlocksScreen() {
 			</View>
 		);
 	}
+}
+
+export default function SeekerBlocksScreen() {
+	return (
+		<MemberOnly>
+			<SeekerBlocksInner />
+		</MemberOnly>
+	);
 }

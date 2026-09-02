@@ -12,6 +12,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { MemberOnly } from "@/src/components/member-only";
 import { MessageBody } from "@/src/components/message-body";
 import { directMessageBodyToText } from "@/src/lib/me-messages";
 import { orpc, queryClient } from "@/src/lib/orpc";
@@ -334,7 +335,7 @@ function MessageList({ tab }: { tab: MessagesTab }) {
 	);
 }
 
-export default function SeekerMeMessagesScreen() {
+function SeekerMeMessagesInner() {
 	const [tab, setTab] = useState<MessagesTab>("inbox");
 
 	return (
@@ -349,5 +350,13 @@ export default function SeekerMeMessagesScreen() {
 			<MessagesTabs onChange={setTab} tab={tab} />
 			<MessageList tab={tab} />
 		</BambiScreen>
+	);
+}
+
+export default function SeekerMeMessagesScreen() {
+	return (
+		<MemberOnly>
+			<SeekerMeMessagesInner />
+		</MemberOnly>
 	);
 }

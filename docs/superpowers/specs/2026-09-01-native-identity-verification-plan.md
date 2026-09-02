@@ -1,5 +1,9 @@
 ﻿# native 본인인증(포트원 KCP 인증창) 도입 타당성 조사
 
+## 결정 변경(2026-09-02): 방안 B 채택, 릴레이 제거
+
+초기 구현(방안 A: 웹 릴레이 `/app-verify` + `expo-web-browser` `openAuthSessionAsync` + 딥링크 복귀)을 **방안 B: `@portone/react-native-sdk`의 `<IdentityVerification/>` 인앱 WebView**로 전면 교체한다. 웹 릴레이 라우트(`apps/web/src/app/app-verify/*`)와 native 전용 env `EXPO_PUBLIC_WEB_URL`은 제거하고, 신규 native env `EXPO_PUBLIC_PORTONE_STORE_ID`·`EXPO_PUBLIC_PORTONE_CHANNEL_KEY`(둘 다 있을 때만 인증 가능, 미설정 시 "웹에서 이용" 폴백)를 도입한다. 서버 계약(`startIdentityVerification`/`verifyMyPhone`/`issueGuestToken`)은 무변경 — 서버가 포트원 단건조회로 최종 판정한다. 아래 방안 A/B 비교·조사 본문은 히스토리로 남긴다.
+
 조사 범위: `apps/web`(브라우저 SDK 호출부) → `packages/api`(발급·검증·소진) → `apps/native`(현 상태·가용 수단). 모든 주장에 파일:라인 또는 공식 문서 근거를 단다. 코드는 한 줄도 수정하지 않았다.
 
 ## 현행 웹 흐름(정확한 심볼·엔드포인트)

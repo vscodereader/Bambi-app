@@ -3,6 +3,7 @@ import {
 	createGuestToken,
 	DEV_GUEST_TOKEN_SECRET,
 	decodeGuestTokenGender,
+	GUEST_TOKEN_MAX_AGE_SECONDS,
 	readGuestTokenFromCookieString,
 	resolveGuestTokenSecret,
 	verifyGuestToken,
@@ -102,6 +103,10 @@ describe("guest token", () => {
 
 		expect(decodeGuestTokenGender(token)).toBe("female");
 		expect(decodeGuestTokenGender("1")).toBeNull();
+	});
+
+	it("게스트 토큰 유효기간은 30일(2592000초)이다 — 웹 쿠키 maxAge와 동일", () => {
+		expect(GUEST_TOKEN_MAX_AGE_SECONDS).toBe(2_592_000);
 	});
 
 	it("Cookie 헤더 문자열에서 토큰만 뽑는다", async () => {

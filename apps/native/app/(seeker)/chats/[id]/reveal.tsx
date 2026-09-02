@@ -11,10 +11,11 @@ import {
 	LoadingState,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { MemberOnly } from "@/src/components/member-only";
 import { getConfirmedScheduleId } from "@/src/lib/bambi-native";
 import { orpc } from "@/src/lib/orpc";
 
-export default function ContactRevealScreen() {
+function ContactRevealInner() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const [contactValue, setContactValue] = useState("010-0000-0000");
 	const [message, setMessage] = useState<null | string>(null);
@@ -90,5 +91,13 @@ export default function ContactRevealScreen() {
 				</Button>
 			</Surface>
 		</BambiScreen>
+	);
+}
+
+export default function ContactRevealScreen() {
+	return (
+		<MemberOnly>
+			<ContactRevealInner />
+		</MemberOnly>
 	);
 }

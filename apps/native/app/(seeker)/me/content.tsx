@@ -9,6 +9,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { MemberOnly } from "@/src/components/member-only";
 import {
 	contentBoardLabel,
 	contentUnavailableLabel,
@@ -145,7 +146,7 @@ function ContentSection({ kind }: { kind: "authored" | "liked" }) {
 	);
 }
 
-export default function SeekerMyContentScreen() {
+function SeekerMyContentInner() {
 	return (
 		<BambiScreen>
 			{/* _layout.tsx를 건드리지 않고 스택 헤더 제목만 준다(jobs/[id].tsx의 headerRight와 같은 방식).
@@ -158,5 +159,13 @@ export default function SeekerMyContentScreen() {
 			<ContentSection kind="liked" />
 			<ContentSection kind="authored" />
 		</BambiScreen>
+	);
+}
+
+export default function SeekerMyContentScreen() {
+	return (
+		<MemberOnly>
+			<SeekerMyContentInner />
+		</MemberOnly>
 	);
 }
