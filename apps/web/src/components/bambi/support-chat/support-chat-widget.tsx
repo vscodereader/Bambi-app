@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { SUPPORT_CHAT_ANCHOR_EVENT } from "@/components/bambi/ad-banner";
 import { authClient } from "@/lib/auth-client";
+import { isOnboardingPath } from "@/lib/bambi/onboarding-route";
 import { orpc } from "@/utils/orpc";
 import { WidgetConversation } from "./widget-conversation";
 import { WidgetHome } from "./widget-home";
@@ -210,6 +211,7 @@ export function SupportChatWidget() {
 	// resize, 그리고 rail 마운트 알림(수다방처럼 마운트 게이트 뒤에서 rail이 늦게 나타나는
 	// 화면은 pathname 재탐색이 앵커 등장을 놓친다) 때 다시 판정한다 — 한 페이지에 둘일 수
 	// 있어 첫 매치만 쓴다.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: pathname 값은 effect 본문에서 읽지 않지만 페이지 이동마다 새 rail anchor를 다시 찾는 재실행 키다.
 	useEffect(() => {
 		const sync = () => {
 			const el = document.querySelector<HTMLElement>(
@@ -246,6 +248,7 @@ export function SupportChatWidget() {
 	);
 	// 채팅방 안에선 FAB이 입력창·메시지를 가려 감춘다. 목록(/seeker/chats)은 그대로 둔다.
 	const isChatRoomPath = CHAT_ROOM_PATH.test(pathname ?? "");
+	const isOnboarding = isOnboardingPath(pathname);
 	// 로그인 상태에서 프로필 응답 전까지도 감춘다 — admin 계정에서 버튼이 잠깐 떴다
 	// 사라지는 깜빡임 방지(비로그인은 조회가 없어 해당 없음). 인증 카드(?auth=) 위에도
 	// 버튼을 세우지 않는다. hidden이면 아래 canPoll도 함께 꺼지는데, 채팅방에선 어차피
@@ -254,6 +257,7 @@ export function SupportChatWidget() {
 		isModeratorPath ||
 		isCrawlerPath ||
 		isChatRoomPath ||
+		isOnboarding ||
 		isAdmin ||
 		onAuthScreen ||
 		(Boolean(session) && profileQuery.isPending);

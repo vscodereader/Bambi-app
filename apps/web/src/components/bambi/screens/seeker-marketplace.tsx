@@ -23,6 +23,7 @@ import { Card } from "../ds";
 import { HomeCommunitySection } from "../home-community-section";
 import { Search2 } from "../icons";
 import { MarketplaceFilterControls } from "../marketplace";
+import { RoleCoachmarkRunner } from "../onboarding/role-coachmark-runner";
 import { PremiumAdBannerSection } from "../premium-ad-banner-section";
 import { useSeekerFilters } from "../seeker-app-shell";
 import { VisualJobExposureSections } from "../visual-job-exposure-sections";
@@ -77,6 +78,7 @@ export function SeekerMarketplaceScreen() {
 	// 좌우 여백 컬럼은 매우 넓은 화면에서만 노출한다.
 	return (
 		<div className={cn(SIDE_AD_RAIL_LAYOUT_CLASS, "py-5 pb-24 md:py-10")}>
+			<RoleCoachmarkRunner audienceRole="job_seeker" />
 			{/* 페이지 h1: 시각적으로 숨기지만 스크린리더·문서 개요에 최상위 제목을 준다.
 			    이 아래 가장 상위 제목은 "빠른 탐색" h2였다(h1 부재). */}
 			<h1 className="sr-only">밤비알바 채용정보</h1>

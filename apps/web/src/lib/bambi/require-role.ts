@@ -41,6 +41,11 @@ export async function redirectToRoleHome(): Promise<void> {
 	redirect("/seeker");
 }
 
+export async function resolveOnboardingAccess(): Promise<{ role: BambiRole }> {
+	const routing = await getRouting();
+	return { role: routing.role };
+}
+
 // 구직자 전용 영역: 구직자가 아니면 각자 홈으로. 구인자·운영자도 공고 상세까지는 보지만
 // 그 뒤 채팅 흐름은 구직자 것이라 여기서 막는다.
 // 인증 오버레이로 보내지 않는 게 핵심이다 — 세션·프로필이 없는 상태와 역할이 다른 상태는

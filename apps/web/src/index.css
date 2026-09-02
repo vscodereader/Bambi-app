@@ -259,6 +259,29 @@ body {
 	}
 }
 
+@keyframes bambiSlideInFromRight {
+	from {
+		transform: translateX(100%);
+		opacity: 0.2;
+	}
+	to {
+		transform: translateX(0);
+		opacity: 1;
+	}
+}
+
+@keyframes bambiReviewSubmitPress {
+	0%,
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+	50% {
+		transform: scale(0.96);
+		opacity: 0.85;
+	}
+}
+
 /* ---- 스테이지 (페르소나 스위처 · /preview, 데모 전용) ---- */
 .bambi-stage {
 	display: flex;
