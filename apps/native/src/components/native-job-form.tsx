@@ -4,6 +4,7 @@ import {
 } from "@bambi-app/api/services/bambi-job-description-blocks";
 import { useQuery } from "@tanstack/react-query";
 import {
+	Alert,
 	Button,
 	Description,
 	FieldError,
@@ -262,10 +263,16 @@ export function NativeJobFormScreen({
 				</View>
 			}
 		>
+			{/* 한 줄짜리 안내라 Description 없이 Title만 둔다(문서의 title-only 구성) — 그래서
+			    아이콘을 첫 줄에 맞추는 items-center·pt-0 조합이 함께 온다. status는 default로
+			    남긴다: accent를 주면 코럴이 화면에 두 번(안내와 하단 등록 CTA) 나와 위계가 흐려진다. */}
 			{notice ? (
-				<Text className="text-muted text-sm leading-5" selectable>
-					{notice}
-				</Text>
+				<Alert className="items-center">
+					<Alert.Indicator className="pt-0" />
+					<Alert.Content>
+						<Alert.Title>{notice}</Alert.Title>
+					</Alert.Content>
+				</Alert>
 			) : null}
 			<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 				{scopeLocked ? (
