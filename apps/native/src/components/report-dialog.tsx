@@ -26,10 +26,12 @@ export function JobReportDialog({
 	isOpen,
 	onOpenChange,
 	targetId,
+	targetType = "job_post",
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 	targetId: string;
+	targetType?: "chat_room" | "job_post";
 }) {
 	const [reason, setReason] = useState<ReportReason | null>(null);
 	const [detail, setDetail] = useState("");
@@ -57,7 +59,7 @@ export function JobReportDialog({
 		}
 		const trimmed = detail.trim();
 		createReport.mutate({
-			targetType: "job_post",
+			targetType,
 			targetId,
 			reason,
 			details: trimmed ? trimmed : undefined,
