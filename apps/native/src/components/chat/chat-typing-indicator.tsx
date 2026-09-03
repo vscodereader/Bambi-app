@@ -63,7 +63,7 @@ export function ChatTypingIndicator({
 	counterpartProfileImageUrl: null | string;
 }) {
 	return (
-		<View className="mt-3 flex-row items-end px-4">
+		<View className="my-3 flex-row items-end px-4">
 			<View className="mr-2 w-9">
 				<Avatar color="accent" size="sm">
 					{counterpartProfileImageUrl ? (
