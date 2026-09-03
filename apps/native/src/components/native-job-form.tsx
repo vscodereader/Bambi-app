@@ -9,16 +9,15 @@ import {
 	FieldError,
 	Input,
 	Label,
-	Radio,
-	RadioGroup,
 	Surface,
 	Switch,
 	TextField,
 } from "heroui-native";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { BambiScreen } from "@/src/components/bambi-screen";
+import { FieldSelect } from "@/src/components/field-select";
 import { JobDescriptionBlockEditor } from "@/src/components/job-description-block-editor";
 import { JobImagePickerSection } from "@/src/components/job-image-picker-section";
 import {
@@ -69,14 +68,6 @@ interface Choice<TValue extends string> {
 	value: TValue;
 }
 
-interface ChoiceGroupProps<TValue extends string> {
-	isRequired?: boolean;
-	label: string;
-	onChange: (value: TValue) => void;
-	options: readonly Choice<TValue>[];
-	value: TValue;
-}
-
 // 라벨과 값이 같은 고정 목록(업종·급여 단위)용. 지역만 서버 마스터라 코드≠라벨이다.
 const toChoices = <TValue extends string>(
 	values: readonly TValue[]
@@ -97,49 +88,6 @@ const toInitialForm = (value?: NativeJobForm): NativeJobForm => ({
 	...emptyNativeJobForm,
 	...value,
 });
-
-function ChoiceGroup<TValue extends string>({
-	isRequired = false,
-	label,
-	onChange,
-	options,
-	value,
-}: ChoiceGroupProps<TValue>) {
-	return (
-		<View className="gap-2">
-			{/* 필수 표시는 heroui Label에 맡긴다 — TextField 라벨과 서체·별표가 어긋나지 않는다. */}
-			<Label isRequired={isRequired}>{label}</Label>
-			<View className="flex-row flex-wrap gap-2">
-				{options.map((option) => {
-					const isSelected = option.value === value;
-
-					return (
-						<Pressable
-							// min-h-12: 칩 하나가 최소 48dp 터치 타깃을 넘기도록.
-							className={`min-h-12 justify-center rounded-full border px-3 active:opacity-75 ${
-								isSelected
-									? "border-accent bg-accent"
-									: "border-border bg-background"
-							}`}
-							key={option.value}
-							onPress={() => onChange(option.value)}
-						>
-							<Text
-								className={
-									isSelected
-										? "font-semibold text-accent-foreground text-sm"
-										: "font-semibold text-foreground text-sm"
-								}
-							>
-								{option.label}
-							</Text>
-						</Pressable>
-					);
-				})}
-			</View>
-		</View>
-	);
-}
 
 export function NativeJobFormScreen({
 	initialBeginnerFriendly,
@@ -320,36 +268,30 @@ export function NativeJobFormScreen({
 				</Text>
 			) : null}
 			<Surface className="gap-4 rounded-lg p-4" variant="secondary">
-				<View className="gap-2">
-					<Label isRequired={!scopeLocked}>등록 범위</Label>
-					{scopeLocked ? (
+				{scopeLocked ? (
+					// 수정 화면은 조직 변경 자체가 막혀 있어(서버 FORBIDDEN) 고를 수 없는 컨트롤 대신
+					// 평문으로 보여준다.
+					<View className="gap-2">
+						<Label>등록 범위</Label>
 						<Text className="text-foreground" selectable>
 							{selectedScopeOption?.label ?? "등록 범위"}
 						</Text>
-					) : (
-						// 선택 상태를 배경색이 아니라 라디오 마커로도 구분한다(색만으로 구분하지 않기).
-						<RadioGroup
-							onValueChange={handleScopeChange}
-							value={selectedScopeValue}
-						>
-							{postingScopeOptions.map((option) => (
-								<RadioGroup.Item
-									className="min-h-12"
-									key={option.value}
-									value={option.value}
-								>
-									<Label className="flex-1">{option.label}</Label>
-									<Radio />
-								</RadioGroup.Item>
-							))}
-						</RadioGroup>
-					)}
-					{scopeLocked ? null : (
-						<FieldError isInvalid={Boolean(errors.organizationId)}>
-							{errors.organizationId}
-						</FieldError>
-					)}
-				</View>
+					</View>
+				) : (
+					<FieldSelect
+						errorMessage={errors.organizationId}
+						isRequired
+						label="등록 범위"
+						onChange={handleScopeChange}
+						options={postingScopeOptions.map((option) => ({
+							label: option.label,
+							value: option.value,
+						}))}
+						placeholder="공고를 올릴 조직·팀을 골라 주세요"
+						snapPoints={["40%"]}
+						value={selectedScopeValue}
+					/>
+				)}
 
 				<TextField isInvalid={Boolean(errors.title)} isRequired>
 					<Label>공고 제목</Label>
@@ -361,59 +303,66 @@ export function NativeJobFormScreen({
 					<FieldError>{errors.title}</FieldError>
 				</TextField>
 
-				<ChoiceGroup
+				<FieldSelect
+					errorMessage={errors.industryCategory}
 					isRequired
 					label="업종"
 					onChange={(industryCategory) => updateForm({ industryCategory })}
 					options={toChoices(industryOptions)}
+					placeholder="업종을 골라 주세요"
+					snapPoints={["55%"]}
 					value={form.industryCategory}
 				/>
-				<FieldError isInvalid={Boolean(errors.industryCategory)}>
-					{errors.industryCategory}
-				</FieldError>
 
-				<ChoiceGroup
+				<FieldSelect
+					errorMessage={errors.regionCode}
 					isRequired
 					label="지역"
 					onChange={(regionCode) => updateForm({ regionCode })}
 					options={regionChoices}
+					placeholder="근무 지역을 골라 주세요"
+					snapPoints={["75%"]}
 					value={form.regionCode}
 				/>
-				<FieldError isInvalid={Boolean(errors.regionCode)}>
-					{errors.regionCode}
-				</FieldError>
 
-				<TextField
-					isDisabled={isPayNegotiable}
-					isInvalid={Boolean(errors.payAmount)}
-					isRequired={!isPayNegotiable}
-				>
-					<Label>급여</Label>
-					<Input
-						keyboardType="number-pad"
-						onChangeText={(payAmount) => updateForm({ payAmount })}
-						placeholder="예: 15000"
-						value={form.payAmount}
-					/>
-					{isPayNegotiable ? (
-						// 잠긴 필드라도 안내는 읽혀야 하므로 흐림 처리를 끈다.
-						<Description isDisabled={false}>
-							금액 없이 ‘급여 협의’로 등록됩니다.
-						</Description>
-					) : null}
-					<FieldError>{errors.payAmount}</FieldError>
-				</TextField>
-
-				<ChoiceGroup
-					isRequired
-					label="급여 단위"
-					onChange={handlePayUnitChange}
-					options={toChoices(payUnitOptions)}
-					value={form.payUnit}
-				/>
-				<FieldError isInvalid={Boolean(errors.payUnit)}>
-					{errors.payUnit}
-				</FieldError>
+				{/* 금액과 단위는 이제 둘 다 라벨 달린 같은 형태의 컨트롤이라 기준선이 맞는다 — 한 줄로 붙인다. */}
+				<View className="flex-row gap-3">
+					<View className="flex-1">
+						<TextField
+							isDisabled={isPayNegotiable}
+							isInvalid={Boolean(errors.payAmount)}
+							isRequired={!isPayNegotiable}
+						>
+							<Label>급여</Label>
+							<Input
+								keyboardType="number-pad"
+								onChangeText={(payAmount) => updateForm({ payAmount })}
+								placeholder="예: 15000"
+								value={form.payAmount}
+							/>
+							{isPayNegotiable ? (
+								// 잠긴 필드라도 안내는 읽혀야 하므로 흐림 처리를 끈다.
+								<Description isDisabled={false}>
+									금액 없이 ‘급여 협의’로 등록됩니다.
+								</Description>
+							) : null}
+							<FieldError>{errors.payAmount}</FieldError>
+						</TextField>
+					</View>
+					{/* w-36: 라벨 "급여 단위"와 가장 긴 값+셰브론이 잘리지 않는 최소 폭. */}
+					<View className="w-36">
+						<FieldSelect
+							errorMessage={errors.payUnit}
+							isRequired
+							label="급여 단위"
+							onChange={handlePayUnitChange}
+							options={toChoices(payUnitOptions)}
+							placeholder="단위 선택"
+							snapPoints={["45%"]}
+							value={form.payUnit}
+						/>
+					</View>
+				</View>
 
 				<TextField isInvalid={Boolean(errors.workSchedule)} isRequired>
 					<Label>근무 일정</Label>
