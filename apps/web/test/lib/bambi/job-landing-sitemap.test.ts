@@ -31,7 +31,7 @@ describe("buildJobLandingSitemapEntries", () => {
 		expect(entryByPath(entries, "/jobs/seoul/room-salon")).toBeDefined();
 	});
 
-	it("drops region×industry combos with no jobs", () => {
+	it("includes empty combos without lastmod", () => {
 		const summary: LandingSummaryRow[] = [
 			{
 				count: 3,
@@ -42,15 +42,23 @@ describe("buildJobLandingSitemapEntries", () => {
 		];
 		const entries = buildJobLandingSitemapEntries(summary, BASE);
 
-		// 실린 조합은 서울×룸싸롱 하나뿐.
-		expect(entryByPath(entries, "/jobs/seoul/room-salon")).toBeDefined();
-		expect(entryByPath(entries, "/jobs/seoul/bar")).toBeUndefined();
-		expect(entryByPath(entries, "/jobs/busan/room-salon")).toBeUndefined();
-		// 조합 항목은 채워진 1개뿐(인덱스·16개 지역 허브는 별도).
+		// 채워진 조합(서울×룸싸롱)은 lastmod가 있고, 0건 조합도 lastmod 없이 항목으로 실린다.
+		expect(
+			entryByPath(entries, "/jobs/seoul/room-salon")?.lastModified
+		).toEqual(new Date("2026-08-20T00:00:00.000Z"));
+		expect(entryByPath(entries, "/jobs/seoul/bar")).toBeDefined();
+		expect(
+			entryByPath(entries, "/jobs/seoul/bar")?.lastModified
+		).toBeUndefined();
+		expect(entryByPath(entries, "/jobs/busan/room-salon")).toBeDefined();
+		expect(
+			entryByPath(entries, "/jobs/busan/room-salon")?.lastModified
+		).toBeUndefined();
+		// 조합 항목은 16×9 = 144개 전부(인덱스·16개 지역 허브는 별도).
 		const comboEntries = entries.filter((entry) =>
 			COMBO_URL_RE.test(entry.url)
 		);
-		expect(comboEntries).toHaveLength(1);
+		expect(comboEntries).toHaveLength(144);
 	});
 
 	it("keeps all 16 region hub pages even when empty", () => {
@@ -59,8 +67,8 @@ describe("buildJobLandingSitemapEntries", () => {
 		expect(entryByPath(entries, "/jobs")).toBeDefined();
 		expect(entryByPath(entries, "/jobs/seoul")).toBeDefined();
 		expect(entryByPath(entries, "/jobs/jeju")).toBeDefined();
-		// 인덱스(1) + 지역(16), 조합 0개.
-		expect(entries).toHaveLength(1 + 16);
+		// 인덱스(1) + 지역(16) + 조합(16×9), lastmod는 전부 없음.
+		expect(entries).toHaveLength(1 + 16 + 16 * 9);
 		expect(entries.every((entry) => entry.lastModified === undefined)).toBe(
 			true
 		);
@@ -154,8 +162,8 @@ describe("buildJobLandingSitemapEntries", () => {
 		];
 		const entries = buildJobLandingSitemapEntries(summary, BASE);
 
-		// 조합·지역 항목엔 안 들어가지만 인덱스 최신 계산엔 기여한다.
-		expect(entries).toHaveLength(1 + 16);
+		// 조합·지역 항목엔 lastmod가 안 붙지만 인덱스 최신 계산엔 기여한다.
+		expect(entries).toHaveLength(1 + 16 + 16 * 9);
 		expect(entryByPath(entries, "/jobs")?.lastModified).toEqual(
 			new Date("2026-08-30T00:00:00.000Z")
 		);

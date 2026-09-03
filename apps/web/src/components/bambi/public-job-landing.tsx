@@ -115,6 +115,27 @@ export const loadLandingJobs = ({
 }: JobLandingTarget): Promise<Job[] | null> =>
 	loadLandingJobsBySlug(region?.slug, industry?.slug);
 
+// 지역×업종 조합이 0건일 때 붙일 폴백 공고. 1차 전국 같은 업종 → 2차 같은 지역 전 업종.
+// 현 조합이 0건이라 두 폴백 모두 현 조합과 겹치지 않아 별도 필터가 필요 없다. 헤딩까지 함께 낸다.
+const loadLandingFallback = async (
+	region: JobLandingRegion,
+	industry: JobLandingIndustry
+): Promise<{ heading: string; jobs: Job[] } | null> => {
+	const byIndustry = await loadLandingJobs({ industry });
+
+	if (byIndustry && byIndustry.length > 0) {
+		return { heading: `다른 지역 ${industry.label} 공고`, jobs: byIndustry };
+	}
+
+	const byRegion = await loadLandingJobs({ region });
+
+	if (byRegion && byRegion.length > 0) {
+		return { heading: `${region.label} 다른 업종 공고`, jobs: byRegion };
+	}
+
+	return null;
+};
+
 // 수집 공고 id는 job_post에 없어 상세 경로가 다르다. 카드 href와 CollectionPage ItemList가
 // 같은 경로를 쓰도록 한 곳에서 만든다.
 const jobDetailPath = (job: Job): string =>
@@ -291,6 +312,28 @@ function LandingJobCard({ job }: { job: Job }) {
 	);
 }
 
+// 자체 공고·폴백 공고 두 곳에서 같은 룩으로 카드 그리드를 그린다.
+function LandingJobGrid({ jobs }: { jobs: Job[] }) {
+	return (
+		<PublicJobHitProvider
+			jobs={jobs.map((job) => ({
+				beginnerFriendly: job.beginnerFriendly,
+				id: job.id,
+				instantInterview: job.instantInterview,
+				regionKey: job.regionCode || job.region || job.location,
+			}))}
+		>
+			{/* 그리드 기본 구간에도 grid-cols-1(minmax(0,1fr))을 명시한다 — 안 주면 auto 트랙이
+			    카드 안 truncate(nowrap) 텍스트 폭만큼 벌어져 모바일에서 가로 스크롤이 생긴다. */}
+			<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+				{jobs.map((job) => (
+					<LandingJobCard job={job} key={job.id} />
+				))}
+			</div>
+		</PublicJobHitProvider>
+	);
+}
+
 // 정의 섹션(h2 질문형 + 문단). 헤딩 직하 첫 문단은 반드시 완결된 직답(body[0])이어야
 // AI가 문단째 발췌한다 — 그래서 지역 고유 lead는 body[0] '뒤'에 끼운다. 같은 업종 정의가
 // 16개 지역에 반복돼도 지역 문장이 페이지마다 텍스트를 달라지게 하되, 직답은 항상 맨 앞이다.
@@ -445,6 +488,12 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 	const target: JobLandingTarget = { industry, region };
 	// 조회 실패(null)든 진짜 0건이든 화면은 소개·링크를 그대로 띄운다 — null을 []로 취급.
 	const jobs = (await loadLandingJobs(target)) ?? [];
+	// 지역×업종 조합이 0건이면 폴백 공고를 붙여 빈 화면을 피한다(색인 대상이므로 실제 카드가
+	// 있어야 한다). CollectionPage에는 넣지 않는다 — 이 페이지의 컬렉션이라고 주장하지 않는다.
+	const fallback =
+		region && industry && jobs.length === 0
+			? await loadLandingFallback(region, industry)
+			: null;
 	const heading = jobLandingHeading(target);
 	const isIndexLanding = !(region || industry);
 
@@ -504,24 +553,16 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 						? `모집 중인 공고 ${jobs.length}개`
 						: "지금은 새 공고를 준비 중입니다 — 공고는 수시로 업데이트됩니다"}
 				</h2>
-				{/* 그리드 기본 구간에도 grid-cols-1(minmax(0,1fr))을 명시한다 — 안 주면 auto 트랙이
-				    카드 안 truncate(nowrap) 텍스트 폭만큼 벌어져 모바일에서 가로 스크롤이 생긴다. */}
-				{jobs.length > 0 ? (
-					<PublicJobHitProvider
-						jobs={jobs.map((job) => ({
-							beginnerFriendly: job.beginnerFriendly,
-							id: job.id,
-							instantInterview: job.instantInterview,
-							regionKey: job.regionCode || job.region || job.location,
-						}))}
-					>
-						<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-							{jobs.map((job) => (
-								<LandingJobCard job={job} key={job.id} />
-							))}
-						</div>
-					</PublicJobHitProvider>
-				) : (
+				{jobs.length > 0 ? <LandingJobGrid jobs={jobs} /> : null}
+				{jobs.length === 0 && fallback ? (
+					<section className="flex flex-col gap-3">
+						<h3 className="m-0 font-bold text-base text-foreground">
+							{fallback.heading}
+						</h3>
+						<LandingJobGrid jobs={fallback.jobs} />
+					</section>
+				) : null}
+				{jobs.length === 0 && !fallback ? (
 					<Empty className="border border-border">
 						<EmptyHeader>
 							<EmptyTitle>지금은 모집 중인 공고가 없어요</EmptyTitle>
@@ -531,7 +572,7 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 							</EmptyDescription>
 						</EmptyHeader>
 					</Empty>
-				)}
+				) : null}
 			</section>
 
 			<LandingContentSections industry={industry} region={region} />

@@ -1,5 +1,5 @@
 // 사이트맵의 /jobs 랜딩 항목을 지역×업종 집계로 조립하는 순수 로직. sitemap.ts에서 떼어내
-// 단위 테스트한다(0건 조합 제외·lastmod 매핑·조회 실패 폴백은 DB 없이 검증 가능해야 한다).
+// 단위 테스트한다(161개 전부 싣기·lastmod 매핑·조회 실패 폴백은 DB 없이 검증 가능해야 한다).
 
 import type { MetadataRoute } from "next";
 import {
@@ -58,8 +58,8 @@ const entry = (
 
 // 사이트맵의 /jobs 랜딩 항목을 만든다.
 // - summary가 null(조회 실패)이면 현행 폴백(161개 전부·lastmod 없음)을 그대로 낸다.
-// - 아니면 (a) 공고 0건인 지역×업종 조합은 빼고, (b) 인덱스·지역·조합 항목에 최신 updatedAt을
-//   lastModified로 채운다. 지역 페이지(16개)는 0건이어도 유지한다(콘텐츠 섹션이 있는 허브).
+// - 아니면 (a) 161개 조합을 전부 싣고 lastmod만 집계로 채운다(0건 조합은 lastmod 없이 항목만),
+//   (b) 인덱스·지역·조합 항목에 최신 updatedAt을 lastModified로 채운다. 지역 페이지(16개)도 유지.
 export const buildJobLandingSitemapEntries = (
 	summary: LandingSummaryRow[] | null,
 	baseUrl: string
@@ -101,12 +101,8 @@ export const buildJobLandingSitemapEntries = (
 		for (const industry of JOB_LANDING_INDUSTRIES) {
 			const combo = byCombo.get(comboKey(region.code, industry.label));
 
-			// undefined = 0건 조합 → 사이트맵에서 제외.
-			if (combo === undefined) {
-				continue;
-			}
-
-			if (combo !== null) {
+			// undefined(0건)·null(시각 없음)은 항목만 싣고 lastmod 생략, number면 시각을 채운다.
+			if (typeof combo === "number") {
 				regionTimes.push(combo);
 			}
 
@@ -114,7 +110,7 @@ export const buildJobLandingSitemapEntries = (
 				entry(
 					baseUrl,
 					jobLandingPath({ industry, region }),
-					combo === null ? undefined : new Date(combo)
+					typeof combo === "number" ? new Date(combo) : undefined
 				)
 			);
 		}
