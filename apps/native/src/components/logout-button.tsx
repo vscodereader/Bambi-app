@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Alert } from "react-native";
 
 import { authClient } from "@/lib/auth-client";
+import { disconnectChatSocket } from "@/src/lib/chat/chat-socket";
 import { clearGuestToken } from "@/src/lib/guest-store";
 import { queryClient } from "@/src/lib/orpc";
 
@@ -16,6 +17,8 @@ export function LogoutButton() {
 		// @better-auth/expo는 요청을 보내는 시점에 SecureStore 쿠키와 세션 캐시를 비운다.
 		// 서버 응답이 실패해도 로컬 세션은 이미 해제되므로 실패 알림은 띄우지 않는다.
 		await authClient.signOut().catch(() => undefined);
+		// 로그아웃하면 세션 쿠키가 사라지므로 옛 채팅 소켓 연결도 함께 끊는다.
+		disconnectChatSocket();
 		// 게스트로 둘러보다 회원 로그인했다면 남은 게스트 토큰까지 지워야 완전 로그아웃이다(실패 무시).
 		await clearGuestToken().catch(() => undefined);
 		// invalidateQueries는 stale 표시만 하고 데이터를 남기며, 기본 refetchType "active"라
