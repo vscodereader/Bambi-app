@@ -1,4 +1,7 @@
+import type { JobDescriptionBlock } from "@bambi-app/api/services/bambi-job-description-blocks";
 import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
+
+import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
 
 const TITLE_MIN_LENGTH = 2;
 const TITLE_MAX_LENGTH = 80;
@@ -36,12 +39,21 @@ export interface NativeJobForm {
 }
 
 export interface NativeJobPostInput {
+	adProductId?: null | string;
+	beginnerFriendly?: boolean;
 	description: string;
+	descriptionBlocks?: JobDescriptionBlock[];
+	exposureAmount?: null | number;
+	exposureDurationDays?: null | number;
 	// 서버 입력이 업종 enum이라 제출 페이로드는 확정 목록 값으로 좁힌다(폼 상태는 string 유지).
 	industryCategory: NativeIndustryOption;
+	instantInterview?: boolean;
 	interviewNotes?: string;
+	media?: { cover?: JobMediaUploadItem; detail: JobMediaUploadItem[] };
 	organizationId: string;
-	payAmount: number;
+	// "협의" 단위는 금액이 없다 — 서버 jobPostInput refine이 짝을 강제한다.
+	payAmount: null | number;
+	paymentMethod?: "bank_transfer" | "card" | null;
 	payUnit: string;
 	regionCode: string;
 	teamId?: string;
@@ -80,7 +92,10 @@ export const industryOptions = [
 
 export type NativeIndustryOption = (typeof industryOptions)[number];
 
-export const payUnitOptions = ["시급", "일급", "주급", "월급"] as const;
+export const payUnitOptions = ["시급", "일급", "주급", "월급", "협의"] as const;
+
+// 급여 협의 단위 — 금액 없이 저장한다(web bambi-options.ts의 NEGOTIABLE_PAY_UNIT과 같은 값).
+export const NEGOTIABLE_PAY_UNIT = "협의";
 
 export const jobStatusLabels = {
 	draft: "임시 저장",
@@ -92,6 +107,7 @@ export const jobStatusLabels = {
 } as const;
 
 export const verificationStatusLabels = {
+	changes_unsubmitted: "변경사항 미제출",
 	none: "미인증",
 	pending: "인증 대기",
 	rejected: "인증 반려",
@@ -146,7 +162,6 @@ export const validateNativeJobForm = (
 	const industryCategory = trim(form.industryCategory);
 	const regionCode = trim(form.regionCode);
 	const payAmountText = trim(form.payAmount);
-	const payAmount = Number(payAmountText);
 	const payUnit = trim(form.payUnit);
 	const workSchedule = trim(form.workSchedule);
 	const description = trim(form.description);
@@ -178,12 +193,18 @@ export const validateNativeJobForm = (
 		errors.regionCode = "지역을 선택해 주세요.";
 	}
 
-	if (!(Number.isInteger(payAmount) && payAmount > 0)) {
-		errors.payAmount = "급여 금액은 1 이상의 정수로 입력해 주세요.";
-	}
+	const isNegotiable = payUnit === NEGOTIABLE_PAY_UNIT;
+	const payAmount = isNegotiable ? null : Number(payAmountText);
 
 	if (!(payUnit.length > 0 && payUnit.length <= PAY_UNIT_MAX_LENGTH)) {
 		errors.payUnit = "급여 단위를 선택해 주세요.";
+	}
+
+	// 협의는 금액을 받지 않는다. 그 외 단위만 1 이상 정수를 요구한다.
+	if (
+		!(isNegotiable || (Number.isInteger(payAmount) && (payAmount ?? 0) > 0))
+	) {
+		errors.payAmount = "급여 금액은 1 이상의 정수로 입력해 주세요.";
 	}
 
 	if (

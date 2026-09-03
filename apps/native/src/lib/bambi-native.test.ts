@@ -99,6 +99,29 @@ describe("bambi native helpers", () => {
 		});
 	});
 
+	it("급여 단위가 협의면 금액 없이 통과하고 payAmount는 null이다", () => {
+		const result = validateNativeJobForm(
+			{
+				...emptyNativeJobForm,
+				description: "충분히 긴 상세 설명입니다.",
+				industryCategory: "BAR",
+				organizationId: "org1",
+				payAmount: "",
+				payUnit: "협의",
+				regionCode: "1111000000",
+				title: "협의 공고",
+				workSchedule: "주 5일",
+			},
+			{}
+		);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.input.payAmount).toBeNull();
+			expect(result.input.payUnit).toBe("협의");
+		}
+	});
+
 	it("splits login ids by @ like the web form", () => {
 		expect(isEmailLoginId("seeker@bambi.dev")).toBe(true);
 		expect(isEmailLoginId("seeker_01")).toBe(false);
