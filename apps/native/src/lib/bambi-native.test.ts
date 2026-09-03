@@ -8,6 +8,7 @@ import {
 	emptyNativeJobForm,
 	formatAdPeriod,
 	getNativeHomeRoute,
+	getNativeRoleTab,
 	groupDetailImageSlices,
 	isEmailLoginId,
 	NATIVE_AD_PERIOD_TIERS,
@@ -66,9 +67,24 @@ const jobPage = (
 describe("bambi native helpers", () => {
 	it("routes users by Bambi profile role", () => {
 		expect(getNativeHomeRoute("job_seeker")).toBe("/(seeker)");
-		expect(getNativeHomeRoute("employer")).toBe("/(employer)");
-		expect(getNativeHomeRoute("admin")).toBe("/(moderator)");
+		expect(getNativeHomeRoute("employer")).toBe("/(seeker)");
+		expect(getNativeHomeRoute("admin")).toBe("/(seeker)");
 		expect(getNativeHomeRoute(null)).toBe("/onboarding");
+		expect(getNativeHomeRoute(undefined)).toBe("/onboarding");
+	});
+
+	it("exposes a role tab only for employer and admin", () => {
+		expect(getNativeRoleTab("employer")).toEqual({
+			href: "/(employer)",
+			title: "구인자 관리",
+		});
+		expect(getNativeRoleTab("admin")).toEqual({
+			href: "/(moderator)",
+			title: "운영자 페이지",
+		});
+		expect(getNativeRoleTab("job_seeker")).toBeNull();
+		expect(getNativeRoleTab(null)).toBeNull();
+		expect(getNativeRoleTab(undefined)).toBeNull();
 	});
 
 	it("validates job forms using web-compatible requirements", () => {
