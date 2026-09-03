@@ -239,7 +239,7 @@ export function ChatComposer({
 						<Pressable
 							accessibilityLabel="첨부 추가"
 							accessibilityRole="button"
-							className="h-11 w-11 items-center justify-center rounded-2xl bg-surface-secondary active:opacity-75"
+							className="h-12 w-12 items-center justify-center rounded-2xl bg-surface-secondary active:opacity-75"
 							disabled={isDisabled || isUploading}
 						>
 							<Ionicons color={foreground} name="add" size={26} />
@@ -296,7 +296,7 @@ export function ChatComposer({
 				<View className="flex-1">
 					<TextArea
 						accessibilityLabel="메시지 입력"
-						className="max-h-32 min-h-11"
+						className="h-auto max-h-32 min-h-12"
 						editable={!isDisabled}
 						maxLength={MESSAGE_MAX_LENGTH}
 						onBlur={stopTyping}

@@ -6,6 +6,18 @@ const listDateFormat = new Intl.DateTimeFormat("ko-KR", {
 	month: "numeric",
 });
 
+const interviewDateFormat = new Intl.DateTimeFormat("ko-KR", {
+	day: "numeric",
+	hour: "numeric",
+	minute: "2-digit",
+	month: "long",
+	weekday: "short",
+});
+
+// 면접 카드 일시 — "9월 22일 (화) 오전 3:30". 연도는 옵션에 없어 표시하지 않는다.
+export const formatInterviewDate = (value: Date | string): string =>
+	interviewDateFormat.format(new Date(value));
+
 // 채팅 목록 우측 시각 — web seeker-chat-list-responsive의 formatChatListTime과 같은 규칙.
 // now를 주입받아 테스트가 시계에 흔들리지 않는다.
 export const formatChatListTime = (
