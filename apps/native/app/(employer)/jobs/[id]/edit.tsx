@@ -4,7 +4,6 @@ import { type Href, router, useLocalSearchParams } from "expo-router";
 import { Alert } from "react-native";
 
 import {
-	BambiHeader,
 	BambiScreen,
 	ErrorState,
 	LoadingState,
@@ -121,26 +120,22 @@ export default function EditEmployerJobScreen() {
 		});
 	};
 
+	// 제목은 네이티브 헤더가 단다(new.tsx와 같은 규칙). 재검수 안내만 폼 위에 남긴다.
 	return (
-		<BambiScreen>
-			<BambiHeader
-				description="공개 내용이 바뀌면 조직 인증 상태와 위험어 여부에 따라 재검수될 수 있습니다."
-				title="공고 편집"
-			/>
-			<NativeJobFormScreen
-				initialBeginnerFriendly={editable.beginnerFriendly ?? false}
-				initialBlocks={editable.descriptionBlocks ?? []}
-				initialCover={initialCover}
-				initialDetail={initialDetail}
-				initialInstantInterview={editable.instantInterview ?? false}
-				initialPreviews={initialPreviews}
-				initialValue={toNativeJobForm(jobQuery.data)}
-				isSubmitting={updateMutation.isPending}
-				onSubmit={handleSubmit}
-				postingScopes={postingScopes}
-				scopeLocked
-				submitLabel="공고 저장"
-			/>
-		</BambiScreen>
+		<NativeJobFormScreen
+			initialBeginnerFriendly={editable.beginnerFriendly ?? false}
+			initialBlocks={editable.descriptionBlocks ?? []}
+			initialCover={initialCover}
+			initialDetail={initialDetail}
+			initialInstantInterview={editable.instantInterview ?? false}
+			initialPreviews={initialPreviews}
+			initialValue={toNativeJobForm(jobQuery.data)}
+			isSubmitting={updateMutation.isPending}
+			notice="공개 내용이 바뀌면 조직 인증 상태와 위험어 여부에 따라 재검수될 수 있습니다."
+			onSubmit={handleSubmit}
+			postingScopes={postingScopes}
+			scopeLocked
+			submitLabel="공고 저장"
+		/>
 	);
 }

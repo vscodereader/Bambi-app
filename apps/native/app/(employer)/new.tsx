@@ -3,7 +3,6 @@ import { type Href, router } from "expo-router";
 import { Alert } from "react-native";
 
 import {
-	BambiHeader,
 	BambiScreen,
 	ErrorState,
 	LoadingState,
@@ -59,18 +58,15 @@ export default function NewEmployerJobScreen() {
 		createMutation.mutate(input);
 	};
 
+	// 화면 제목("새 공고")은 네이티브 헤더가 이미 달고 있다 — 같은 말을 큰 제목으로 한 번 더
+	// 그리면 첫 화면의 위쪽 절반이 제목 반복으로 채워진다. 폼이 스스로 화면을 두른다.
 	return (
-		<BambiScreen>
-			<BambiHeader
-				description="Web과 같은 필수 입력값과 검수 규칙으로 공고를 등록합니다."
-				title="새 공고"
-			/>
-			<NativeJobFormScreen
-				isSubmitting={createMutation.isPending}
-				onSubmit={handleSubmit}
-				postingScopes={postingScopes}
-				submitLabel="공고 등록"
-			/>
-		</BambiScreen>
+		<NativeJobFormScreen
+			isSubmitting={createMutation.isPending}
+			notice="등록한 공고는 검수를 거쳐 공개됩니다."
+			onSubmit={handleSubmit}
+			postingScopes={postingScopes}
+			submitLabel="공고 등록"
+		/>
 	);
 }

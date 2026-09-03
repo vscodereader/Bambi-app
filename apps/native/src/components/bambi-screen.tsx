@@ -19,6 +19,9 @@ interface ScreenProps {
 	hasTopInset?: boolean;
 	isCentered?: boolean;
 	scrollViewProps?: Omit<ScrollViewProps, "contentContainerStyle">;
+	// footer와 다르다: footer는 스크롤 콘텐츠 끝에 붙고, stickyFooter는 스크롤 밖 화면
+	// 하단에 고정된다(긴 폼의 제출 CTA용). 둘 다 넘겨도 서로 간섭하지 않는다.
+	stickyFooter?: ReactNode;
 }
 
 interface StateCardProps {
@@ -45,9 +48,14 @@ export function BambiScreen({
 	hasTopInset,
 	isCentered = false,
 	scrollViewProps,
+	stickyFooter,
 }: ScreenProps) {
 	return (
-		<Container hasTopInset={hasTopInset} scrollViewProps={scrollViewProps}>
+		<Container
+			hasTopInset={hasTopInset}
+			scrollViewProps={scrollViewProps}
+			stickyFooter={stickyFooter}
+		>
 			{/* flex-1이 아니라 grow인 것이 핵심이다 — flex-1은 flexBasis:0%+flexShrink:1까지
 			    붙어서, 내용이 뷰포트보다 길면 이 래퍼가 한 화면 높이로 눌리고 넘치는 부분이
 			    잘린 채 스크롤도 되지 않는다. grow는 flexGrow:1만 얹으므로 짧으면 남는 공간을
