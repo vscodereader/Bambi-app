@@ -17,13 +17,16 @@ const INTERVIEW_NOTES_MAX_LENGTH = 500;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 
-export type NativeHomeRoute =
-	| "/(employer)"
-	| "/(moderator)"
-	| "/(seeker)"
-	| "/onboarding";
+export type NativeHomeRoute = "/(seeker)" | "/onboarding";
 
 export type NativeProfileRole = "admin" | "employer" | "job_seeker";
+
+export type NativeRoleAreaRoute = "/(employer)" | "/(moderator)";
+
+export interface NativeRoleTab {
+	href: NativeRoleAreaRoute;
+	title: string;
+}
 
 export interface NativeJobForm {
 	description: string;
@@ -143,19 +146,25 @@ const isLengthBetween = (value: string, min: number, max: number): boolean =>
 const findFirstError = (errors: NativeJobFormErrors): string | undefined =>
 	Object.values(errors).find((message) => Boolean(message));
 
+// 앱 시작 홈은 역할과 무관하게 구직자 홈이다(웹 redirectToRoleHome과 같은 규칙 —
+// 루트는 항상 /seeker로 보내고, 구인자·운영자는 하단 탭의 역할 탭으로 자기 영역에 들어간다).
+// 프로필이 없는 사용자만 온보딩으로 보낸다.
 export const getNativeHomeRoute = (
 	role: NativeProfileRole | null | undefined
-): NativeHomeRoute => {
-	switch (role) {
-		case "admin":
-			return "/(moderator)";
-		case "employer":
-			return "/(employer)";
-		case "job_seeker":
-			return "/(seeker)";
-		default:
-			return "/onboarding";
+): NativeHomeRoute => (role ? "/(seeker)" : "/onboarding");
+
+// 구직자 하단 탭에서 수다방과 내 정보 사이에 끼우는 역할 탭. 구직자·미가입은 탭이 없다
+// (웹 mobile-tab-bar의 "구인 관리"·"운영자 모드" 탭과 같은 축).
+export const getNativeRoleTab = (
+	role: NativeProfileRole | null | undefined
+): NativeRoleTab | null => {
+	if (role === "employer") {
+		return { href: "/(employer)", title: "구인자 관리" };
 	}
+	if (role === "admin") {
+		return { href: "/(moderator)", title: "운영자 페이지" };
+	}
+	return null;
 };
 
 export const validateNativeJobForm = (
