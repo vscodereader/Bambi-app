@@ -7,6 +7,8 @@ import {
 	describeJobForScreenReader,
 	emptyNativeJobForm,
 	formatAdPeriod,
+	getNativeAreaOptions,
+	getNativeAreaSwitchAction,
 	getNativeHomeRoute,
 	getNativeRoleTab,
 	groupDetailImageSlices,
@@ -85,6 +87,33 @@ describe("bambi native helpers", () => {
 		expect(getNativeRoleTab("job_seeker")).toBeNull();
 		expect(getNativeRoleTab(null)).toBeNull();
 		expect(getNativeRoleTab(undefined)).toBeNull();
+	});
+
+	it("offers a way back to the seeker area only when a role area exists", () => {
+		expect(getNativeAreaOptions("employer")).toEqual([
+			{ href: "/(seeker)", title: "구직자 화면" },
+			{ href: "/(employer)", title: "구인자 관리" },
+		]);
+		expect(getNativeAreaOptions("admin")).toEqual([
+			{ href: "/(seeker)", title: "구직자 화면" },
+			{ href: "/(moderator)", title: "운영자 페이지" },
+		]);
+		expect(getNativeAreaOptions("job_seeker")).toEqual([]);
+		expect(getNativeAreaOptions(null)).toEqual([]);
+		expect(getNativeAreaOptions(undefined)).toEqual([]);
+	});
+
+	// 탭과 메뉴가 같은 대상을 다른 이름으로 부르면 안 된다.
+	it("labels the role area the same in the tab and the switch menu", () => {
+		const roleTab = getNativeRoleTab("employer");
+
+		expect(getNativeAreaOptions("employer").at(-1)).toEqual(roleTab);
+	});
+
+	it("rewinds to the seeker area when there is somewhere to go back to", () => {
+		expect(getNativeAreaSwitchAction(true)).toBe("back");
+		// 딥링크로 역할 영역이 곧장 열린 경우 — 되감을 화면이 없어 이동해야 한다.
+		expect(getNativeAreaSwitchAction(false)).toBe("replace");
 	});
 
 	it("validates job forms using web-compatible requirements", () => {
