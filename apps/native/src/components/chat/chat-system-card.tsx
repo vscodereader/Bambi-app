@@ -1,80 +1,142 @@
+import { formatChatTimeLabel } from "@bambi-app/api/services/bambi-chat-message-grouping";
 import {
 	type ContactRevealDecision,
-	getContactRequestNotice,
-	getInterviewProposalNotice,
 	readContactRequestMetadata,
 	readInterviewProposalMetadata,
 } from "@bambi-app/api/services/bambi-chat-system-messages";
 import { Ionicons } from "@expo/vector-icons";
-import { Button, Surface, useThemeColor } from "heroui-native";
+import { Button, Chip, Dialog, Surface, useThemeColor } from "heroui-native";
+import { useState } from "react";
 import { Text, View } from "react-native";
 
-import { formatDateTime, Pill } from "@/src/components/bambi-screen";
 import type { ChatTimelineMessage } from "@/src/lib/chat/chat-optimistic";
+import { formatInterviewDate } from "@/src/lib/chat/chat-time";
 import type { ChatRoomSchedule } from "@/src/lib/chat/chat-types";
-import {
-	interviewStatusLabel,
-	interviewStatusTone,
-} from "@/src/lib/me-interviews";
+import { interviewStatusLabel } from "@/src/lib/me-interviews";
 
 type InterviewResponse = "confirmed" | "declined";
+type StatusChipColor = "default" | "success" | "warning";
 
+// 상태 → soft Chip 색. warning=대기(proposed/pending), success=성사(confirmed/revealed),
+// 그 외(declined·canceled·completed)는 중립.
+function statusChipColor(status: string): StatusChipColor {
+	if (status === "proposed" || status === "pending") {
+		return "warning";
+	}
+	if (status === "confirmed" || status === "revealed") {
+		return "success";
+	}
+	return "default";
+}
+
+// 연락처 카드 부제 — web getContactRequestNotice와 달리 구직자 앱 1인칭 문구라 native 전용.
+function contactNotice(status: string, counterpartName: null | string): string {
+	if (status === "revealed") {
+		return "연락처를 공개했어요";
+	}
+	if (status === "declined") {
+		return "연락처 공개를 거절했어요";
+	}
+	return `${counterpartName ?? "상대방"}이 내 전화번호를 요청했어요`;
+}
+
+// 두 시스템 카드 공통 한 줄 셸: 아이콘 타일 + 제목/부제 컬럼 + 우측 슬롯(버튼 또는 상태 Chip),
+// 카드 밖 우하단 타임스탬프. 액센트는 타일 배경·아이콘·primary 버튼에만.
 function CardShell({
-	children,
 	createdAt,
 	icon,
+	rightSlot,
+	subtitle,
+	subtitleSecondary,
+	title,
 }: {
-	children: React.ReactNode;
 	createdAt: Date | string;
 	icon: React.ComponentProps<typeof Ionicons>["name"];
+	rightSlot?: React.ReactNode;
+	subtitle?: string;
+	subtitleSecondary?: React.ReactNode;
+	title: string;
 }) {
 	const accent = useThemeColor("accent");
 
 	return (
-		<View className="items-center px-4 pt-3">
+		<View className="mx-4 my-1">
 			<Surface
-				className="w-11/12 items-center gap-2 rounded-2xl border border-accent/20 p-4"
+				className="flex-row items-center gap-3 rounded-2xl p-3"
 				variant="secondary"
 			>
-				<Ionicons color={accent} name={icon} size={22} />
-				{children}
-				<Text className="text-muted text-xs">{formatDateTime(createdAt)}</Text>
+				<View className="h-14 w-14 items-center justify-center rounded-xl bg-accent-soft">
+					<Ionicons color={accent} name={icon} size={26} />
+				</View>
+				<View className="flex-1 gap-0.5">
+					<Text
+						className="font-semibold text-foreground text-sm"
+						numberOfLines={1}
+					>
+						{title}
+					</Text>
+					{subtitle ? (
+						<Text className="text-foreground text-sm" numberOfLines={2}>
+							{subtitle}
+						</Text>
+					) : null}
+					{subtitleSecondary ?? null}
+				</View>
+				{rightSlot ? (
+					<View className="flex-row items-center gap-2">{rightSlot}</View>
+				) : null}
 			</Surface>
+			<Text className="mt-1 mr-4 self-end text-muted text-xs">
+				{formatChatTimeLabel(createdAt)}
+			</Text>
 		</View>
 	);
 }
 
+// 거절(tertiary ✕, 왼쪽) / 확정·공개(primary ✓, 오른쪽). 둘 다 아이콘 버튼.
 function ResponseButtons({
 	confirmLabel,
+	declineLabel,
 	isBusy,
 	onConfirm,
 	onDecline,
 }: {
 	confirmLabel: string;
+	declineLabel: string;
 	isBusy: boolean;
 	onConfirm: () => void;
 	onDecline: () => void;
 }) {
+	const foreground = useThemeColor("foreground");
+	const accentForeground = useThemeColor("accent-foreground");
+
 	return (
-		<View className="mt-1 flex-row gap-2">
-			<Button isDisabled={isBusy} onPress={onConfirm} size="sm">
-				<Button.Label>{confirmLabel}</Button.Label>
-			</Button>
+		<>
 			<Button
+				accessibilityLabel={declineLabel}
 				isDisabled={isBusy}
+				isIconOnly
 				onPress={onDecline}
 				size="sm"
 				variant="tertiary"
 			>
-				<Button.Label>거절</Button.Label>
+				<Ionicons color={foreground} name="close" size={18} />
 			</Button>
-		</View>
+			<Button
+				accessibilityLabel={confirmLabel}
+				isDisabled={isBusy}
+				isIconOnly
+				onPress={onConfirm}
+				size="sm"
+			>
+				<Ionicons color={accentForeground} name="checkmark" size={18} />
+			</Button>
+		</>
 	);
 }
 
 // contact_request·interview_proposal 인라인 시스템 카드(web ContactRequestMessage·
-// InterviewProposalMessage와 같은 규칙). 구직자 앱이므로 viewerIsEmployer는 항상 false지만
-// 공유 함수 시그니처를 그대로 쓴다.
+// InterviewProposalMessage와 같은 규칙). 구직자 앱이므로 viewerIsEmployer는 항상 false.
 export function ChatSystemCard({
 	counterpartName,
 	currentUserId,
@@ -98,6 +160,9 @@ export function ChatSystemCard({
 	) => void;
 	schedules: readonly ChatRoomSchedule[];
 }) {
+	const muted = useThemeColor("muted");
+	const [confirmReveal, setConfirmReveal] = useState(false);
+
 	if (message.kind === "contact_request") {
 		const metadata = readContactRequestMetadata(message.metadata);
 
@@ -105,12 +170,6 @@ export function ChatSystemCard({
 			return null;
 		}
 
-		const notice = getContactRequestNotice({
-			counterpartName: counterpartName ?? "상대방",
-			revealedPhoneLabel: message.revealedPhone,
-			status: metadata.status,
-			viewerIsEmployer: false,
-		});
 		const canRespond =
 			metadata.status === "pending" && metadata.targetUserId === currentUserId;
 		const statusLabel = {
@@ -118,27 +177,76 @@ export function ChatSystemCard({
 			pending: "응답 대기",
 			revealed: "공개함",
 		}[metadata.status];
-		const statusTone = {
-			declined: "neutral",
-			pending: "warning",
-			revealed: "success",
-		}[metadata.status] as "neutral" | "success" | "warning";
 
 		return (
-			<CardShell createdAt={message.createdAt} icon="call-outline">
-				<Text className="text-center font-semibold text-foreground text-sm leading-5">
-					{notice}
-				</Text>
-				<Pill tone={statusTone}>{statusLabel}</Pill>
+			<>
+				<CardShell
+					createdAt={message.createdAt}
+					icon="call-outline"
+					rightSlot={
+						canRespond ? (
+							<ResponseButtons
+								confirmLabel="연락처 공개"
+								declineLabel="연락처 공개 거절"
+								isBusy={isBusy}
+								onConfirm={() => setConfirmReveal(true)}
+								onDecline={() => onRespondContact(message.id, "decline")}
+							/>
+						) : (
+							<Chip
+								color={statusChipColor(metadata.status)}
+								size="sm"
+								variant="soft"
+							>
+								<Chip.Label>{statusLabel}</Chip.Label>
+							</Chip>
+						)
+					}
+					subtitle={contactNotice(metadata.status, counterpartName)}
+					title="연락처 공개 요청"
+				/>
 				{canRespond ? (
-					<ResponseButtons
-						confirmLabel="공개"
-						isBusy={isBusy}
-						onConfirm={() => onRespondContact(message.id, "reveal")}
-						onDecline={() => onRespondContact(message.id, "decline")}
-					/>
+					<Dialog
+						isOpen={confirmReveal}
+						onOpenChange={(open) => !open && setConfirmReveal(false)}
+					>
+						<Dialog.Portal>
+							<Dialog.Overlay />
+							<Dialog.Content>
+								<View className="gap-4">
+									<View className="gap-1.5">
+										<Dialog.Title>연락처를 공개할까요?</Dialog.Title>
+										<Dialog.Description>
+											{`${counterpartName ?? "상대방"}에게 내 전화번호가 전달돼요. 되돌릴 수 없어요.`}
+										</Dialog.Description>
+									</View>
+									<View className="flex-row gap-3">
+										<View className="flex-1">
+											<Button
+												onPress={() => setConfirmReveal(false)}
+												variant="tertiary"
+											>
+												<Button.Label>취소</Button.Label>
+											</Button>
+										</View>
+										<View className="flex-1">
+											<Button
+												isDisabled={isBusy}
+												onPress={() => {
+													onRespondContact(message.id, "reveal");
+													setConfirmReveal(false);
+												}}
+											>
+												<Button.Label>공개</Button.Label>
+											</Button>
+										</View>
+									</View>
+								</View>
+							</Dialog.Content>
+						</Dialog.Portal>
+					</Dialog>
 				) : null}
-			</CardShell>
+			</>
 		);
 	}
 
@@ -150,11 +258,11 @@ export function ChatSystemCard({
 
 		if (!schedule) {
 			return (
-				<CardShell createdAt={message.createdAt} icon="calendar-outline">
-					<Text className="text-center font-semibold text-foreground text-sm">
-						{message.body}
-					</Text>
-				</CardShell>
+				<CardShell
+					createdAt={message.createdAt}
+					icon="calendar-outline"
+					title={message.body}
+				/>
 			);
 		}
 
@@ -162,30 +270,41 @@ export function ChatSystemCard({
 		const canRespond = schedule.status === "proposed" && !viewerIsProposer;
 
 		return (
-			<CardShell createdAt={message.createdAt} icon="calendar-outline">
-				<Text className="text-center font-semibold text-foreground text-sm leading-5">
-					{getInterviewProposalNotice(schedule.status, viewerIsProposer)}
-				</Text>
-				<Text className="font-semibold text-accent text-base">
-					{formatDateTime(schedule.scheduledAt)}
-				</Text>
-				{schedule.locationNote ? (
-					<Text className="text-center text-muted text-sm">
-						{schedule.locationNote}
-					</Text>
-				) : null}
-				<Pill tone={interviewStatusTone(schedule.status)}>
-					{interviewStatusLabel(schedule.status)}
-				</Pill>
-				{canRespond ? (
-					<ResponseButtons
-						confirmLabel="확정"
-						isBusy={isBusy}
-						onConfirm={() => onSetInterviewStatus(schedule.id, "confirmed")}
-						onDecline={() => onSetInterviewStatus(schedule.id, "declined")}
-					/>
-				) : null}
-			</CardShell>
+			<CardShell
+				createdAt={message.createdAt}
+				icon="calendar-outline"
+				rightSlot={
+					canRespond ? (
+						<ResponseButtons
+							confirmLabel="면접 확정"
+							declineLabel="면접 거절"
+							isBusy={isBusy}
+							onConfirm={() => onSetInterviewStatus(schedule.id, "confirmed")}
+							onDecline={() => onSetInterviewStatus(schedule.id, "declined")}
+						/>
+					) : (
+						<Chip
+							color={statusChipColor(schedule.status)}
+							size="sm"
+							variant="soft"
+						>
+							<Chip.Label>{interviewStatusLabel(schedule.status)}</Chip.Label>
+						</Chip>
+					)
+				}
+				subtitle={formatInterviewDate(schedule.scheduledAt)}
+				subtitleSecondary={
+					schedule.locationNote ? (
+						<View className="flex-row items-center gap-1">
+							<Ionicons color={muted} name="location-outline" size={14} />
+							<Text className="flex-1 text-muted text-sm" numberOfLines={1}>
+								{schedule.locationNote}
+							</Text>
+						</View>
+					) : undefined
+				}
+				title="면접 제안"
+			/>
 		);
 	}
 

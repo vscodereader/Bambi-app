@@ -5,7 +5,7 @@ import { View } from "react-native";
 export function ChatDateChip({ label }: { label: string }) {
 	return (
 		<View className="items-center py-3">
-			<Chip color="default" size="sm" variant="soft">
+			<Chip className="self-center" color="default" size="sm" variant="soft">
 				<Chip.Label>{label}</Chip.Label>
 			</Chip>
 		</View>
