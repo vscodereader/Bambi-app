@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button, Dialog, Input, Surface, TextField } from "heroui-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Text, View } from "react-native";
 
 import { BambiScreen, LoadingState, Pill } from "@/src/components/bambi-screen";
@@ -42,10 +42,15 @@ export default function EmployerBusinessScreen() {
 	const [startDate, setStartDate] = useState("");
 	const [confirmOpen, setConfirmOpen] = useState(false);
 
+	// 폼은 프로필당 한 번만 초기화한다. 서류 추가/삭제 → invalidate로 organizationProfile
+	// 객체가 새로 와도(값은 동일) 사용자가 입력 중인 값을 덮어쓰지 않게 한다.
+	const didInitFormRef = useRef(false);
+
 	useEffect(() => {
-		if (!organizationProfile) {
+		if (!organizationProfile || didInitFormRef.current) {
 			return;
 		}
+		didInitFormRef.current = true;
 		setDisplayName(
 			organizationProfile.draftDisplayName ??
 				organizationProfile.displayName ??
@@ -82,11 +87,14 @@ export default function EmployerBusinessScreen() {
 			onError: (error) => {
 				Alert.alert("제출하지 못했어요", businessErrorMessage(error));
 			},
-			onSuccess: async () => {
+			onSuccess: async (data) => {
 				await invalidateMine();
+				// 인증 완료 상태에서 변경 없이 재제출하면 서버가 verified를 그대로 유지한다.
 				Alert.alert(
 					"제출했어요",
-					"업체 정보를 제출했어요. 운영자 승인을 기다려 주세요."
+					data.verificationStatus === "verified"
+						? "변경 사항이 없어 인증 상태를 유지해요."
+						: "업체 정보를 제출했어요. 운영자 승인을 기다려 주세요."
 				);
 			},
 		})
@@ -240,6 +248,8 @@ export default function EmployerBusinessScreen() {
 					documents={documents}
 					onChanged={invalidateMine}
 					onEnsureOrganizationId={ensureOrganizationId}
+					organizationId={organizationProfile?.organizationId ?? null}
+					requiresConfirmation={screenState.requiresConfirmation}
 				/>
 			</Surface>
 
