@@ -75,7 +75,12 @@ const scheduleReconnect = (): void => {
 	reconnectAttempt += 1;
 	reconnectTimer = setTimeout(() => {
 		reconnectTimer = null;
-		chatSocket?.connect();
+		if (chatSocket) {
+			// 커스텀 재연결은 reconnect_attempt/connectChatSocket을 거치지 않으므로
+			// connect() 직전에 최신 세션 쿠키를 다시 싣는다(옛 쿠키 재사용 방지).
+			chatSocket.io.opts.extraHeaders = resolveAuthHeaders();
+			chatSocket.connect();
+		}
 	}, delay);
 };
 
