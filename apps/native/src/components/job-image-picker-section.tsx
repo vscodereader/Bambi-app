@@ -31,6 +31,20 @@ interface Props {
 // 미리보기 uri는 payload에 담지 않는다 — 화면 표시용으로만 storageKey에 매핑해 둔다.
 type PreviewMap = Record<string, string>;
 
+// web이 만든 조각 그룹은 sliceIndex 0..n으로 여러 행이 들어온다. 개수·한도(5장)는 원본
+// 단위로 세야 하므로 그룹 첫 조각(또는 조각 아님)만 원본 1장으로 취급한다. native 새 픽·
+// 단일 이미지는 sliceIndex가 없다.
+const isOriginalDetail = (item: JobMediaUploadItem): boolean =>
+	item.sliceIndex === undefined || item.sliceIndex === 0;
+
+const sliceCount = (
+	detail: JobMediaUploadItem[],
+	item: JobMediaUploadItem
+): number =>
+	item.sliceGroupId
+		? detail.filter((x) => x.sliceGroupId === item.sliceGroupId).length
+		: 1;
+
 export function JobImagePickerSection({
 	cover,
 	detail,
@@ -44,6 +58,8 @@ export function JobImagePickerSection({
 	const uploadMutation = useMutation(
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
 	);
+	// 조각 그룹은 원본 1장으로 접어서 세고 렌더한다(개수·한도·목록 모두).
+	const originalDetail = detail.filter(isOriginalDetail);
 
 	const pickAndUpload = async (
 		usage: "cover" | "detail"
@@ -138,7 +154,7 @@ export function JobImagePickerSection({
 	};
 
 	const handleDetailPick = async () => {
-		if (detail.length >= JOB_DETAIL_LIMIT) {
+		if (originalDetail.length >= JOB_DETAIL_LIMIT) {
 			Alert.alert(
 				"상세 이미지는 최대 5장",
 				"이미 5장을 등록했어요. 기존 이미지를 제거한 뒤 추가해 주세요."
@@ -218,38 +234,45 @@ export function JobImagePickerSection({
 			</View>
 
 			<View className="gap-2">
-				<Text className="text-muted text-xs">{`상세 이미지 (${detail.length}/${JOB_DETAIL_LIMIT})`}</Text>
-				{detail.map((item, index) => (
-					<View className="gap-2" key={item.storageKey}>
-						{previewFor(item) ? (
-							<Image
-								accessibilityLabel={`상세 이미지 ${index + 1} 미리보기`}
-								className="h-40 w-full rounded-lg"
-								source={{ uri: previewFor(item) }}
-							/>
-						) : (
-							<Text className="text-muted text-xs" selectable>
-								{`등록된 상세 이미지 ${index + 1} (${item.fileName})`}
-							</Text>
-						)}
-						<Pressable
-							className="self-start rounded-lg border border-border bg-background px-3 py-2 active:opacity-75"
-							onPress={() =>
-								onChange({
-									cover,
-									detail: detail.filter(
-										(x) => x.storageKey !== item.storageKey
-									),
-								})
-							}
-						>
-							<Text className="text-danger-soft-foreground text-sm dark:text-danger">
-								{`상세 이미지 ${index + 1} 제거`}
-							</Text>
-						</Pressable>
-					</View>
-				))}
-				{detail.length < JOB_DETAIL_LIMIT ? (
+				<Text className="text-muted text-xs">{`상세 이미지 (${originalDetail.length}/${JOB_DETAIL_LIMIT})`}</Text>
+				{originalDetail.map((item, index) => {
+					const pieces = sliceCount(detail, item);
+					const label =
+						pieces > 1
+							? `상세 이미지 ${index + 1} (조각 ${pieces}장)`
+							: `상세 이미지 ${index + 1}`;
+					// 조각 그룹은 통째로 제거한다 — 일부만 지우면 잘린 그룹이 남는다.
+					const removed = item.sliceGroupId
+						? detail.filter((x) => x.sliceGroupId !== item.sliceGroupId)
+						: detail.filter((x) => x.storageKey !== item.storageKey);
+
+					return (
+						<View className="gap-2" key={item.storageKey}>
+							{previewFor(item) ? (
+								<Image
+									accessibilityLabel={`${label} 미리보기`}
+									className="h-40 w-full rounded-lg"
+									source={{ uri: previewFor(item) }}
+								/>
+							) : (
+								<Text className="text-muted text-xs" selectable>
+									{pieces > 1
+										? `등록된 ${label}`
+										: `등록된 ${label} (${item.fileName})`}
+								</Text>
+							)}
+							<Pressable
+								className="self-start rounded-lg border border-border bg-background px-3 py-2 active:opacity-75"
+								onPress={() => onChange({ cover, detail: removed })}
+							>
+								<Text className="text-danger-soft-foreground text-sm dark:text-danger">
+									{`${label} 제거`}
+								</Text>
+							</Pressable>
+						</View>
+					);
+				})}
+				{originalDetail.length < JOB_DETAIL_LIMIT ? (
 					<Button
 						isDisabled={isBusy}
 						onPress={handleDetailPick}

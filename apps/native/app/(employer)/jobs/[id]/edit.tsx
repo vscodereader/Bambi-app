@@ -20,6 +20,7 @@ import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
 import {
 	buildJobUpdateData,
 	type EditableAdSource,
+	type EditableBanners,
 } from "@/src/lib/employer/job-update";
 import { orpc } from "@/src/lib/orpc";
 
@@ -79,15 +80,23 @@ const toUploadItem = (item: EditableMediaItem): JobMediaUploadItem => ({
 // getEditableById 미디어를 폼 초기값으로. 원격 미디어는 로컬 uri가 없어 공개 버킷 URL을
 // 미리보기로 조립하고, env 미설정·비공개 객체라 조립이 안 되면 폼이 파일명으로 폴백한다.
 const toInitialMedia = (media?: {
+	adHorizontal: EditableMediaItem | null;
+	adVertical: EditableMediaItem | null;
 	cover: EditableMediaItem | null;
 	detail: EditableMediaItem[];
 }): {
+	banners: EditableBanners;
 	cover: JobMediaUploadItem | null;
 	detail: JobMediaUploadItem[];
 	previews: Record<string, string>;
 } => {
 	const cover = media?.cover ? toUploadItem(media.cover) : null;
 	const detail = (media?.detail ?? []).map(toUploadItem);
+	// 배너는 폼에 노출하지 않지만 저장 시 보존해야 한다(media 전량 교체 방어).
+	const banners: EditableBanners = {
+		adHorizontal: media?.adHorizontal ? toUploadItem(media.adHorizontal) : null,
+		adVertical: media?.adVertical ? toUploadItem(media.adVertical) : null,
+	};
 	const previews: Record<string, string> = {};
 	for (const item of cover ? [cover, ...detail] : detail) {
 		const uri = publicObjectUri(item.storageKey, GCS_PUBLIC_BASE_URL);
@@ -95,7 +104,7 @@ const toInitialMedia = (media?: {
 			previews[item.storageKey] = uri;
 		}
 	}
-	return { cover, detail, previews };
+	return { banners, cover, detail, previews };
 };
 
 export default function EditEmployerJobScreen() {
@@ -152,6 +161,7 @@ export default function EditEmployerJobScreen() {
 
 	const editable = jobQuery.data;
 	const {
+		banners,
 		cover: initialCover,
 		detail: initialDetail,
 		previews: initialPreviews,
@@ -165,7 +175,7 @@ export default function EditEmployerJobScreen() {
 
 	const handleSubmit = (input: NativeJobPostInput) => {
 		updateMutation.mutate({
-			data: buildJobUpdateData(input, adSource),
+			data: buildJobUpdateData(input, adSource, banners),
 			id,
 		});
 	};

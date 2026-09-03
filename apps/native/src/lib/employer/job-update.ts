@@ -1,4 +1,5 @@
 import type { NativeJobPostInput } from "@/src/lib/bambi-native";
+import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
 
 // getEditableById가 내려주는 공고 행에서 광고 축만 좁힌 것.
 export interface EditableAdSource {
@@ -7,6 +8,29 @@ export interface EditableAdSource {
 	exposureDurationDays: null | number;
 	paymentMethod: null | string;
 }
+
+// web이 올린 배너 미디어(수정 시 보존용). native는 배너를 새로 만들지 않는다.
+export interface EditableBanners {
+	adHorizontal: JobMediaUploadItem | null;
+	adVertical: JobMediaUploadItem | null;
+}
+
+// media는 서버에서 전량 교체라, 배너가 있으면 출력 media에 다시 실어야 배너 행이 지워지지
+// 않는다. 배너가 없으면(무료 공고 등) media를 그대로 둔다(참조 유지).
+const withBanners = (
+	media: NativeJobPostInput["media"],
+	banners: EditableBanners | undefined
+): NativeJobPostInput["media"] => {
+	if (!(media && (banners?.adHorizontal || banners?.adVertical))) {
+		return media;
+	}
+
+	return {
+		...media,
+		...(banners.adHorizontal ? { adHorizontal: banners.adHorizontal } : {}),
+		...(banners.adVertical ? { adVertical: banners.adVertical } : {}),
+	};
+};
 
 /**
  * 수정 payload를 만든다. native는 광고 상품을 편집하지 않지만, 서버 update는 jobPostInput
@@ -18,10 +42,13 @@ export interface EditableAdSource {
  */
 export const buildJobUpdateData = (
 	input: NativeJobPostInput,
-	editable: EditableAdSource
+	editable: EditableAdSource,
+	banners?: EditableBanners
 ): NativeJobPostInput => {
+	const media = withBanners(input.media, banners);
+
 	if (!editable.adProductId) {
-		return input;
+		return media === input.media ? input : { ...input, media };
 	}
 
 	return {
@@ -29,6 +56,7 @@ export const buildJobUpdateData = (
 		adProductId: editable.adProductId,
 		exposureAmount: editable.exposureAmount,
 		exposureDurationDays: editable.exposureDurationDays,
+		media,
 		paymentMethod:
 			editable.paymentMethod === "bank_transfer" ||
 			editable.paymentMethod === "card"

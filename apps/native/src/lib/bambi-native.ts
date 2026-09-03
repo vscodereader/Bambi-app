@@ -49,7 +49,14 @@ export interface NativeJobPostInput {
 	industryCategory: NativeIndustryOption;
 	instantInterview?: boolean;
 	interviewNotes?: string;
-	media?: { cover?: JobMediaUploadItem; detail: JobMediaUploadItem[] };
+	// 배너(adHorizontal/adVertical)는 native가 편집하지 않지만, media는 전량 교체라 web이 올린
+	// 배너를 되돌려 보내지 않으면 서버가 배너 행·GCS 객체를 지운다 — 수정 시 그대로 실어 보낸다.
+	media?: {
+		adHorizontal?: JobMediaUploadItem;
+		adVertical?: JobMediaUploadItem;
+		cover?: JobMediaUploadItem;
+		detail: JobMediaUploadItem[];
+	};
 	organizationId: string;
 	// "협의" 단위는 금액이 없다 — 서버 jobPostInput refine이 짝을 강제한다.
 	payAmount: null | number;

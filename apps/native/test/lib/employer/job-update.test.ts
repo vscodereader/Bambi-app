@@ -1,7 +1,23 @@
 import { describe, expect, it } from "vitest";
 
 import type { NativeJobPostInput } from "@/src/lib/bambi-native";
+import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
 import { buildJobUpdateData } from "@/src/lib/employer/job-update";
+
+const banner = (storageKey: string): JobMediaUploadItem => ({
+	altText: "",
+	byteSize: 10,
+	fileName: "b.gif",
+	mimeType: "image/gif",
+	storageKey,
+});
+
+const adSource = {
+	adProductId: "ad1",
+	exposureAmount: 50_000,
+	exposureDurationDays: 30,
+	paymentMethod: "card" as const,
+};
 
 const base: NativeJobPostInput = {
 	description: "충분히 긴 상세 설명",
@@ -41,5 +57,28 @@ describe("buildJobUpdateData", () => {
 		expect(result.paymentMethod).toBe("card");
 		// 표준 필드는 보존
 		expect(result.title).toBe("공고");
+	});
+
+	it("배너(가로·세로)가 있으면 media에 실어 보존한다(GIF mime 유지)", () => {
+		const result = buildJobUpdateData(
+			{ ...base, media: { detail: [] } },
+			adSource,
+			{ adHorizontal: banner("h"), adVertical: banner("v") }
+		);
+
+		expect(result.media?.adHorizontal?.storageKey).toBe("h");
+		expect(result.media?.adVertical?.storageKey).toBe("v");
+		expect(result.media?.adHorizontal?.mimeType).toBe("image/gif");
+	});
+
+	it("배너가 없으면 media에 배너 키를 넣지 않는다", () => {
+		const result = buildJobUpdateData(
+			{ ...base, media: { detail: [] } },
+			adSource,
+			{ adHorizontal: null, adVertical: null }
+		);
+
+		expect(result.media && "adHorizontal" in result.media).toBe(false);
+		expect(result.media && "adVertical" in result.media).toBe(false);
 	});
 });
