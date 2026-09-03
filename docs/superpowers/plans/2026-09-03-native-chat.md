@@ -65,7 +65,7 @@ native UI `apps/native/src/components/chat/`
 **Interfaces:**
 - Produces: native에서 `import { io } from "socket.io-client"`, `import { getDocumentAsync } from "expo-document-picker"` 가능
 
-- [ ] **Step 1: native에 expo-document-picker 설치(SDK 호환 버전 확정)**
+- [x] **Step 1: native에 expo-document-picker 설치(SDK 호환 버전 확정)**
 
 Run (cwd `apps/native`):
 ```bash
@@ -73,7 +73,7 @@ pnpm expo install expo-document-picker
 ```
 Expected: `apps/native/package.json`에 `"expo-document-picker": "~56.x.x"` 추가됨. 그 버전 문자열을 기록한다.
 
-- [ ] **Step 2: catalog 등록**
+- [x] **Step 2: catalog 등록**
 
 `pnpm-workspace.yaml`의 `catalog:` 블록에 알파벳 순으로 추가(기존 항목은 `"@ai-sdk/react": ^3.0.3` 형식):
 ```yaml
@@ -81,7 +81,7 @@ Expected: `apps/native/package.json`에 `"expo-document-picker": "~56.x.x"` 추�
   socket.io-client: ^4.8.3
 ```
 
-- [ ] **Step 3: package.json을 catalog 참조로 변경**
+- [x] **Step 3: package.json을 catalog 참조로 변경**
 
 `apps/web/package.json`:
 ```json
@@ -93,7 +93,7 @@ Expected: `apps/native/package.json`에 `"expo-document-picker": "~56.x.x"` 추�
 "socket.io-client": "catalog:",
 ```
 
-- [ ] **Step 4: 설치·검증**
+- [x] **Step 4: 설치·검증**
 
 Run (cwd 워크트리 루트):
 ```bash
@@ -102,7 +102,7 @@ node -e "require.resolve('socket.io-client/package.json',{paths:['apps/native']}
 ```
 Expected: `ok`. `pnpm-lock.yaml`에 두 패키지가 catalog 항목으로 잡힘.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pnpm-workspace.yaml pnpm-lock.yaml apps/web/package.json apps/native/package.json
@@ -126,7 +126,7 @@ git commit -m "chore: socket.io-client·expo-document-picker를 catalog로 등�
   - `mergeChatMessagesById<M>(older: readonly M[], latest: readonly M[]): M[]`, `resolveOldestChatMessageCursor(messages): ChatMessageCursor | null`, `isScrolledToBottom({clientHeight, scrollHeight, scrollTop}): boolean`, 타입 `ChatMessageCursor {createdAt: string; id: string}`
   - `getChatBlockMessage(error: unknown): null | string`, 타입 `ChatBlockReason`
 
-- [ ] **Step 1: 파일 이동(git mv로 이력 유지)**
+- [x] **Step 1: 파일 이동(git mv로 이력 유지)**
 
 ```bash
 git mv apps/web/src/lib/bambi/chat-message-grouping.ts packages/api/src/services/bambi-chat-message-grouping.ts
@@ -137,7 +137,7 @@ git mv apps/web/test/lib/bambi/chat-room-messages.test.ts packages/api/test/serv
 git mv apps/web/test/lib/bambi/chat-block.test.ts packages/api/test/services/bambi-chat-block.test.ts
 ```
 
-- [ ] **Step 2: 테스트 import 경로 수정**
+- [x] **Step 2: 테스트 import 경로 수정**
 
 세 테스트 파일의 `from "@/lib/bambi/chat-message-grouping"` 등을 아래로 바꾼다(packages/api vitest alias `@` → `packages/api/src`):
 ```ts
@@ -146,21 +146,21 @@ import { ... } from "@/services/bambi-chat-room-messages";
 import { ... } from "@/services/bambi-chat-block";
 ```
 
-- [ ] **Step 3: 이동한 소스의 상단 주석에 공유 사실 한 줄 추가**
+- [x] **Step 3: 이동한 소스의 상단 주석에 공유 사실 한 줄 추가**
 
 각 파일 첫 주석 블록 끝에:
 ```ts
 // web(apps/web)·native(apps/native)가 함께 import한다. 화면 로직을 여기 넣지 말 것.
 ```
 
-- [ ] **Step 4: web import 경로 갱신**
+- [x] **Step 4: web import 경로 갱신**
 
 `grep -rn "lib/bambi/chat-message-grouping\|lib/bambi/chat-room-messages\|lib/bambi/chat-block\"" apps/web/src` 결과 전부(6곳 예상)를 다음으로 치환:
 - `@/lib/bambi/chat-message-grouping` → `@bambi-app/api/services/bambi-chat-message-grouping`
 - `@/lib/bambi/chat-room-messages` 및 `./chat-room-messages` → `@bambi-app/api/services/bambi-chat-room-messages`
 - `@/lib/bambi/chat-block` → `@bambi-app/api/services/bambi-chat-block`
 
-- [ ] **Step 5: api 테스트 실행**
+- [x] **Step 5: api 테스트 실행**
 
 Run (cwd `packages/api`):
 ```bash
@@ -168,7 +168,7 @@ pnpm vitest run test/services/bambi-chat-message-grouping.test.ts test/services/
 ```
 Expected: 3 files passed, 0 failed.
 
-- [ ] **Step 6: web·api 타입 검사**
+- [x] **Step 6: web·api 타입 검사**
 
 Run (cwd 워크트리 루트):
 ```bash
@@ -177,14 +177,14 @@ pnpm --filter @bambi-app/api check-types
 ```
 Expected: 오류 0. (web check-types가 낡은 `.next` 때문에 오탐을 내면 `apps/web/.next` 삭제 후 재실행.)
 
-- [ ] **Step 7: 린트**
+- [x] **Step 7: 린트**
 
 ```bash
 pnpm dlx ultracite check packages/api/src/services/bambi-chat-message-grouping.ts packages/api/src/services/bambi-chat-room-messages.ts packages/api/src/services/bambi-chat-block.ts apps/web/src/components/bambi/screens apps/web/src/lib/bambi apps/web/src/app/moderator/chats apps/web/src/app/seeker/jobs
 ```
 Expected: 오류 0.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A packages/api/src/services packages/api/test/services apps/web/src apps/web/test
@@ -211,7 +211,7 @@ git commit -m "refactor: 채팅 순수 로직 3파일을 packages/api/services�
   - `getInterviewProposalNotice(status: string, viewerIsProposer: boolean): string`
   - `generateChatMessageId(): string` (crypto 없으면 Math.random 폴백)
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `packages/api/test/services/bambi-chat-system-messages.test.ts`:
 ```ts
@@ -322,12 +322,12 @@ describe("readInterviewProposalMetadata / getInterviewProposalNotice", () => {
 });
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run (cwd `packages/api`): `pnpm vitest run test/services/bambi-chat-system-messages.test.ts`
 Expected: FAIL — 모듈을 찾을 수 없음.
 
-- [ ] **Step 3: 공유 파일 작성**
+- [x] **Step 3: 공유 파일 작성**
 
 `packages/api/src/services/bambi-chat-system-messages.ts`:
 ```ts
@@ -451,7 +451,7 @@ export const getInterviewProposalNotice = (
 };
 ```
 
-- [ ] **Step 4: web 채팅방 컴포넌트에서 로컬 정의 제거·import 교체**
+- [x] **Step 4: web 채팅방 컴포넌트에서 로컬 정의 제거·import 교체**
 
 `apps/web/src/components/bambi/screens/seeker-chat-room-responsive.tsx`:
 - `type ContactRequestStatus`, `type ContactRevealDecision`, `interface ContactRequestMetadata`, `CONTACT_REQUEST_STATUSES`, `readContactRequestMetadata`, `getContactRequestNotice`, `readInterviewProposalMetadata`, `getInterviewProposalNotice` 정의(약 196~310행)를 삭제.
@@ -478,7 +478,7 @@ const notice = getContactRequestNotice({
 ```
 (`formatPhone` import는 그대로 유지.)
 
-- [ ] **Step 5: 메시지 id 생성기 crypto 폴백**
+- [x] **Step 5: 메시지 id 생성기 crypto 폴백**
 
 `packages/api/src/services/bambi-chat-message-id.ts`의 `crypto.getRandomValues(bytes);` 를 `fillRandomBytes(bytes);` 로 교체하고, 상수 아래에 추가:
 ```ts
@@ -499,7 +499,7 @@ const fillRandomBytes = (bytes: Uint8Array): void => {
 };
 ```
 
-- [ ] **Step 6: 폴백 테스트 추가**
+- [x] **Step 6: 폴백 테스트 추가**
 
 `packages/api/test/services/bambi-chat-message-id.test.ts` 마지막 `describe` 안에 추가:
 ```ts
@@ -524,7 +524,7 @@ const fillRandomBytes = (bytes: Uint8Array): void => {
 	});
 ```
 
-- [ ] **Step 7: 테스트·타입·린트**
+- [x] **Step 7: 테스트·타입·린트**
 
 Run (cwd `packages/api`):
 ```bash
@@ -540,7 +540,7 @@ pnpm dlx ultracite check packages/api/src/services/bambi-chat-system-messages.ts
 ```
 Expected: 오류 0.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/api/src/services/bambi-chat-system-messages.ts packages/api/src/services/bambi-chat-message-id.ts packages/api/test/services apps/web/src/components/bambi/screens/seeker-chat-room-responsive.tsx
@@ -558,17 +558,20 @@ git commit -m "refactor: 채팅 시스템 메시지 문구를 공유 서비스�
 - Create: `apps/native/src/lib/chat/chat-optimistic.ts`
 - Create: `apps/native/src/lib/chat/chat-typing.ts`
 - Create: `apps/native/src/lib/chat/chat-errors.ts`
-- Test: `apps/native/test/lib/chat/chat-time.test.ts`, `chat-optimistic.test.ts`, `chat-typing.test.ts`, `chat-errors.test.ts`
+- Create: `apps/native/src/lib/chat/chat-attachment-picker.ts` (Ruling: chat-errors 순수부에 붙어 있어 Task 7에서 여기로 옮김)
+- Test: `apps/native/test/lib/chat/chat-time.test.ts`, `chat-optimistic.test.ts`, `chat-typing.test.ts`, `chat-errors.test.ts`, `chat-attachment-picker.test.ts`
 
 **Interfaces:**
+- Ruling(구현 반영): `CHAT_MESSAGE_PAGE_SIZE`는 여러 훅이 쓰므로 Task 6의 `chat-read-watermark.ts` 대신 `chat-types.ts`에서 정의한다. 순수 함수인 `chat-attachment-picker.ts`도 Task 7이 아닌 이 Task에서 만든다(같은 커밋 `ec977890`).
 - Produces:
-  - `chat-types.ts`: `ChatRoomDetail`, `ChatRoomMessage`, `ChatRoomSchedule`, `ChatRoomAttachment`, `ChatRoomListItem`
+  - `chat-types.ts`: `ChatRoomDetail`, `ChatRoomMessage`, `ChatRoomSchedule`, `ChatRoomAttachment`, `ChatRoomListItem`, `CHAT_MESSAGE_PAGE_SIZE = 50`
+  - `chat-attachment-picker.ts`: `interface PickedAttachment { byteSize: number; fileName: string; mimeType: string; uri: string }`, `toPickedAttachment(input, fallbackMimeType): PickedAttachment`, `validatePickedAttachment(picked): { ok: true } | { message: string; ok: false }`, `isImageMimeType(mimeType: string): boolean`
   - `chat-time.ts`: `formatChatListTime(value: Date | string, now?: Date): string`
   - `chat-optimistic.ts`: `type ChatSendStatus = "failed" | "sending"`, `interface OptimisticChatMessage { attempts: number; body: string; chatRoomId: string; createdAt: string; id: string; localImageUri: null | string; senderUserId: string; sendStatus: ChatSendStatus }`, `type ChatTimelineMessage = ChatRoomMessage & { localImageUri?: null | string; sendStatus?: ChatSendStatus }`, `createOptimisticTextMessage({ body, chatRoomId, id, senderUserId }): OptimisticChatMessage`, `createOptimisticImageMessage({ chatRoomId, id, localImageUri, senderUserId }): OptimisticChatMessage`, `buildChatTimeline({ optimistic, server }): ChatTimelineMessage[]`(시간순, 서버 우선), `toInvertedTimeline(items): ChatTimelineMessage[]`, `dropSettledOptimistic(optimistic, server): OptimisticChatMessage[]`
   - `chat-typing.ts`: `type TypingState = Readonly<Record<string, number>>`(만료 시각 ms), `TYPING_TTL_MS = 5000`, `applyTypingStarted(state, userId, now): TypingState`, `applyTypingStopped(state, userId): TypingState`, `pruneTyping(state, now): TypingState`, `typingUserIds(state, now): string[]`
   - `chat-errors.ts`: `chatMutationErrorMessage(error: unknown): string`, `startChatErrorMessage(error: unknown): string`, `attachmentPolicyMessage(code: ChatMediaPolicyCode): string`, `readOrpcErrorCode(error: unknown): string | null`
 
-- [ ] **Step 1: vitest 설정**
+- [x] **Step 1: vitest 설정**
 
 `apps/native/vitest.config.ts`:
 ```ts
@@ -593,7 +596,7 @@ export default defineConfig({
 ```
 vitest는 리포 루트 devDependency로 설치되어 있다. `pnpm --filter native test`가 바이너리를 못 찾으면 루트에서 `pnpm vitest run --config apps/native/vitest.config.ts`로 실행한다(둘 중 동작하는 쪽을 이후 단계에서 계속 쓴다).
 
-- [ ] **Step 2: 타입 파일**
+- [x] **Step 2: 타입 파일**
 
 `apps/native/src/lib/chat/chat-types.ts`:
 ```ts
@@ -610,7 +613,7 @@ export type ChatRoomListItem = Awaited<
 >[number];
 ```
 
-- [ ] **Step 3: 실패하는 테스트 4개 작성**
+- [x] **Step 3: 실패하는 테스트 4개 작성**
 
 `apps/native/test/lib/chat/chat-time.test.ts`:
 ```ts
@@ -867,12 +870,12 @@ describe("attachmentPolicyMessage", () => {
 });
 ```
 
-- [ ] **Step 4: 실패 확인**
+- [x] **Step 4: 실패 확인**
 
 Run (cwd `apps/native`): `pnpm vitest run`
 Expected: 4 files FAIL(모듈 없음).
 
-- [ ] **Step 5: 순수 함수 구현**
+- [x] **Step 5: 순수 함수 구현**
 
 `apps/native/src/lib/chat/chat-time.ts`:
 ```ts
@@ -1172,12 +1175,12 @@ export const attachmentPolicyMessage = (code: ChatMediaPolicyCode): string => {
 };
 ```
 
-- [ ] **Step 6: 테스트 통과 확인**
+- [x] **Step 6: 테스트 통과 확인**
 
 Run (cwd `apps/native`): `pnpm vitest run`
 Expected: 4 files passed.
 
-- [ ] **Step 7: 타입·린트**
+- [x] **Step 7: 타입·린트**
 
 Run (cwd 루트):
 ```bash
@@ -1186,7 +1189,7 @@ pnpm dlx ultracite check apps/native/src/lib/chat apps/native/test apps/native/v
 ```
 Expected: 오류 0.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/native/vitest.config.ts apps/native/package.json apps/native/src/lib/chat apps/native/test
@@ -1212,7 +1215,7 @@ git commit -m "feat(native): 채팅 순수 로직(시각·낙관적 병합·타�
   - `emitChatTypingStarted(roomId: string): void`, `emitChatTypingStopped(roomId: string): void`
   - `disconnectChatSocket(): void` — 로그아웃 시 호출용
 
-- [ ] **Step 1: 파일 작성**
+- [x] **Step 1: 파일 작성**
 
 `apps/native/src/lib/chat/chat-socket.ts` (web `apps/web/src/lib/bambi-chat-realtime.ts`의 native판 — `window.*` 대신 전역 타이머, 쿠키는 헤더로):
 ```ts
@@ -1438,7 +1441,7 @@ export const disconnectChatSocket = (): void => {
 };
 ```
 
-- [ ] **Step 2: 로그아웃 훅 연결**
+- [x] **Step 2: 로그아웃 훅 연결**
 
 `apps/native/src/components/logout-button.tsx`(기존)에서 `authClient.signOut` 호출 직후에 `disconnectChatSocket()`을 호출한다:
 ```ts
@@ -1448,7 +1451,7 @@ disconnectChatSocket();
 ```
 (파일 구조가 다르면 signOut을 호출하는 곳 바로 다음 줄에 넣는다. 다른 로직은 건드리지 않는다.)
 
-- [ ] **Step 3: 타입·린트**
+- [x] **Step 3: 타입·린트**
 
 Run (cwd 루트):
 ```bash
@@ -1457,7 +1460,7 @@ pnpm dlx ultracite check apps/native/src/lib/chat/chat-socket.ts apps/native/src
 ```
 Expected: 오류 0. `socket.io.opts.extraHeaders` 타입 오류가 나면 `(socket.io.opts as { extraHeaders?: Record<string, string> }).extraHeaders = ...`로 좁힌다.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/native/src/lib/chat/chat-socket.ts apps/native/src/components/logout-button.tsx
@@ -1477,9 +1480,9 @@ git commit -m "feat(native): 채팅 socket.io 클라이언트 싱글턴(쿠키 �
 - Test: `apps/native/test/lib/chat/chat-read-watermark.test.ts`
 
 **Interfaces:**
-- Consumes: Task 4 타입·`buildChatTimeline`·`dropSettledOptimistic`·타이핑 리듀서, Task 5 소켓 함수, `orpc`·`queryClient`(`@/src/lib/orpc`), 공유 `mergeChatMessagesById`·`resolveOldestChatMessageCursor`
+- Consumes: Task 4 타입·`CHAT_MESSAGE_PAGE_SIZE`(`chat-types.ts`)·`buildChatTimeline`·`dropSettledOptimistic`·타이핑 리듀서, Task 5 소켓 함수, `orpc`·`queryClient`(`@/src/lib/orpc`), 공유 `mergeChatMessagesById`·`resolveOldestChatMessageCursor`
+- Ruling(구현 반영): `CHAT_MESSAGE_PAGE_SIZE`는 이 Task가 아니라 Task 4 `chat-types.ts`가 정의한다. 이 Task는 import해서 쓴다.
 - Produces:
-  - `CHAT_MESSAGE_PAGE_SIZE = 50`
   - `useChatMessages({ roomId, optimistic }): { canLoadOlder: boolean; isLoadingOlder: boolean; loadOlder: () => void; room: ChatRoomDetail | undefined; roomQuery: UseQueryResult<ChatRoomDetail>; timeline: ChatTimelineMessage[] /* 시간순 */ }`
   - `useChatAutoRead({ chatRoomId, isActive }): { markReadNow: (messageId: null | string) => void; queueMarkRead: (messageId: null | string) => void; reassertMarkRead: () => void }`
   - `useChatRoomRealtime({ roomId, onIncomingMessage: (messageId: string) => void; onUnreadRemaining: () => void }): { isConnected: boolean; typingUserIds: string[] }`
@@ -1487,7 +1490,7 @@ git commit -m "feat(native): 채팅 socket.io 클라이언트 싱글턴(쿠키 �
   - `chat-read-watermark.ts`: `resolveNextChatReadWatermark({ attemptedMessageId, latestUnreadMessageId }): null | string`, `canFlushChatRead(latest, sentMessageId, attempted): boolean`
   - 쿼리 키 규약: 방 상세 무효화는 `orpc.bambi.chats.getById.key({ input: { id: roomId } })`(부분 일치), 목록은 `orpc.bambi.chats.listMine.queryKey()`, 배지는 `orpc.bambi.chats.unreadState.queryKey()`
 
-- [ ] **Step 1: 읽음 기준선 순수 함수 + 테스트**
+- [x] **Step 1: 읽음 기준선 순수 함수 + 테스트**
 
 `apps/native/test/lib/chat/chat-read-watermark.test.ts`:
 ```ts
@@ -1580,7 +1583,7 @@ export const canFlushChatRead = (
 
 Run again → PASS.
 
-- [ ] **Step 2: `use-chat-messages.ts`**
+- [x] **Step 2: `use-chat-messages.ts`**
 
 ```ts
 import {
@@ -1692,7 +1695,7 @@ export function useChatMessages({
 }
 ```
 
-- [ ] **Step 3: `use-chat-auto-read.ts`**
+- [x] **Step 3: `use-chat-auto-read.ts`**
 
 ```ts
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -1892,7 +1895,7 @@ export function useChatAutoRead({
 }
 ```
 
-- [ ] **Step 4: `use-chat-room-realtime.ts`**
+- [x] **Step 4: `use-chat-room-realtime.ts`**
 
 ```ts
 import { useQueryClient } from "@tanstack/react-query";
@@ -2077,7 +2080,7 @@ export function useChatRoomRealtime({
 }
 ```
 
-- [ ] **Step 5: `use-chat-unread-badge.ts`**
+- [x] **Step 5: `use-chat-unread-badge.ts`**
 
 ```ts
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -2124,7 +2127,7 @@ export function useChatUnreadBadge(enabled: boolean): number {
 }
 ```
 
-- [ ] **Step 6: 타입·린트·테스트**
+- [x] **Step 6: 타입·린트·테스트**
 
 Run (cwd 루트):
 ```bash
@@ -2133,7 +2136,7 @@ pnpm dlx ultracite check apps/native/src/lib/chat apps/native/test/lib/chat
 ```
 Run (cwd `apps/native`): `pnpm vitest run` → 5 files passed.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/native/src/lib/chat apps/native/test/lib/chat
@@ -2146,17 +2149,14 @@ git commit -m "feat(native): 채팅방 데이터 훅(메시지 타임라인·자
 
 **Files:**
 - Create: `apps/native/src/lib/chat/use-chat-send.ts`
-- Create: `apps/native/src/lib/chat/chat-attachment-picker.ts`
-- Test: `apps/native/test/lib/chat/chat-attachment-picker.test.ts`
 
 **Interfaces:**
-- Consumes: `generateChatMessageId`(`@bambi-app/api/services/bambi-chat-message-id`), `validateChatMediaUpload`(`@bambi-app/api/services/bambi-media-policy`), Task 4 낙관적 빌더·`attachmentPolicyMessage`·`chatMutationErrorMessage`, `orpc`
+- Ruling(구현 반영): `chat-attachment-picker.ts`(순수)와 그 테스트는 Task 4로 옮겼다. 이 Task는 `PickedAttachment`·`toPickedAttachment`·`validatePickedAttachment`·`isImageMimeType`를 소비만 한다.
+- Consumes: `generateChatMessageId`(`@bambi-app/api/services/bambi-chat-message-id`), `validateChatMediaUpload`(`@bambi-app/api/services/bambi-media-policy`), Task 4 낙관적 빌더·`attachmentPolicyMessage`·`chatMutationErrorMessage`·`chat-attachment-picker`(`PickedAttachment`·`toPickedAttachment`·`validatePickedAttachment`·`isImageMimeType`), `orpc`
 - Produces:
-  - `interface PickedAttachment { byteSize: number; fileName: string; mimeType: string; uri: string }`
-  - `chat-attachment-picker.ts`: `toPickedAttachment(input: { fileName?: null | string; mimeType?: null | string; size?: null | number; uri: string }, fallbackMimeType: string): PickedAttachment`, `validatePickedAttachment(picked: PickedAttachment): { ok: true } | { message: string; ok: false }`, `isImageMimeType(mimeType: string): boolean`
   - `useChatSend({ currentUserId, roomId, onError: (message: string) => void }): { discardFailed: (id: string) => void; isUploading: boolean; optimistic: OptimisticChatMessage[]; retry: (id: string) => void; sendAttachment: (picked: PickedAttachment, body: string) => Promise<void>; sendText: (body: string) => void }`
 
-- [ ] **Step 1: 첨부 선택 순수 함수 테스트**
+- [x] **Step 1: 첨부 선택 순수 함수 테스트**
 
 `apps/native/test/lib/chat/chat-attachment-picker.test.ts`:
 ```ts
@@ -2238,7 +2238,7 @@ describe("isImageMimeType", () => {
 
 Run (cwd `apps/native`): `pnpm vitest run test/lib/chat/chat-attachment-picker.test.ts` → FAIL.
 
-- [ ] **Step 2: `chat-attachment-picker.ts`**
+- [x] **Step 2: `chat-attachment-picker.ts`**
 
 ```ts
 import { validateChatMediaUpload } from "@bambi-app/api/services/bambi-media-policy";
@@ -2293,7 +2293,7 @@ export const isImageMimeType = (mimeType: string): boolean =>
 
 Run again → PASS.
 
-- [ ] **Step 3: `use-chat-send.ts`**
+- [x] **Step 3: `use-chat-send.ts`**
 
 ```ts
 import { generateChatMessageId } from "@bambi-app/api/services/bambi-chat-message-id";
@@ -2560,7 +2560,7 @@ export function useChatSend({
 ```
 주의: `queryClient.getQueryData(... limit: 50 ...)`의 `50`은 `CHAT_MESSAGE_PAGE_SIZE`(Task 6)를 import해 쓴다.
 
-- [ ] **Step 4: 타입·린트·테스트**
+- [x] **Step 4: 타입·린트·테스트**
 
 Run (cwd 루트):
 ```bash
@@ -2569,7 +2569,7 @@ pnpm dlx ultracite check apps/native/src/lib/chat apps/native/test/lib/chat
 ```
 Run (cwd `apps/native`): `pnpm vitest run` → 6 files passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/native/src/lib/chat apps/native/test/lib/chat
@@ -2597,7 +2597,7 @@ git commit -m "feat(native): 채팅 전송 훅(낙관적 텍스트·첨부 업�
   - `ChatNewMessagePill({ onPress: () => void })`
   - 내부 상수: 말풍선 최대 너비 `max-w-[78%]`은 Tailwind 임의값이 아니라 `w-4/5`(80%)로 대체한다. 이미지 최대 높이는 `max-h-80`.
 
-- [ ] **Step 1: `chat-date-chip.tsx`**
+- [x] **Step 1: `chat-date-chip.tsx`**
 
 ```tsx
 import { Chip } from "heroui-native";
@@ -2615,7 +2615,7 @@ export function ChatDateChip({ label }: { label: string }) {
 }
 ```
 
-- [ ] **Step 2: `chat-message-bubble.tsx`**
+- [x] **Step 2: `chat-message-bubble.tsx`**
 
 ```tsx
 import { formatChatTimeLabel } from "@bambi-app/api/services/bambi-chat-message-grouping";
@@ -2743,7 +2743,7 @@ export function ChatMessageBubble({
 }
 ```
 
-- [ ] **Step 3: `chat-attachment-message.tsx`**
+- [x] **Step 3: `chat-attachment-message.tsx`**
 
 ```tsx
 import { Ionicons } from "@expo/vector-icons";
@@ -2886,7 +2886,7 @@ export function ChatAttachmentMessage({
 }
 ```
 
-- [ ] **Step 4: `chat-typing-indicator.tsx`**
+- [x] **Step 4: `chat-typing-indicator.tsx`**
 
 ```tsx
 import { Avatar } from "heroui-native";
@@ -2962,7 +2962,7 @@ export function ChatTypingIndicator({
 ```
 (`Animated.View`에 `className`이 안 먹으면 `style={[style, { backgroundColor: useThemeColor("muted"), borderRadius: 4, height: 8, width: 8 }]}`로 대체한다.)
 
-- [ ] **Step 5: `chat-new-message-pill.tsx`**
+- [x] **Step 5: `chat-new-message-pill.tsx`**
 
 ```tsx
 import { Ionicons } from "@expo/vector-icons";
@@ -2986,7 +2986,7 @@ export function ChatNewMessagePill({ onPress }: { onPress: () => void }) {
 }
 ```
 
-- [ ] **Step 6: 타입·린트**
+- [x] **Step 6: 타입·린트**
 
 Run (cwd 루트):
 ```bash
@@ -2995,7 +2995,7 @@ pnpm dlx ultracite check apps/native/src/components/chat
 ```
 Expected: 오류 0. heroui prop 이름이 다르면(`Chip.Label` 미존재 등) `node .agents/skills/heroui-native/scripts/get_component_docs.mjs <Component>`로 확인 후 맞춘다.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/native/src/components/chat
@@ -3024,7 +3024,7 @@ git commit -m "feat(native): 채팅 말풍선·첨부·날짜 칩·타이핑·�
   - `ChatRoomMenu({ canRevealContact, onBlock, onLeave, onReport, onRevealContact })`
   - `ChatRoomListItem({ onPress, room: ChatRoomListItem })`
 
-- [ ] **Step 1: `chat-system-card.tsx`**
+- [x] **Step 1: `chat-system-card.tsx`**
 
 ```tsx
 import {
@@ -3189,7 +3189,7 @@ export function ChatSystemCard({
 }
 ```
 
-- [ ] **Step 2: `chat-block-notice.tsx`**
+- [x] **Step 2: `chat-block-notice.tsx`**
 
 ```tsx
 import { Ionicons } from "@expo/vector-icons";
@@ -3213,7 +3213,7 @@ export function ChatBlockNotice({ message }: { message: string }) {
 }
 ```
 
-- [ ] **Step 3: `chat-composer.tsx`**
+- [x] **Step 3: `chat-composer.tsx`**
 
 ```tsx
 import { Ionicons } from "@expo/vector-icons";
@@ -3439,7 +3439,7 @@ export function ChatComposer({
 ```
 (`Button`에 `isIconOnly`가 없으면 `className="h-11 w-11 rounded-2xl"`로 대체한다. `BottomSheet.Trigger asChild` 미지원이면 `<BottomSheet.Trigger>` 안에 아이콘만 넣는다.)
 
-- [ ] **Step 4: `chat-room-header.tsx`**
+- [x] **Step 4: `chat-room-header.tsx`**
 
 ```tsx
 import { Ionicons } from "@expo/vector-icons";
@@ -3500,7 +3500,7 @@ export function ChatRoomHeader({
 }
 ```
 
-- [ ] **Step 5: `chat-room-menu.tsx`**
+- [x] **Step 5: `chat-room-menu.tsx`**
 
 ```tsx
 import { Ionicons } from "@expo/vector-icons";
@@ -3562,7 +3562,7 @@ export function ChatRoomMenu({
 }
 ```
 
-- [ ] **Step 6: `chat-room-list-item.tsx`**
+- [x] **Step 6: `chat-room-list-item.tsx`**
 
 ```tsx
 import { Avatar, Chip, cn, ListGroup } from "heroui-native";
@@ -3626,7 +3626,7 @@ export function ChatRoomListItem({
 }
 ```
 
-- [ ] **Step 7: 타입·린트**
+- [x] **Step 7: 타입·린트**
 
 Run (cwd 루트):
 ```bash
@@ -3635,7 +3635,7 @@ pnpm dlx ultracite check apps/native/src/components/chat
 ```
 Expected: 오류 0. heroui prop이 다르면 문서 스크립트로 확인해 맞춘다(`ListGroup.ItemTitle`에 `numberOfLines`가 없으면 `<Text>`로 대체).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/native/src/components/chat
@@ -3654,7 +3654,7 @@ git commit -m "feat(native): 채팅 시스템 카드·차단 안내·입력바·
 - Consumes: Task 6 훅(`useChatMessages`, `useChatAutoRead`, `useChatRoomRealtime`), Task 7 `useChatSend`, Task 8·9 컴포넌트, 공유 `annotateChatMessages`, `toInvertedTimeline`, `chatMutationErrorMessage`, `getChatBlockMessage`, `getConfirmedScheduleId`(`@/src/lib/bambi-native`), `JobReportDialog`(`@/src/components/report-dialog`) — 단, 이 다이얼로그는 `targetType: "job_post"` 고정이라 채팅 신고에는 쓰지 않는다(아래 Step 2 참고).
 - Produces: 화면 하나. 라우트 파라미터 `id`.
 
-- [ ] **Step 1: `_layout.tsx` 헤더 옵션 변경**
+- [x] **Step 1: `_layout.tsx` 헤더 옵션 변경**
 
 `apps/native/app/(seeker)/_layout.tsx`의
 ```tsx
@@ -3667,11 +3667,11 @@ git commit -m "feat(native): 채팅 시스템 카드·차단 안내·입력바·
 ```
 로 바꾼다.
 
-- [ ] **Step 2: 채팅 신고용 ReportDialog 확장**
+- [x] **Step 2: 채팅 신고용 ReportDialog 확장**
 
 `apps/native/src/components/report-dialog.tsx`의 `JobReportDialog` props에 `targetType?: "chat_room" | "job_post"`(기본 `"job_post"`)를 추가하고 `createReport.mutate({ targetType, ... })`로 넘긴다. 제목 문구는 그대로 둔다. 서버 enum `moderationTargetType`에 `chat_room`이 있다(`packages/db/src/schema/bambi.ts:174-185`).
 
-- [ ] **Step 3: 화면 작성**
+- [x] **Step 3: 화면 작성**
 
 `apps/native/app/(seeker)/chats/[id].tsx`:
 ```tsx
@@ -3798,14 +3798,16 @@ function SeekerChatRoomInner() {
 		roomId: id,
 	});
 
-	// 첫 로드가 끝나면 지연 없이 읽음 처리한다.
-	const firstLoadedRef = useRef(false);
+	// 첫 로드가 끝나면 지연 없이 읽음 처리한다. 같은 라우트에서 방만 갈아탈 수 있으므로
+	// boolean이 아니라 "읽음 처리한 방 id"를 들어 방이 바뀌면 다시 돈다.
+	const firstLoadedRoomIdRef = useRef<string | null>(null);
 	useEffect(() => {
-		if (room && !firstLoadedRef.current) {
-			firstLoadedRef.current = true;
+		if (room && firstLoadedRoomIdRef.current !== id) {
+			firstLoadedRoomIdRef.current = id;
 			autoRead.markReadNow(latestMessageId);
+			setHasUnseenNew(false);
 		}
-	}, [autoRead, latestMessageId, room]);
+	}, [autoRead, id, latestMessageId, room]);
 
 	const invalidateRoom = useCallback(
 		() => queryClient.invalidateQueries({ queryKey: orpc.bambi.chats.getById.key({ input: { id } }) }).catch(() => undefined),
@@ -3875,7 +3877,9 @@ function SeekerChatRoomInner() {
 		);
 	}
 
-	if (roomQuery.isError || !room) {
+	// 캐시된 방 데이터가 아예 없는 초기 실패만 전체 화면을 갈아 끼운다. 보던 중 차단되면
+	// room(직전 성공 데이터)이 남아 이력을 유지하고, 사유는 입력바 자리에 띄운다(아래).
+	if (roomQuery.isError && !room) {
 		const blockMessage = getChatBlockMessage(roomQuery.error);
 		return (
 			<View className="flex-1 bg-background">
@@ -3887,6 +3891,16 @@ function SeekerChatRoomInner() {
 				) : (
 					<ErrorState onRetry={() => roomQuery.refetch()} />
 				)}
+			</View>
+		);
+	}
+
+	// 최초 로딩(데이터 없음)도 여기로 떨어져 스켈레톤을 그린다 — 위 에러 분기만 통과하면 된다.
+	if (!room) {
+		return (
+			<View className="flex-1 bg-background">
+				<ChatRoomHeader counterpartName={null} counterpartProfileImageUrl={null} jobTitle={null} onBack={() => router.back()} statusLine={null} />
+				<RoomSkeleton />
 			</View>
 		);
 	}
@@ -3927,11 +3941,12 @@ function SeekerChatRoomInner() {
 			/>
 		);
 
-		// inverted라 날짜 칩은 같은 아이템 "위"(=렌더 순서상 뒤)에 붙인다.
+		// inverted여도 각 셀은 scaleY:-1이 두 번 걸려 내용이 정방향이라 JSX 순서가 곧
+		// 시각 순서 — 날짜 칩은 메시지 "위"에 오도록 body 앞에 둔다.
 		return (
 			<View>
-				{body}
 				{dateLabel ? <ChatDateChip label={dateLabel} /> : null}
+				{body}
 			</View>
 		);
 	};
@@ -4062,7 +4077,7 @@ export default function SeekerChatRoomScreen() {
 - `50`은 `CHAT_MESSAGE_PAGE_SIZE`를 import해 쓴다.
 - 차단 대상은 구직자 앱이므로 `room.room.employerUserId`(상대=구인자).
 
-- [ ] **Step 4: 타입·린트**
+- [x] **Step 4: 타입·린트**
 
 Run (cwd 루트):
 ```bash
@@ -4071,7 +4086,7 @@ pnpm dlx ultracite check "apps/native/app/(seeker)/chats" "apps/native/app/(seek
 ```
 Expected: 오류 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add "apps/native/app/(seeker)/chats/[id].tsx" "apps/native/app/(seeker)/_layout.tsx" apps/native/src/components/report-dialog.tsx
@@ -4091,7 +4106,7 @@ git commit -m "feat(native): 채팅방 화면 재작성(inverted 리스트·실�
 **Interfaces:**
 - Consumes: `ChatRoomListItem` 컴포넌트(Task 9), `useChatUnreadBadge`(Task 6), `startChatErrorMessage`(Task 4), `connectChatSocket`(Task 5), `useVisitor`(`@/src/lib/guest-store`)
 
-- [ ] **Step 1: 목록 화면 재작성**
+- [x] **Step 1: 목록 화면 재작성**
 
 `apps/native/app/(seeker)/(tabs)/chats.tsx`:
 ```tsx
@@ -4208,7 +4223,7 @@ export default function SeekerChatsScreen() {
 }
 ```
 
-- [ ] **Step 2: 탭 배지**
+- [x] **Step 2: 탭 배지**
 
 `apps/native/app/(seeker)/(tabs)/_layout.tsx`에 import 추가:
 ```tsx
@@ -4234,7 +4249,7 @@ const chatUnreadCount = useChatUnreadBadge(visitorState === "member");
 ```
 `99`는 `UNREAD_CAP` 상수로 뺀다. `"#ffffff"`는 `useThemeColor("accent-foreground")` 값으로 대체한다.
 
-- [ ] **Step 3: 공고 상세 CTA 오류 문구**
+- [x] **Step 3: 공고 상세 CTA 오류 문구**
 
 `apps/native/app/(seeker)/jobs/[id].tsx`에서
 ```tsx
@@ -4250,11 +4265,11 @@ import { startChatErrorMessage } from "@/src/lib/chat/chat-errors";
 ```
 로 바꾼다.
 
-- [ ] **Step 4: 연락처 공개 화면 기본값 정리**
+- [x] **Step 4: 연락처 공개 화면 기본값 정리**
 
 `apps/native/app/(seeker)/chats/[id]/reveal.tsx`의 `useState("010-0000-0000")`을 `useState("")`로 바꾸고, 버튼 `isDisabled`에 `|| contactValue.trim().length < 3`을 추가한다(서버 zod `contactValue` 3~120자).
 
-- [ ] **Step 5: 타입·린트**
+- [x] **Step 5: 타입·린트**
 
 Run (cwd 루트):
 ```bash
@@ -4263,7 +4278,7 @@ pnpm dlx ultracite check "apps/native/app/(seeker)/(tabs)" "apps/native/app/(see
 ```
 Expected: 오류 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add "apps/native/app/(seeker)/(tabs)/chats.tsx" "apps/native/app/(seeker)/(tabs)/_layout.tsx" "apps/native/app/(seeker)/jobs/[id].tsx" "apps/native/app/(seeker)/chats/[id]/reveal.tsx"
@@ -4278,12 +4293,12 @@ git commit -m "feat(native): 채팅 목록 메신저식 재작성·탭 미읽음
 - Modify: `docs/superpowers/plans/2026-09-03-native-chat.md` (체크박스·검증 노트)
 - Modify: `docs/superpowers/specs/2026-09-03-native-chat-design.md` (구현 중 바뀐 결정 반영: 시스템 메시지 공유 파일 추가, 메시지 id crypto 폴백, `chat-read-watermark.ts`·`chat-attachment-picker.ts` 추가)
 
-- [ ] **Step 1: 테스트 전체**
+- [x] **Step 1: 테스트 전체**
 
 Run (cwd `packages/api`): `pnpm vitest run test/services` → 전부 통과(기존 dev DB 의존 기저 실패 3건은 사전에 기록된 것이면 그대로 보고).
-Run (cwd `apps/native`): `pnpm vitest run` → 7 files passed.
+Run (cwd `apps/native`): `pnpm vitest run` → native 6 files / 30 tests passed.
 
-- [ ] **Step 2: 타입 검사 3패키지**
+- [x] **Step 2: 타입 검사 3패키지**
 
 Run (cwd 루트):
 ```bash
@@ -4293,14 +4308,14 @@ pnpm --filter @bambi-app/api check-types
 ```
 Expected: 오류 0.
 
-- [ ] **Step 3: 린트 전체 경로**
+- [x] **Step 3: 린트 전체 경로**
 
 ```bash
 pnpm dlx ultracite check apps/native/src apps/native/app apps/native/test packages/api/src/services packages/api/test/services apps/web/src/components/bambi/screens apps/web/src/lib/bambi apps/web/src/app/moderator/chats apps/web/src/app/seeker/jobs
 ```
 Expected: 오류 0.
 
-- [ ] **Step 4: 잔여 참조 점검**
+- [x] **Step 4: 잔여 참조 점검**
 
 ```bash
 grep -rn "lib/bambi/chat-message-grouping\|lib/bambi/chat-room-messages\|lib/bambi/chat-block\"" apps/web/src apps/web/test
@@ -4308,7 +4323,7 @@ grep -rn "Alert.alert" apps/native/src/components/chat "apps/native/app/(seeker)
 ```
 Expected: 둘 다 출력 없음.
 
-- [ ] **Step 5: 문서 갱신·커밋**
+- [x] **Step 5: 문서 갱신·커밋**
 
 플랜 체크박스를 실제 완료 상태로, 스펙의 "아키텍처" 표에 신규 파일 4개(`bambi-chat-system-messages.ts`, `chat-read-watermark.ts`, `chat-attachment-picker.ts`, `chat-room-header.tsx`)와 "메시지 id 생성기 crypto 폴백" 결정을 추가한다. 스펙의 `app/_layout.tsx`에 `ToastProvider` 추가 항목은 삭제한다 — heroui-native 1.0.3의 `HeroUINativeProvider`가 `ToastProvider`를 내장하므로(`node_modules/heroui-native/lib/module/providers/hero-ui-native/provider.js`) `useToast`만 쓰면 된다.
 
@@ -4317,7 +4332,7 @@ git add docs/superpowers
 git commit -m "docs: native 채팅 스펙·플랜을 구현 결과에 맞춰 갱신"
 ```
 
-- [ ] **Step 6: 사용자 실측 안내(보고에 포함)**
+- [x] **Step 6: 사용자 실측 안내(보고에 포함)**
 
 에뮬레이터·실기기에서 확인할 항목을 보고에 나열한다: (1) 목록 진입·배지 (2) 방 진입 시 읽음 처리로 배지 0 (3) 텍스트 전송 낙관적 표시→확정 (4) 두 계정 간 실시간 수신·타이핑 (5) 이미지·PDF 첨부(GCS env 필요) (6) 면접 제안 카드 확정/거절 (7) 연락처 요청 카드 공개/거절 (8) 차단·나가기 Dialog (9) 백그라운드 복귀 후 재조회 (10) 마감 공고 상태 줄.
 

@@ -27,6 +27,7 @@
 | 전송 | 낙관적 삽입 + 실패 재전송(멱등키로 중복 방지) | web은 낙관적 삽입 없음 → 개선점 |
 | 소켓 인증 | orpc와 동일하게 `authClient.getCookie()`를 `extraHeaders.Cookie`로 전달 | 서버 미들웨어가 `createContext(headers)`로 세션 조회 |
 | 피드백 UI | `Alert.alert` 대신 heroui `Dialog`·`Toast` | 앱 톤 통일 |
+| 메시지 id 생성기 | crypto 폴백. Hermes(RN)에는 `globalThis.crypto`가 없어 `generateChatMessageId`가 웹크립토 부재 시 `Math.random`으로 바이트를 채운다 | 이 id는 보안 토큰이 아니라 정렬 가능한 멱등키. 서버·브라우저는 항상 crypto 경로 |
 | DB·서버 | 변경 없음 | 마이그레이션 0건 |
 
 ## 아키텍처
@@ -38,8 +39,9 @@
 | `chat-message-grouping.ts` | `bambi-chat-message-grouping.ts` | 같은 발신자·같은 날·같은 분 그룹핑, 날짜 칩 라벨 |
 | `chat-room-messages.ts` | `bambi-chat-room-messages.ts` | `ChatMessageCursor` 타입, id 기준 dedupe + `(createdAt,id)` 정렬 병합 |
 | `chat-block.ts` | `bambi-chat-block.ts` | `chatBlockReason` 4종 → 안내 문구 |
+| (web 채팅방 컴포넌트에서 추출) | `bambi-chat-system-messages.ts` | `contact_request`·`interview_proposal` metadata 리더·문구 4함수(`readContactRequestMetadata`, `getContactRequestNotice`, `readInterviewProposalMetadata`, `getInterviewProposalNotice`). `getContactRequestNotice`는 앱마다 다른 전화번호 포맷을 피하려 호출부가 포맷한 `revealedPhoneLabel`을 받는다 |
 
-테스트 3개(`apps/web/test/lib/bambi/chat-*.test.ts`)도 `packages/api/test/services/`로 이동. 기존 `bambi-chat-message-id.ts`(`generateChatMessageId`), `bambi-chat-realtime.ts`(이벤트 타입), `bambi-media-policy.ts`(허용 mime·10MB)는 그대로 import.
+테스트 3개(`apps/web/test/lib/bambi/chat-*.test.ts`)도 `packages/api/test/services/`로 이동하고 `bambi-chat-system-messages.test.ts`를 신규 추가. 기존 `bambi-chat-message-id.ts`(`generateChatMessageId`, crypto 폴백 추가), `bambi-chat-realtime.ts`(이벤트 타입), `bambi-media-policy.ts`(허용 mime·10MB)는 그대로 import.
 
 ### native 데이터·훅 계층 `apps/native/src/lib/chat/`
 
@@ -53,6 +55,9 @@
 | `chat-optimistic.ts` | 낙관적 메시지 타입·병합(같은 id 서버 row 우선)·inverted 변환 — 순수 함수 |
 | `chat-time.ts` | 목록 시각(오늘=HH:mm, 어제, M. D.), 말풍선 시각(오전/오후 h:mm) — 순수 함수 |
 | `chat-typing.ts` | 타이핑 수신 리듀서(5초 타임아웃 자동 해제), 발신 판정(3초 무입력 stop) — 순수 함수 |
+| `chat-read-watermark.ts` | 읽음 기준선 순수 함수(`resolveNextChatReadWatermark`, `canFlushChatRead`). markRead 응답이 더 새 안읽음을 알리면 다음 기준선으로 재주장 |
+| `chat-attachment-picker.ts` | 피커 결과 정규화(`toPickedAttachment`)·정책 검증(`validatePickedAttachment`, `bambi-media-policy` 경유)·이미지 판정 — 순수 함수 |
+| `chat-types.ts` | oRPC 응답 파생 타입과 `CHAT_MESSAGE_PAGE_SIZE = 50`(서버 기본 페이지 크기) 정의 |
 
 ### native UI 계층 `apps/native/src/components/chat/`
 
@@ -65,6 +70,7 @@
 | `chat-date-chip.tsx` | 가운데 `Chip variant="soft"` 날짜 |
 | `chat-typing-indicator.tsx` | 상대 아바타 + 점 3개 reanimated 말풍선 |
 | `chat-composer.tsx` | `+` 첨부(BottomSheet: 앨범·카메라·파일) / `TextArea variant="secondary"` 1~5줄 / 전송 아이콘 `primary`(빈 내용 비활성). 첨부 선택 후 썸네일 미리보기 + 제거. `KeyboardStickyView`로 키보드 위 고정. 하단 safe-area 패딩 1회 |
+| `chat-room-header.tsx` | 커스텀 헤더: 뒤로 · 상대 아바타 · 상대명 · 공고명 · 케밥(`chat-room-menu`) |
 | `chat-room-menu.tsx` | 헤더 케밥 `Menu`: 연락처 공개 보기(확정 면접 있을 때) · 차단 · 신고 · 나가기(`danger`). 차단·나가기는 `Dialog` 확인 |
 | `chat-new-message-pill.tsx` | 위로 스크롤 중 새 메시지 도착 시 하단 "새 메시지 ↓" 플로팅 칩 |
 | `chat-block-notice.tsx` | 차단·탈퇴·마감 사유 안내 카드(입력바 자리) |
@@ -77,7 +83,7 @@
 | `app/(seeker)/chats/[id].tsx` | 전면 재작성. 커스텀 헤더(뒤로·상대 아바타·상대명·공고명·케밥), 상태 줄(마감·탈퇴·차단 시만), `FlatList inverted` 본문, 타이핑 인디케이터, 새 메시지 칩, composer 또는 차단 안내 |
 | `app/(seeker)/chats/[id]/reveal.tsx` | 유지. 문구·상태 라벨 맵만 정리 |
 | `app/(seeker)/(tabs)/_layout.tsx` | 채팅 탭 `tabBarBadge` = `unreadState.unreadMessageCount`(0이면 미표시) |
-| `app/_layout.tsx` | `ToastProvider` 추가 |
+| `app/(seeker)/_layout.tsx` | 채팅방 스택 헤더 숨김(커스텀 `chat-room-header` 사용) |
 | `app/(seeker)/jobs/[id].tsx` | CTA 실패 사유 인라인 문구 보강(휴대폰 미인증·마감 등) |
 
 ## 데이터 흐름
@@ -106,12 +112,13 @@
 
 | 상황 | 처리 |
 |---|---|
-| `getById` FORBIDDEN + `chatBlockReason` | 공유 문구 함수 → 입력바 자리 안내 카드, 이력은 표시 |
+| `getById` FORBIDDEN + `chatBlockReason` | 콜드 진입은 서버가 이력을 내려주지 않아 사유만 전체 화면 안내. 보던 중 차단되면 이력을 유지한 채 입력바 자리에 사유 카드 |
 | `sendMessage` TOO_MANY_REQUESTS | 서버 메시지 인라인 경고 |
 | CONFLICT(면접 상태 경합·연락처 응답 경합) | Toast 후 방 재조회 |
 | 소켓 연결 실패 | 사용자에게 알리지 않음. 방 화면 표시 중 15초 폴링 보강, 재연결 시 중단 |
 | 업로드 실패·크기 초과·mime 불허 | 각각 Toast 구분 안내 |
-| 상대 탈퇴·공고 마감 | 상태 줄 표시 + 전송 차단 |
+| 상대 탈퇴 | 상태 줄 표시 + 전송 차단 |
+| 공고 마감 | 상태 줄만 표시(서버 `sendMessage`·web과 동일하게 전송은 막지 않음) |
 | 그 외 | `ErrorState` 재시도 |
 
 ## UI 원칙
@@ -132,7 +139,7 @@
 
 ## 의존성 변경
 
-- `pnpm-workspace.yaml` catalog: `socket.io-client: ^4.8.3`, `expo-document-picker: <pnpm expo install이 고른 SDK 호환 버전>`.
+- `pnpm-workspace.yaml` catalog: `socket.io-client: ^4.8.3`, `expo-document-picker: ~56.0.4`(pnpm expo install이 고른 SDK 56 호환 버전).
 - `apps/web/package.json`: `socket.io-client` → `"catalog:"`.
 - `apps/native/package.json`: `socket.io-client`, `expo-document-picker` → `"catalog:"`.
 - native 설치는 `pnpm expo install expo-document-picker`로 버전 확정 후 catalog에 반영.
