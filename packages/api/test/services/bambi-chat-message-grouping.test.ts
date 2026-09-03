@@ -3,7 +3,7 @@ import {
 	annotateChatMessages,
 	formatChatDateLabel,
 	formatChatTimeLabel,
-} from "@/lib/bambi/chat-message-grouping";
+} from "@/services/bambi-chat-message-grouping";
 
 // 타임존에 흔들리지 않게 로컬 시각 생성자로 만든다(UTC 문자열이면 CI 타임존에 따라 날짜가 밀린다).
 const message = ({
@@ -101,7 +101,7 @@ describe("annotateChatMessages", () => {
 			true,
 		]);
 		expect(annotated.map(({ isGroupEnd }) => isGroupEnd)).toEqual([true, true]);
-		expect(annotated[1].dateLabel).toBeNull();
+		expect(annotated[1]?.dateLabel).toBeNull();
 	});
 
 	it("발신자가 바뀌면 같은 분이어도 새 그룹", () => {

@@ -1,7 +1,7 @@
 "use client";
 
+import { isScrolledToBottom } from "@bambi-app/api/services/bambi-chat-room-messages";
 import { useCallback, useRef, useState } from "react";
-import { isScrolledToBottom } from "./chat-room-messages";
 
 /**
  * 채팅방 메시지 영역의 내부 스크롤 동작(문서가 아니라 이 영역만 스크롤한다).

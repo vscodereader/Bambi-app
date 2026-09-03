@@ -1,6 +1,12 @@
 "use client";
 
+import { getChatBlockMessage } from "@bambi-app/api/services/bambi-chat-block";
+import {
+	annotateChatMessages,
+	formatChatTimeLabel,
+} from "@bambi-app/api/services/bambi-chat-message-grouping";
 import { generateChatMessageId } from "@bambi-app/api/services/bambi-chat-message-id";
+import { mergeChatMessagesById } from "@bambi-app/api/services/bambi-chat-room-messages";
 import {
 	ALLOWED_CHAT_MEDIA_MIME_TYPES,
 	CHAT_MEDIA_MAX_BYTES,
@@ -34,12 +40,6 @@ import {
 	useState,
 } from "react";
 import { toast } from "sonner";
-import { getChatBlockMessage } from "@/lib/bambi/chat-block";
-import {
-	annotateChatMessages,
-	formatChatTimeLabel,
-} from "@/lib/bambi/chat-message-grouping";
-import { mergeChatMessagesById } from "@/lib/bambi/chat-room-messages";
 import {
 	detectImageSignature,
 	isPdfSignature,

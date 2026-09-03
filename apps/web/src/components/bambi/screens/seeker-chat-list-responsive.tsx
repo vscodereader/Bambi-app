@@ -1,13 +1,13 @@
 "use client";
 
 import type { AppRouter } from "@bambi-app/api/routers/index";
+import { formatChatTimeLabel } from "@bambi-app/api/services/bambi-chat-message-grouping";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { InferRouterOutputs } from "@orpc/server";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
-import { formatChatTimeLabel } from "@/lib/bambi/chat-message-grouping";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { connectBambiChatSocket } from "@/lib/bambi-chat-realtime";
 import { orpc } from "@/utils/orpc";
