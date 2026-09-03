@@ -24,6 +24,11 @@ const readServerMessage = (error: unknown): string | null => {
 	return ENGLISH_FALLBACK_PATTERN.test(error.message) ? null : error.message;
 };
 
+// oRPC가 아닌 로컬 예외(fetch·검증 등)의 message를 안전하게 노출한다. 한국어 등
+// 우리 문구면 그대로, 영어 기본값(예: "Network request failed")이면 fallback.
+export const localErrorMessage = (error: unknown, fallback: string): string =>
+	readServerMessage(error) ?? fallback;
+
 const GENERIC_MESSAGE = "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
 const RATE_LIMIT_MESSAGE = "요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.";
 

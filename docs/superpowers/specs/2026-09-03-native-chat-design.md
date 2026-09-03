@@ -48,7 +48,7 @@
 | 파일 | 책임 |
 |---|---|
 | `chat-socket.ts` | socket.io-client 싱글턴. `${EXPO_PUBLIC_SERVER_URL}` 접속, `autoConnect:false`, `extraHeaders.Cookie`. `connectChatSocket`, `joinChatRoom`(ack 5초), `leaveChatRoom`, `scheduleChatRoomLeave`(30초 유예), `emitTypingStarted/Stopped`. 미들웨어 거절(`socket.active===false`) 시 지수 백오프 재연결 |
-| `use-chat-room-realtime.ts` | 방 진입 시 join, 이벤트 → 쿼리 무효화·타이핑 state. `connect` 시 재join + 재조회. AppState background→active 시 재조회. 소켓 끊김 동안 15초 폴링 보강. unmount 시 typing stop + leave 예약 |
+| `use-chat-room-realtime.ts` | 입력 `currentUserId`(ref로 보관, 빈값→실값 전환 시 재join 방지). 방 진입 시 join, 이벤트 → 쿼리 무효화·타이핑 state. `connect` 시 재join + 재조회. AppState background→active 시 재조회. 소켓 끊김 동안 15초 폴링 보강. unmount 시 typing stop + leave 예약. 반환에 `counterpartReadMessageIds`(상대 읽음 영수증 집합)·`realtimeError`(`chat:error` 문구) 추가 |
 | `use-chat-messages.ts` | `getById({id, limit:50})` 최신 페이지 + 커서 누적 과거 페이지 + 낙관적 메시지를 공유 병합 함수로 합쳐 inverted 배열 반환. `loadOlder()`는 `hasMoreMessages`·`nextCursor`로 fetchQuery |
 | `use-chat-auto-read.ts` | 첫 로드 즉시 markRead, 이후 300ms 코얼레싱. 성공 시 `listMine` 해당 방 unreadCount 0, `unreadState`를 `totalUnreadMessageCount`로 setQueryData. `chat:unread:updated`가 0이 아니면 재주장. 화면 blur 시 중단 |
 | `use-chat-send.ts` | 텍스트·첨부 전송 상태 머신(sending/failed/sent), 재전송, 첨부 업로드(mime·크기 사전 검사 → intent → PUT → sendMediaMessage) |
@@ -65,11 +65,11 @@
 |---|---|
 | `chat-room-list-item.tsx` | `ListGroup.Item`: `Avatar` prefix, 상대명·공고명·마지막 메시지 content, 시각·미읽음 `Chip` suffix. 차단·탈퇴 상태 칩 |
 | `chat-message-bubble.tsx` | 텍스트 말풍선. 내 것 `bg-accent text-accent-foreground` 우측, 상대 `Surface variant="secondary"` 좌측. 그룹 시작에만 아바타·이름, 그룹 끝에만 시각. 내 마지막 메시지 아래 읽음/전송 중/실패·재전송 |
-| `chat-attachment-message.tsx` | 이미지: 색 말풍선 없이 `rounded-xl` 원본 비율(최대 너비 78%, 높이 상한), 탭 → 풀스크린 `Dialog` 뷰어. PDF: 아이콘·이름·용량 카드, 탭 → `expo-web-browser` |
+| `chat-attachment-message.tsx` | 이미지: 색 말풍선 없이 `rounded-xl` 원본 비율(최대 너비 78%), 탭 → 풀스크린 `Dialog` 뷰어. PDF: 아이콘·이름·용량 카드, 탭 → `expo-web-browser` |
 | `chat-system-card.tsx` | 연락처 요청·면접 제안 카드. 가운데 `Surface`, 아이콘·제목·상세·상태 칩(라벨 맵). 응답 권한자에게만 `primary` 확정 + `tertiary` 거절 |
 | `chat-date-chip.tsx` | 가운데 `Chip variant="soft"` 날짜 |
 | `chat-typing-indicator.tsx` | 상대 아바타 + 점 3개 reanimated 말풍선 |
-| `chat-composer.tsx` | `+` 첨부(BottomSheet: 앨범·카메라·파일) / `TextArea variant="secondary"` 1~5줄 / 전송 아이콘 `primary`(빈 내용 비활성). 첨부 선택 후 썸네일 미리보기 + 제거. `KeyboardStickyView`로 키보드 위 고정. 하단 safe-area 패딩 1회 |
+| `chat-composer.tsx` | `+` 첨부(BottomSheet: 앨범·카메라·파일) / `TextArea variant="secondary"` 1~5줄 / 전송 아이콘 `primary`(빈 내용 비활성). 첨부 선택 후 썸네일 미리보기 + 제거. `KeyboardAvoidingView`(react-native-keyboard-controller, behavior padding)로 키보드 위 고정. 하단 safe-area 패딩 1회 |
 | `chat-room-header.tsx` | 커스텀 헤더: 뒤로 · 상대 아바타 · 상대명 · 공고명 · 케밥(`chat-room-menu`) |
 | `chat-room-menu.tsx` | 헤더 케밥 `Menu`: 연락처 공개 보기(확정 면접 있을 때) · 차단 · 신고 · 나가기(`danger`). 차단·나가기는 `Dialog` 확인 |
 | `chat-new-message-pill.tsx` | 위로 스크롤 중 새 메시지 도착 시 하단 "새 메시지 ↓" 플로팅 칩 |
@@ -90,11 +90,12 @@
 
 ### 전송
 1. `generateChatMessageId()` → 낙관적 말풍선 삽입(status sending) → `sendMessage({chatRoomId, body, messageId})`.
-2. 성공: 서버 row가 캐시에 들어오면 같은 id로 대체. 실패: 말풍선에 "재전송" 탭, 3회 실패 시 삭제 버튼.
+2. 성공: 서버 row가 캐시에 들어오면 같은 id로 대체. 실패: 말풍선에 재전송·삭제, 재전송은 최대 3회(소진 후 삭제만).
 3. 첨부: picker → 허용 mime 4종·10MB 사전 검사 → `createAttachmentUpload` → `fetch(uploadUrl, PUT)` → `sendMediaMessage({storageKey, fileName, mimeType, byteSize, messageId, body?, textMessageId?})`. 업로드 중 진행 스피너 카드.
 
 ### 수신
-- 방 진입: `getById` → `chat:join`. `chat:message:created` → `getById` 무효화 → 병합. `chat:room:updated` → `getById` 무효화. `chat:message:read` → 읽음 표시. `chat:typing:*` → 리듀서(5초 타임아웃).
+- 방 진입: `getById` → `chat:join`. `chat:message:created` → `getById` 무효화 → 병합. `chat:room:updated` → `getById` 무효화. `chat:typing:*` → 리듀서(5초 타임아웃, 내 이벤트는 무시).
+- `chat:message:read`(readerUserId≠나) → 내 메시지 "읽음" 표시(진입 후 실수신분만 `counterpartReadMessageIds`에 누적, 방 바뀌면 초기화). `chat:error` → 입력바 위 인라인 문구(`realtimeError`).
 - 목록: `chat:list:updated` → `listMine`·`unreadState` 무효화.
 - AppState active 복귀 → 방·목록 재조회. `connect` → 재join + 재조회.
 
@@ -113,7 +114,7 @@
 | 상황 | 처리 |
 |---|---|
 | `getById` FORBIDDEN + `chatBlockReason` | 콜드 진입은 서버가 이력을 내려주지 않아 사유만 전체 화면 안내. 보던 중 차단되면 이력을 유지한 채 입력바 자리에 사유 카드 |
-| `sendMessage` TOO_MANY_REQUESTS | 서버 메시지 인라인 경고 |
+| `sendMessage` TOO_MANY_REQUESTS | 토스트(`chatMutationErrorMessage` 서버 문구) |
 | CONFLICT(면접 상태 경합·연락처 응답 경합) | Toast 후 방 재조회 |
 | 소켓 연결 실패 | 사용자에게 알리지 않음. 방 화면 표시 중 15초 폴링 보강, 재연결 시 중단 |
 | 업로드 실패·크기 초과·mime 불허 | 각각 Toast 구분 안내 |

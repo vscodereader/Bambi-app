@@ -27,28 +27,45 @@ const OFFLINE_POLL_MS = 15_000;
  * 오프라인 폴링을 한 곳에서 관리한다. 화면은 반환값만 그린다.
  */
 export function useChatRoomRealtime({
+	currentUserId,
 	onIncomingMessage,
 	onUnreadRemaining,
 	roomId,
 }: {
+	currentUserId: string;
 	onIncomingMessage: (messageId: string) => void;
 	onUnreadRemaining: () => void;
 	roomId: string;
-}): { isConnected: boolean; typingUserIds: string[] } {
+}): {
+	counterpartReadMessageIds: ReadonlySet<string>;
+	isConnected: boolean;
+	realtimeError: null | string;
+	typingUserIds: string[];
+} {
 	const queryClient = useQueryClient();
 	const [isConnected, setIsConnected] = useState(false);
 	const [typing, setTyping] = useState<TypingState>({});
 	const [now, setNow] = useState(() => Date.now());
+	const [realtimeError, setRealtimeError] = useState<null | string>(null);
+	const [counterpartReadMessageIds, setCounterpartReadMessageIds] = useState<
+		ReadonlySet<string>
+	>(() => new Set());
 	const onIncomingMessageRef = useRef(onIncomingMessage);
 	const onUnreadRemainingRef = useRef(onUnreadRemaining);
+	// currentUserId는 처음엔 빈 문자열, 방 로드 후 실값으로 바뀐다 — deps에 넣으면
+	// 그 전환에 재join이 돈다. ref로 들어 최신값만 읽고 effect는 roomId로만 재실행한다.
+	const currentUserIdRef = useRef(currentUserId);
 
 	useEffect(() => {
 		onIncomingMessageRef.current = onIncomingMessage;
 		onUnreadRemainingRef.current = onUnreadRemaining;
-	}, [onIncomingMessage, onUnreadRemaining]);
+		currentUserIdRef.current = currentUserId;
+	}, [currentUserId, onIncomingMessage, onUnreadRemaining]);
 
 	useEffect(() => {
 		const socket = connectChatSocket();
+		setCounterpartReadMessageIds(new Set());
+		setRealtimeError(null);
 		const roomKey = orpc.bambi.chats.getById.key({ input: { id: roomId } });
 		const invalidateRoom = () => {
 			queryClient
@@ -72,6 +89,7 @@ export function useChatRoomRealtime({
 		};
 
 		const handleConnect = () => {
+			setRealtimeError(null);
 			join();
 			invalidateRoom();
 		};
@@ -91,11 +109,33 @@ export function useChatRoomRealtime({
 				invalidateRoom();
 			}
 		};
+		// 상대가 내 메시지를 읽으면 그 영수증으로 '읽음' 표시. 내가 읽은 이벤트는 무시.
+		const handleMessageRead = (payload: {
+			messageId: string;
+			readerUserId: string;
+			roomId: string;
+		}) => {
+			if (payload.roomId !== roomId) {
+				return;
+			}
+			invalidateRoom();
+			if (payload.readerUserId !== currentUserIdRef.current) {
+				setCounterpartReadMessageIds((prev) =>
+					prev.has(payload.messageId)
+						? prev
+						: new Set(prev).add(payload.messageId)
+				);
+			}
+		};
 		const handleUnreadUpdated = (payload: {
 			roomId: string;
 			unreadCount: number;
+			userId: string;
 		}) => {
-			if (payload.roomId !== roomId) {
+			if (
+				payload.roomId !== roomId ||
+				payload.userId !== currentUserIdRef.current
+			) {
 				return;
 			}
 			invalidateRoom();
@@ -107,7 +147,10 @@ export function useChatRoomRealtime({
 			roomId: string;
 			userId: string;
 		}) => {
-			if (payload.roomId === roomId) {
+			if (
+				payload.roomId === roomId &&
+				payload.userId !== currentUserIdRef.current
+			) {
 				setTyping((state) =>
 					applyTypingStarted(state, payload.userId, Date.now())
 				);
@@ -117,20 +160,27 @@ export function useChatRoomRealtime({
 			roomId: string;
 			userId: string;
 		}) => {
-			if (payload.roomId === roomId) {
+			if (
+				payload.roomId === roomId &&
+				payload.userId !== currentUserIdRef.current
+			) {
 				setTyping((state) => applyTypingStopped(state, payload.userId));
 			}
+		};
+		const handleChatError = (payload: { message: string }) => {
+			setRealtimeError(payload.message);
 		};
 
 		socket.on("connect", handleConnect);
 		socket.on("disconnect", handleDisconnect);
 		socket.on("chat:message:created", handleMessageCreated);
-		socket.on("chat:message:read", handleRoomChanged);
+		socket.on("chat:message:read", handleMessageRead);
 		socket.on("chat:room:updated", handleRoomChanged);
 		socket.on("chat:list:updated", invalidateList);
 		socket.on("chat:unread:updated", handleUnreadUpdated);
 		socket.on("chat:typing:started", handleTypingStarted);
 		socket.on("chat:typing:stopped", handleTypingStopped);
+		socket.on("chat:error", handleChatError);
 
 		if (socket.connected) {
 			join();
@@ -144,7 +194,7 @@ export function useChatRoomRealtime({
 					invalidateRoom();
 					invalidateList();
 					if (!socket.connected) {
-						socket.connect();
+						connectChatSocket();
 					}
 				}
 			}
@@ -154,12 +204,13 @@ export function useChatRoomRealtime({
 			socket.off("connect", handleConnect);
 			socket.off("disconnect", handleDisconnect);
 			socket.off("chat:message:created", handleMessageCreated);
-			socket.off("chat:message:read", handleRoomChanged);
+			socket.off("chat:message:read", handleMessageRead);
 			socket.off("chat:room:updated", handleRoomChanged);
 			socket.off("chat:list:updated", invalidateList);
 			socket.off("chat:unread:updated", handleUnreadUpdated);
 			socket.off("chat:typing:started", handleTypingStarted);
 			socket.off("chat:typing:stopped", handleTypingStopped);
+			socket.off("chat:error", handleChatError);
 			appStateSubscription.remove();
 			emitChatTypingStopped(roomId);
 			scheduleChatRoomLeave(roomId);
@@ -199,5 +250,10 @@ export function useChatRoomRealtime({
 		return () => clearInterval(timerId);
 	}, [hasTyping]);
 
-	return { isConnected, typingUserIds: typingUserIds(typing, now) };
+	return {
+		counterpartReadMessageIds,
+		isConnected,
+		realtimeError,
+		typingUserIds: typingUserIds(typing, now),
+	};
 }

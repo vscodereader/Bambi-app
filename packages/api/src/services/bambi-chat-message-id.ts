@@ -31,7 +31,7 @@ const fillRandomBytes = (bytes: Uint8Array): void => {
  * 앞 48비트가 Unix ms 타임스탬프라 id 자체가 생성 시간순으로 정렬된다.
  * 클라이언트가 전송 전에 id를 만들어 보내고 서버는 PK 충돌로 재시도를
  * 흡수하므로(멱등성), 브라우저·Node 양쪽에서 동작해야 한다 —
- * crypto.getRandomValues만 사용한다.
+ * 웹크립토가 있으면 crypto.getRandomValues, 없으면(Hermes) Math.random 폴백.
  * 정렬의 정본은 여전히 DB createdAt이다. id의 타임스탬프는 클라이언트
  * 시계라 신뢰하지 않고, 동시각 타이브레이커·중복 판별·커서 구성에만 쓴다.
  */

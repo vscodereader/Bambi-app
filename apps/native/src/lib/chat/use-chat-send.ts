@@ -9,7 +9,11 @@ import {
 	type PickedAttachment,
 	validatePickedAttachment,
 } from "./chat-attachment-picker";
-import { chatMutationErrorMessage } from "./chat-errors";
+import {
+	chatMutationErrorMessage,
+	localErrorMessage,
+	readOrpcErrorCode,
+} from "./chat-errors";
 import {
 	createOptimisticImageMessage,
 	createOptimisticTextMessage,
@@ -207,8 +211,11 @@ export function useChatSend({
 			} catch (error) {
 				markFailed(id);
 				onErrorRef.current(
-					error instanceof Error && !("code" in error)
-						? error.message
+					readOrpcErrorCode(error) === null
+						? localErrorMessage(
+								error,
+								"파일을 보내지 못했어요. 네트워크를 확인하고 다시 시도해 주세요."
+							)
 						: chatMutationErrorMessage(error)
 				);
 			} finally {

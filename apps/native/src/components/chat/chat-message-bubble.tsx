@@ -44,6 +44,7 @@ function ChatBubbleAvatarColumn({
 
 // 말풍선 아래 상태 줄(전송 중·실패·시각·읽음). 본 컴포넌트 분기 복잡도를 낮추려 분리.
 function ChatMessageStatusRow({
+	canRetry,
 	isGroupEnd,
 	isMine,
 	isReadByCounterpart,
@@ -53,6 +54,7 @@ function ChatMessageStatusRow({
 	sendStatus,
 	timeLabel,
 }: {
+	canRetry: boolean;
 	isGroupEnd: boolean;
 	isMine: boolean;
 	isReadByCounterpart: boolean;
@@ -73,13 +75,15 @@ function ChatMessageStatusRow({
 			{sendStatus === "failed" ? (
 				<>
 					<Text className="text-danger text-xs">전송 실패</Text>
-					<Pressable
-						accessibilityRole="button"
-						hitSlop={8}
-						onPress={() => onRetry?.(messageId)}
-					>
-						<Text className="font-semibold text-accent text-xs">재전송</Text>
-					</Pressable>
+					{canRetry ? (
+						<Pressable
+							accessibilityRole="button"
+							hitSlop={8}
+							onPress={() => onRetry?.(messageId)}
+						>
+							<Text className="font-semibold text-accent text-xs">재전송</Text>
+						</Pressable>
+					) : null}
 					<Pressable
 						accessibilityRole="button"
 						hitSlop={8}
@@ -102,6 +106,7 @@ function ChatMessageStatusRow({
 // 카카오톡식 말풍선. 그룹 첫 메시지에만 아바타·이름, 그룹 마지막에만 시각.
 // 내 말풍선은 accent, 상대는 surface-secondary. 첨부 메시지는 색 말풍선 없이 콘텐츠만.
 export function ChatMessageBubble({
+	canRetry = true,
 	counterpartName,
 	counterpartProfileImageUrl,
 	isGroupEnd,
@@ -112,6 +117,8 @@ export function ChatMessageBubble({
 	onDiscard,
 	onRetry,
 }: {
+	// 재전송 3회 소진 시 false — 재전송 버튼을 숨기고 삭제만 남긴다.
+	canRetry?: boolean;
 	counterpartName: null | string;
 	counterpartProfileImageUrl: null | string;
 	isGroupEnd: boolean;
@@ -179,6 +186,7 @@ export function ChatMessageBubble({
 					</View>
 				)}
 				<ChatMessageStatusRow
+					canRetry={canRetry}
 					isGroupEnd={isGroupEnd}
 					isMine={isMine}
 					isReadByCounterpart={isReadByCounterpart}

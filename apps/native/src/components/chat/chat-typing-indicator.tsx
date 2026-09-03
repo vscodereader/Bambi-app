@@ -2,6 +2,7 @@ import { Avatar } from "heroui-native";
 import { useEffect } from "react";
 import { View } from "react-native";
 import Animated, {
+	cancelAnimation,
 	Easing,
 	useAnimatedStyle,
 	useSharedValue,
@@ -39,6 +40,8 @@ function TypingDot({ index }: { index: number }) {
 				-1
 			)
 		);
+
+		return () => cancelAnimation(progress);
 	}, [index, progress]);
 
 	const style = useAnimatedStyle(() => ({

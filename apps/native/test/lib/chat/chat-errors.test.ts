@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	attachmentPolicyMessage,
 	chatMutationErrorMessage,
+	localErrorMessage,
 	readOrpcErrorCode,
 	startChatErrorMessage,
 } from "@/src/lib/chat/chat-errors";
@@ -79,6 +80,20 @@ describe("startChatErrorMessage", () => {
 	it("NOT_FOUND", () => {
 		expect(startChatErrorMessage(orpcError("NOT_FOUND"))).toBe(
 			"공고를 찾을 수 없어요."
+		);
+	});
+});
+
+describe("localErrorMessage", () => {
+	it("한국어 등 우리 문구는 그대로 노출", () => {
+		expect(
+			localErrorMessage(new Error("10MB 이하 파일만 보낼 수 있어요."), "폴백")
+		).toBe("10MB 이하 파일만 보낼 수 있어요.");
+	});
+
+	it("영어 기본값(Network request failed)은 fallback", () => {
+		expect(localErrorMessage(new Error("Network request failed"), "폴백")).toBe(
+			"폴백"
 		);
 	});
 });

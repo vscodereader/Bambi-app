@@ -38,20 +38,20 @@ import { getConfirmedScheduleId } from "@/src/lib/bambi-native";
 import { chatMutationErrorMessage } from "@/src/lib/chat/chat-errors";
 import {
 	type ChatTimelineMessage,
+	type OptimisticChatMessage,
 	toInvertedTimeline,
 } from "@/src/lib/chat/chat-optimistic";
 import { CHAT_MESSAGE_PAGE_SIZE } from "@/src/lib/chat/chat-types";
 import { useChatAutoRead } from "@/src/lib/chat/use-chat-auto-read";
 import { useChatMessages } from "@/src/lib/chat/use-chat-messages";
 import { useChatRoomRealtime } from "@/src/lib/chat/use-chat-room-realtime";
-import { useChatSend } from "@/src/lib/chat/use-chat-send";
+import { MAX_SEND_ATTEMPTS, useChatSend } from "@/src/lib/chat/use-chat-send";
 import { orpc } from "@/src/lib/orpc";
 
 // inverted 리스트에서 "맨 아래(최신)를 보고 있다"로 칠 오프셋 상한.
 const BOTTOM_STICK_THRESHOLD = 80;
 const SYSTEM_KINDS = new Set(["contact_request", "interview_proposal"]);
 const SKELETON_ROWS = [0, 1, 2, 3, 4];
-const NOT_FOUND_INDEX = -1;
 
 type ConfirmAction = "block" | "leave" | null;
 
@@ -63,6 +63,38 @@ function RoomSkeleton() {
 					<Skeleton className="h-12 w-3/5 rounded-2xl" />
 				</View>
 			))}
+		</View>
+	);
+}
+
+function RoomLoadErrorScreen({
+	error,
+	onBack,
+	onRetry,
+}: {
+	error: unknown;
+	onBack: () => void;
+	onRetry: () => void;
+}) {
+	const blockMessage = getChatBlockMessage(error);
+	return (
+		<View className="flex-1 bg-background">
+			<ChatRoomHeader
+				counterpartName={null}
+				counterpartProfileImageUrl={null}
+				jobTitle={null}
+				onBack={onBack}
+				statusLine={null}
+			/>
+			{blockMessage ? (
+				<View className="flex-1 items-center justify-center p-6">
+					<Text className="text-center text-muted leading-6">
+						{blockMessage}
+					</Text>
+				</View>
+			) : (
+				<ErrorState onRetry={onRetry} />
+			)}
 		</View>
 	);
 }
@@ -83,17 +115,13 @@ function resolveStatusLine({
 	return null;
 }
 
-// Array.prototype.findLastIndex는 Hermes에 없어 역순 for 루프로 대체한다.
-function findLastMineIndex(
-	messages: readonly ChatTimelineMessage[],
-	currentUserId: string | undefined
-): number {
-	for (let index = messages.length - 1; index >= 0; index -= 1) {
-		if (messages[index]?.senderUserId === currentUserId) {
-			return index;
-		}
-	}
-	return NOT_FOUND_INDEX;
+// 재전송 3회 소진 여부. 낙관적 목록에서 이 메시지의 시도 횟수를 찾는다.
+function canRetryOptimistic(
+	optimistic: readonly OptimisticChatMessage[],
+	messageId: string
+): boolean {
+	const attempts = optimistic.find((item) => item.id === messageId)?.attempts;
+	return (attempts ?? 0) < MAX_SEND_ATTEMPTS;
 }
 
 function resolveSendBlockedMessage({
@@ -172,6 +200,7 @@ function SeekerChatRoomInner() {
 	const latestMessageId = timeline.at(-1)?.id ?? null;
 
 	const realtime = useChatRoomRealtime({
+		currentUserId: roomForUser?.currentUserId ?? "",
 		onIncomingMessage: (messageId) => {
 			autoRead.queueMarkRead(messageId);
 			if (!isAtBottom) {
@@ -254,15 +283,6 @@ function SeekerChatRoomInner() {
 
 	const annotated = useMemo(() => annotateChatMessages(timeline), [timeline]);
 	const inverted = useMemo(() => toInvertedTimeline(annotated), [annotated]);
-	// 상대가 읽은 내 마지막 메시지 표시용 — 서버 getById는 영수증을 내려주지 않으므로
-	// 소켓 chat:message:read를 받은 뒤 재조회된 unreadCount로 대신 판단하지 않고, 단순히
-	// "상대가 보낸 더 새 메시지가 있으면 읽음"으로 근사한다(web과 동일한 한계).
-	const lastMineIndex = findLastMineIndex(timeline, room?.currentUserId);
-	const isLastMineRead =
-		lastMineIndex >= 0 &&
-		timeline
-			.slice(lastMineIndex + 1)
-			.some((message) => message.senderUserId !== room?.currentUserId);
 
 	const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
 		const atBottom =
@@ -280,26 +300,12 @@ function SeekerChatRoomInner() {
 	// 캐시된 방 데이터가 아예 없는 초기 실패만 전체 화면을 갈아 끼운다. 보던 중 차단되면
 	// room(직전 성공 데이터)이 남아 이력을 유지하고, 사유는 입력바 자리에 띄운다(아래).
 	if (roomQuery.isError && !room) {
-		const blockMessage = getChatBlockMessage(roomQuery.error);
 		return (
-			<View className="flex-1 bg-background">
-				<ChatRoomHeader
-					counterpartName={null}
-					counterpartProfileImageUrl={null}
-					jobTitle={null}
-					onBack={() => router.back()}
-					statusLine={null}
-				/>
-				{blockMessage ? (
-					<View className="flex-1 items-center justify-center p-6">
-						<Text className="text-center text-muted leading-6">
-							{blockMessage}
-						</Text>
-					</View>
-				) : (
-					<ErrorState onRetry={() => roomQuery.refetch()} />
-				)}
-			</View>
+			<RoomLoadErrorScreen
+				error={roomQuery.error}
+				onBack={() => router.back()}
+				onRetry={() => roomQuery.refetch()}
+			/>
 		);
 	}
 
@@ -349,13 +355,14 @@ function SeekerChatRoomInner() {
 			/>
 		) : (
 			<ChatMessageBubble
+				canRetry={canRetryOptimistic(send.optimistic, message.id)}
 				counterpartName={room.counterpartName}
 				counterpartProfileImageUrl={room.counterpartProfileImageUrl}
 				isGroupEnd={isGroupEnd}
 				isGroupStart={isGroupStart}
 				isMine={isMine}
 				isReadByCounterpart={
-					isMine && message.id === timeline[lastMineIndex]?.id && isLastMineRead
+					isMine && realtime.counterpartReadMessageIds.has(message.id)
 				}
 				message={message}
 				onDiscard={send.discardFailed}
@@ -439,6 +446,11 @@ function SeekerChatRoomInner() {
 						<ChatNewMessagePill onPress={scrollToBottom} />
 					) : null}
 				</View>
+				{realtime.realtimeError ? (
+					<Text className="px-4 py-1 text-center text-danger text-xs">
+						{realtime.realtimeError}
+					</Text>
+				) : null}
 				{sendBlockedMessage ? (
 					<ChatBlockNotice message={sendBlockedMessage} />
 				) : (
