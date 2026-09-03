@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Href, router } from "expo-router";
+import { Alert } from "react-native";
 
 import {
 	BambiHeader,
@@ -17,6 +18,12 @@ export default function NewEmployerJobScreen() {
 	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
 	const createMutation = useMutation(
 		orpc.bambi.jobs.create.mutationOptions({
+			onError: (error) => {
+				Alert.alert(
+					"공고를 등록하지 못했어요",
+					error.message || "잠시 후 다시 시도해 주세요."
+				);
+			},
 			onSuccess: async () => {
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.jobs.listMine.queryKey(),

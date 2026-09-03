@@ -18,6 +18,8 @@ import { orpc } from "@/src/lib/orpc";
 interface Props {
 	cover: JobMediaUploadItem | null;
 	detail: JobMediaUploadItem[];
+	// 수정 프리필용 storageKey→원격 미리보기 URL. 없으면 파일명으로 폴백한다.
+	initialPreviews?: Record<string, string>;
 	onChange: (next: {
 		cover: JobMediaUploadItem | null;
 		detail: JobMediaUploadItem[];
@@ -32,12 +34,13 @@ type PreviewMap = Record<string, string>;
 export function JobImagePickerSection({
 	cover,
 	detail,
+	initialPreviews,
 	onChange,
 	organizationId,
 	teamId,
 }: Props) {
 	const [isBusy, setIsBusy] = useState(false);
-	const [previews, setPreviews] = useState<PreviewMap>({});
+	const [previews, setPreviews] = useState<PreviewMap>(initialPreviews ?? {});
 	const uploadMutation = useMutation(
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
 	);
@@ -181,11 +184,17 @@ export function JobImagePickerSection({
 				<Text className="text-muted text-xs">대표 이미지</Text>
 				{cover ? (
 					<View className="gap-2">
-						<Image
-							accessibilityLabel="대표 이미지 미리보기"
-							className="h-40 w-full rounded-lg"
-							source={{ uri: previewFor(cover) }}
-						/>
+						{previewFor(cover) ? (
+							<Image
+								accessibilityLabel="대표 이미지 미리보기"
+								className="h-40 w-full rounded-lg"
+								source={{ uri: previewFor(cover) }}
+							/>
+						) : (
+							<Text className="text-muted text-xs" selectable>
+								{`등록된 대표 이미지 (${cover.fileName})`}
+							</Text>
+						)}
 						<Pressable
 							className="self-start rounded-lg border border-border bg-background px-3 py-2 active:opacity-75"
 							onPress={() => onChange({ cover: null, detail })}
@@ -212,11 +221,17 @@ export function JobImagePickerSection({
 				<Text className="text-muted text-xs">{`상세 이미지 (${detail.length}/${JOB_DETAIL_LIMIT})`}</Text>
 				{detail.map((item, index) => (
 					<View className="gap-2" key={item.storageKey}>
-						<Image
-							accessibilityLabel={`상세 이미지 ${index + 1} 미리보기`}
-							className="h-40 w-full rounded-lg"
-							source={{ uri: previewFor(item) }}
-						/>
+						{previewFor(item) ? (
+							<Image
+								accessibilityLabel={`상세 이미지 ${index + 1} 미리보기`}
+								className="h-40 w-full rounded-lg"
+								source={{ uri: previewFor(item) }}
+							/>
+						) : (
+							<Text className="text-muted text-xs" selectable>
+								{`등록된 상세 이미지 ${index + 1} (${item.fileName})`}
+							</Text>
+						)}
 						<Pressable
 							className="self-start rounded-lg border border-border bg-background px-3 py-2 active:opacity-75"
 							onPress={() =>

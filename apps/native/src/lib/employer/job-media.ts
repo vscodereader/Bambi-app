@@ -30,6 +30,10 @@ export interface PickedJobImage {
 	fileName: string;
 	height?: number;
 	mimeType: string;
+	// native는 슬라이싱을 하지 않으므로 새 픽에는 없다. 수정 프리필에서 web이 만든 조각
+	// 그룹 메타를 그대로 실어 보낼 때만 값이 있다(그래야 재저장 시 그룹이 유지된다).
+	sliceGroupId?: string;
+	sliceIndex?: number;
 	uri: string;
 	width?: number;
 }
@@ -41,6 +45,9 @@ export interface JobMediaUploadItem {
 	fileName: string;
 	height?: number;
 	mimeType: string;
+	// detail 슬라이스 그룹 메타(web 생성분). native 새 픽에는 없다 — 수정 시 보존용.
+	sliceGroupId?: string;
+	sliceIndex?: number;
 	storageKey: string;
 	width?: number;
 }
@@ -101,4 +108,8 @@ export const toJobMediaItem = (
 	mimeType: picked.mimeType,
 	storageKey,
 	width: picked.width,
+	...(picked.sliceGroupId === undefined
+		? {}
+		: { sliceGroupId: picked.sliceGroupId }),
+	...(picked.sliceIndex === undefined ? {} : { sliceIndex: picked.sliceIndex }),
 });

@@ -36,6 +36,8 @@ interface NativeJobFormProps {
 	initialCover?: JobMediaUploadItem | null;
 	initialDetail?: JobMediaUploadItem[];
 	initialInstantInterview?: boolean;
+	// 원격(수정 프리필) 미디어의 storageKey→미리보기 URL. 없으면 파일명으로 폴백한다.
+	initialPreviews?: Record<string, string>;
 	initialValue?: NativeJobForm;
 	isSubmitting: boolean;
 	onSubmit: (input: NativeJobPostInput) => void;
@@ -144,6 +146,7 @@ export function NativeJobFormScreen({
 	initialCover,
 	initialDetail,
 	initialInstantInterview,
+	initialPreviews,
 	initialValue,
 	isSubmitting,
 	onSubmit,
@@ -365,6 +368,7 @@ export function NativeJobFormScreen({
 					<JobImagePickerSection
 						cover={cover}
 						detail={detail}
+						initialPreviews={initialPreviews}
 						onChange={(next) => {
 							setCover(next.cover);
 							setDetail(next.detail);
@@ -412,6 +416,10 @@ export function NativeJobFormScreen({
 						{formMessage}
 					</Text>
 				) : null}
+
+				<Text className="text-muted text-xs leading-5" selectable>
+					광고 노출 상품·결제는 밤비알바 웹사이트에서 진행할 수 있어요.
+				</Text>
 
 				<Button isDisabled={isSubmitting} onPress={handleSubmit}>
 					<Button.Label>{isSubmitting ? "저장 중" : submitLabel}</Button.Label>

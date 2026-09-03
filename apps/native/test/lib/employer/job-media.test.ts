@@ -94,4 +94,34 @@ describe("toJobMediaItem", () => {
 			width: 1200,
 		});
 	});
+
+	it("슬라이스 그룹 메타가 있으면 통과시키고 없으면 생략한다", () => {
+		const withSlice = toJobMediaItem(
+			{
+				byteSize: 10,
+				fileName: "a.png",
+				mimeType: "image/png",
+				sliceGroupId: "11111111-1111-1111-1111-111111111111",
+				sliceIndex: 2,
+				uri: "file:///a.png",
+			},
+			"orgs/o1/x.png"
+		);
+
+		expect(withSlice.sliceGroupId).toBe("11111111-1111-1111-1111-111111111111");
+		expect(withSlice.sliceIndex).toBe(2);
+
+		const withoutSlice = toJobMediaItem(
+			{
+				byteSize: 10,
+				fileName: "a.png",
+				mimeType: "image/png",
+				uri: "file:///a.png",
+			},
+			"orgs/o1/x.png"
+		);
+
+		expect("sliceGroupId" in withoutSlice).toBe(false);
+		expect("sliceIndex" in withoutSlice).toBe(false);
+	});
 });

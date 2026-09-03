@@ -1,5 +1,7 @@
+import { env } from "@bambi-app/env/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Href, router, useLocalSearchParams } from "expo-router";
+import { Alert } from "react-native";
 
 import {
 	BambiHeader,
@@ -9,8 +11,19 @@ import {
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { NativeJobFormScreen } from "@/src/components/native-job-form";
-import type { NativeJobForm, NativeJobPostInput } from "@/src/lib/bambi-native";
+import {
+	type NativeJobForm,
+	type NativeJobPostInput,
+	publicObjectUri,
+} from "@/src/lib/bambi-native";
+import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
+import {
+	buildJobUpdateData,
+	type EditableAdSource,
+} from "@/src/lib/employer/job-update";
 import { orpc } from "@/src/lib/orpc";
+
+const GCS_PUBLIC_BASE_URL = env.EXPO_PUBLIC_GCS_PUBLIC_BASE_URL;
 
 const toNativeJobForm = (job: {
 	description: string;
@@ -38,6 +51,53 @@ const toNativeJobForm = (job: {
 	workSchedule: job.workSchedule,
 });
 
+interface EditableMediaItem {
+	altText: null | string;
+	byteSize: number;
+	fileName: string;
+	height: null | number;
+	mimeType: string;
+	sliceGroupId: null | string;
+	sliceIndex: null | number;
+	storageKey: string;
+	width: null | number;
+}
+
+const toUploadItem = (item: EditableMediaItem): JobMediaUploadItem => ({
+	altText: item.altText ?? "",
+	byteSize: item.byteSize,
+	fileName: item.fileName,
+	height: item.height ?? undefined,
+	mimeType: item.mimeType,
+	storageKey: item.storageKey,
+	width: item.width ?? undefined,
+	// web이 만든 detail 조각 그룹 메타를 보존한다 — 빠뜨리면 재저장 시 조각이 흩어진다.
+	...(item.sliceGroupId === null ? {} : { sliceGroupId: item.sliceGroupId }),
+	...(item.sliceIndex === null ? {} : { sliceIndex: item.sliceIndex }),
+});
+
+// getEditableById 미디어를 폼 초기값으로. 원격 미디어는 로컬 uri가 없어 공개 버킷 URL을
+// 미리보기로 조립하고, env 미설정·비공개 객체라 조립이 안 되면 폼이 파일명으로 폴백한다.
+const toInitialMedia = (media?: {
+	cover: EditableMediaItem | null;
+	detail: EditableMediaItem[];
+}): {
+	cover: JobMediaUploadItem | null;
+	detail: JobMediaUploadItem[];
+	previews: Record<string, string>;
+} => {
+	const cover = media?.cover ? toUploadItem(media.cover) : null;
+	const detail = (media?.detail ?? []).map(toUploadItem);
+	const previews: Record<string, string> = {};
+	for (const item of cover ? [cover, ...detail] : detail) {
+		const uri = publicObjectUri(item.storageKey, GCS_PUBLIC_BASE_URL);
+		if (uri) {
+			previews[item.storageKey] = uri;
+		}
+	}
+	return { cover, detail, previews };
+};
+
 export default function EditEmployerJobScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const queryClient = useQueryClient();
@@ -47,6 +107,12 @@ export default function EditEmployerJobScreen() {
 	);
 	const updateMutation = useMutation(
 		orpc.bambi.jobs.update.mutationOptions({
+			onError: (error) => {
+				Alert.alert(
+					"공고를 저장하지 못했어요",
+					error.message || "잠시 후 다시 시도해 주세요."
+				);
+			},
 			onSuccess: async () => {
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.jobs.listMine.queryKey(),
@@ -84,9 +150,22 @@ export default function EditEmployerJobScreen() {
 		);
 	}
 
+	const editable = jobQuery.data;
+	const {
+		cover: initialCover,
+		detail: initialDetail,
+		previews: initialPreviews,
+	} = toInitialMedia(editable.media);
+	const adSource: EditableAdSource = {
+		adProductId: editable.adProductId ?? null,
+		exposureAmount: editable.exposureAmount ?? null,
+		exposureDurationDays: editable.exposureDurationDays ?? null,
+		paymentMethod: editable.paymentMethod ?? null,
+	};
+
 	const handleSubmit = (input: NativeJobPostInput) => {
 		updateMutation.mutate({
-			data: input,
+			data: buildJobUpdateData(input, adSource),
 			id,
 		});
 	};
@@ -98,6 +177,12 @@ export default function EditEmployerJobScreen() {
 				title="공고 편집"
 			/>
 			<NativeJobFormScreen
+				initialBeginnerFriendly={editable.beginnerFriendly ?? false}
+				initialBlocks={editable.descriptionBlocks ?? []}
+				initialCover={initialCover}
+				initialDetail={initialDetail}
+				initialInstantInterview={editable.instantInterview ?? false}
+				initialPreviews={initialPreviews}
 				initialValue={toNativeJobForm(jobQuery.data)}
 				isSubmitting={updateMutation.isPending}
 				onSubmit={handleSubmit}
