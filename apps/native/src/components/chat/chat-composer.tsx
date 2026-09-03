@@ -302,6 +302,7 @@ export function ChatComposer({
 						onBlur={stopTyping}
 						onChangeText={handleChangeText}
 						placeholder="메시지를 입력하세요"
+						textAlignVertical="center"
 						value={body}
 						variant="secondary"
 					/>

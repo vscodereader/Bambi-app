@@ -1726,8 +1726,13 @@ export function SeekerChatRoomResponsive({
 		markReadNow(lastVisibleMessageId);
 	}, [lastVisibleMessageId, markReadNow, roomQuery.isSuccess]);
 
+	const hasRoomData = Boolean(roomQuery.data);
+
+	// roomQuery.data 객체가 아니라 "방 데이터가 있는지" 불리언만 의존한다. 상대의
+	// 카드 응답 등으로 방 데이터가 재조회되어 새 객체가 될 때마다 이 효과가 재실행되면
+	// draft가 남아 있는 한 typing:started가 다시 전송돼 상대 화면에 유령 "입력 중"이 뜬다.
 	useEffect(() => {
-		if (!roomQuery.data) {
+		if (!hasRoomData) {
 			return;
 		}
 
@@ -1752,7 +1757,7 @@ export function SeekerChatRoomResponsive({
 		}, 1200);
 
 		return () => window.clearTimeout(timeoutId);
-	}, [message, roomId, roomQuery.data]);
+	}, [hasRoomData, message, roomId]);
 
 	// 차단·운영자 조치·내 신고 검토로 막힌 방은 오류 카드로 세워두지 않고 목록으로
 	// 돌려보내며 이유만 토스트로 알린다. id를 고정해 StrictMode 이중 실행에도 토스트가
