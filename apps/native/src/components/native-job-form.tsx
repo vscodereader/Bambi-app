@@ -1,8 +1,13 @@
+import {
+	type JobDescriptionBlock,
+	normalizeJobDescriptionBlocks,
+} from "@bambi-app/api/services/bambi-job-description-blocks";
 import { useQuery } from "@tanstack/react-query";
-import { Button, Input, Surface, TextField } from "heroui-native";
+import { Button, Input, Surface, Switch, TextField } from "heroui-native";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
+import { JobDescriptionBlockEditor } from "@/src/components/job-description-block-editor";
 import {
 	emptyNativeJobForm,
 	industryOptions,
@@ -12,6 +17,7 @@ import {
 	payUnitOptions,
 	validateNativeJobForm,
 } from "@/src/lib/bambi-native";
+import { jobDescriptionBlocksError } from "@/src/lib/employer/job-description-blocks";
 import { orpc } from "@/src/lib/orpc";
 
 interface PostingScope {
@@ -23,6 +29,9 @@ interface PostingScope {
 }
 
 interface NativeJobFormProps {
+	initialBeginnerFriendly?: boolean;
+	initialBlocks?: JobDescriptionBlock[];
+	initialInstantInterview?: boolean;
 	initialValue?: NativeJobForm;
 	isSubmitting: boolean;
 	onSubmit: (input: NativeJobPostInput) => void;
@@ -126,6 +135,9 @@ function FieldError({
 }
 
 export function NativeJobFormScreen({
+	initialBeginnerFriendly,
+	initialBlocks,
+	initialInstantInterview,
 	initialValue,
 	isSubmitting,
 	onSubmit,
@@ -137,6 +149,16 @@ export function NativeJobFormScreen({
 	);
 	const [errors, setErrors] = useState<NativeJobFormErrors>({});
 	const [formMessage, setFormMessage] = useState<null | string>(null);
+	const [beginnerFriendly, setBeginnerFriendly] = useState(
+		initialBeginnerFriendly ?? false
+	);
+	const [instantInterview, setInstantInterview] = useState(
+		initialInstantInterview ?? false
+	);
+	const [blocks, setBlocks] = useState<JobDescriptionBlock[]>(
+		initialBlocks ?? []
+	);
+	const [blocksError, setBlocksError] = useState<null | string>(null);
 	// 지역은 서버 마스터가 유일한 출처다 — 코드를 그대로 제출해야 저장 직전 정합 검사를 통과한다.
 	const regionsQuery = useQuery(orpc.bambi.regions.list.queryOptions());
 	const regionChoices = useMemo(
@@ -197,9 +219,23 @@ export function NativeJobFormScreen({
 			return;
 		}
 
+		const blockError = jobDescriptionBlocksError(blocks);
+
+		if (blockError) {
+			setBlocksError(blockError);
+			setFormMessage(blockError);
+			return;
+		}
+
 		setErrors({});
+		setBlocksError(null);
 		setFormMessage(null);
-		onSubmit(validation.input);
+		onSubmit({
+			...validation.input,
+			beginnerFriendly,
+			descriptionBlocks: normalizeJobDescriptionBlocks(blocks),
+			instantInterview,
+		});
 	};
 
 	return (
@@ -305,6 +341,31 @@ export function NativeJobFormScreen({
 					/>
 				</TextField>
 				<FieldError errors={errors} field="description" />
+
+				<JobDescriptionBlockEditor
+					blocks={blocks}
+					error={blocksError}
+					onChange={setBlocks}
+				/>
+
+				<View className="flex-row items-center justify-between gap-3">
+					<Text className="font-semibold text-foreground text-sm">
+						초보 환영
+					</Text>
+					<Switch
+						isSelected={beginnerFriendly}
+						onSelectedChange={setBeginnerFriendly}
+					/>
+				</View>
+				<View className="flex-row items-center justify-between gap-3">
+					<Text className="font-semibold text-foreground text-sm">
+						당일/즉시 면접
+					</Text>
+					<Switch
+						isSelected={instantInterview}
+						onSelectedChange={setInstantInterview}
+					/>
+				</View>
 
 				<TextField>
 					<Input
