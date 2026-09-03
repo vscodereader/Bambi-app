@@ -23,10 +23,15 @@ export default function SeekerRoleTabRoute() {
 		return <LoadingState label="역할 정보를 확인하고 있습니다." />;
 	}
 
+	// 비로그인 딥링크는 app/index.tsx와 같은 규칙으로 로그인으로 보낸다.
+	if (!session.data?.user) {
+		return <Redirect href={"/login" as Href} />;
+	}
+
 	const roleTab = getNativeRoleTab(
 		mineQuery.data?.bambiProfile?.role as NativeProfileRole | null | undefined
 	);
 
-	// 조회 실패·구직자·비회원은 되돌릴 곳이 구직자 홈뿐이다(빈 탭을 남기지 않는다).
+	// 조회 실패·구직자는 되돌릴 곳이 구직자 홈뿐이다(빈 탭을 남기지 않는다).
 	return <Redirect href={(roleTab?.href ?? "/(seeker)") as Href} />;
 }
