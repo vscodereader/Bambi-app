@@ -4,20 +4,16 @@ import { Pressable } from "react-native";
 
 const MENU_WIDTH = 220;
 
-// 헤더 우측 케밥. 연락처 공개 보기(확정 면접 있을 때) · 신고 · 차단 · 나가기.
+// 헤더 우측 케밥. 신고 · 차단 · 나가기.
 // 차단·나가기 확인 Dialog는 화면([id].tsx)이 띄운다 — 메뉴는 의도만 올린다.
 export function ChatRoomMenu({
-	canRevealContact,
 	onBlock,
 	onLeave,
 	onReport,
-	onRevealContact,
 }: {
-	canRevealContact: boolean;
 	onBlock: () => void;
 	onLeave: () => void;
 	onReport: () => void;
-	onRevealContact: () => void;
 }) {
 	const foreground = useThemeColor("foreground");
 
@@ -36,11 +32,6 @@ export function ChatRoomMenu({
 			<Menu.Portal>
 				<Menu.Overlay />
 				<Menu.Content presentation="popover" width={MENU_WIDTH}>
-					{canRevealContact ? (
-						<Menu.Item onPress={onRevealContact}>
-							<Menu.ItemTitle>연락처 공개</Menu.ItemTitle>
-						</Menu.Item>
-					) : null}
 					<Menu.Item onPress={onReport}>
 						<Menu.ItemTitle>신고</Menu.ItemTitle>
 					</Menu.Item>

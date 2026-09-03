@@ -4,12 +4,7 @@ import {
 	annotateChatMessages,
 } from "@bambi-app/api/services/bambi-chat-message-grouping";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-	type Href,
-	router,
-	useFocusEffect,
-	useLocalSearchParams,
-} from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Button, Dialog, Skeleton, Spinner, useToast } from "heroui-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -34,7 +29,6 @@ import { ChatSystemCard } from "@/src/components/chat/chat-system-card";
 import { ChatTypingIndicator } from "@/src/components/chat/chat-typing-indicator";
 import { MemberOnly } from "@/src/components/member-only";
 import { JobReportDialog } from "@/src/components/report-dialog";
-import { getConfirmedScheduleId } from "@/src/lib/bambi-native";
 import { chatMutationErrorMessage } from "@/src/lib/chat/chat-errors";
 import {
 	type ChatTimelineMessage,
@@ -325,7 +319,6 @@ function SeekerChatRoomInner() {
 		);
 	}
 
-	const confirmedScheduleId = getConfirmedScheduleId(room.schedules);
 	const statusLine = resolveStatusLine({
 		counterpartWithdrawn: room.counterpartWithdrawn,
 		jobStatus: room.jobPost?.status ?? null,
@@ -389,16 +382,9 @@ function SeekerChatRoomInner() {
 				onBack={() => router.back()}
 				right={
 					<ChatRoomMenu
-						canRevealContact={Boolean(confirmedScheduleId)}
 						onBlock={() => setConfirmAction("block")}
 						onLeave={() => setConfirmAction("leave")}
 						onReport={() => setIsReportOpen(true)}
-						onRevealContact={() =>
-							router.push({
-								pathname: "/(seeker)/chats/[id]/reveal",
-								params: { id },
-							} as unknown as Href)
-						}
 					/>
 				}
 				statusLine={statusLine}

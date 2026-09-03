@@ -31,10 +31,6 @@ export default function SeekerLayout() {
 			<Stack.Screen name="me/blocks" options={{ title: "차단한 상대" }} />
 			{/* 채팅방은 상대 아바타·공고명·메뉴를 가진 전용 헤더(ChatRoomHeader)를 화면이 직접 그린다. */}
 			<Stack.Screen name="chats/[id]" options={{ headerShown: false }} />
-			<Stack.Screen
-				name="chats/[id]/reveal"
-				options={{ title: "연락처 공개" }}
-			/>
 		</Stack>
 	);
 }
