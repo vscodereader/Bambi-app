@@ -167,6 +167,41 @@ export const getNativeRoleTab = (
 	return null;
 };
 
+// 구직자 화면도 전환 대상이지만 새 라우트 문자열을 만들지 않는다 — 홈 라우트가 이미
+// 같은 경로를 갖고 있어 그걸 좁혀 쓴다(경로가 바뀌면 한 곳만 고치면 된다).
+const SEEKER_AREA_ROUTE = "/(seeker)" satisfies NativeHomeRoute;
+
+export type NativeAreaRoute = NativeRoleAreaRoute | typeof SEEKER_AREA_ROUTE;
+
+export interface NativeAreaOption {
+	href: NativeAreaRoute;
+	title: string;
+}
+
+// 역할 영역 헤더의 화면 전환 메뉴가 그릴 목록. 역할 영역은 루트 스택에 push된 별도 탭
+// 셸이라 자체 탭바·헤더 어디에도 구직자로 돌아갈 길이 없다 — 그 출구를 여기서 만든다.
+// 구직자·미가입은 오갈 곳이 없어 빈 배열이고, 호출부는 메뉴 자체를 그리지 않는다.
+export const getNativeAreaOptions = (
+	role: NativeProfileRole | null | undefined
+): NativeAreaOption[] => {
+	// 역할 영역 항목은 하단 역할 탭을 그대로 재사용한다 — 같은 대상을 탭과 메뉴가 다른
+	// 이름으로 부르면 안 되므로 문구를 복제하지 않고 한 벌만 둔다.
+	const roleTab = getNativeRoleTab(role);
+
+	return roleTab
+		? [{ href: SEEKER_AREA_ROUTE, title: "구직자 화면" }, roleTab]
+		: [];
+};
+
+export type NativeAreaSwitchAction = "back" | "replace";
+
+// 역할 영역에서 구직자 화면으로 나갈 때 스택을 되감을지 새로 이동할지. 역할 탭으로 push해
+// 들어온 경우엔 되감아야 구직자 탭의 선택 상태·스크롤이 그대로 살아 있다. 반대로 딥링크로
+// 역할 영역이 곧장 열렸으면 되돌아갈 화면이 아예 없어(back은 앱을 닫는다) 이동해야 한다.
+export const getNativeAreaSwitchAction = (
+	canGoBack: boolean
+): NativeAreaSwitchAction => (canGoBack ? "back" : "replace");
+
 export const validateNativeJobForm = (
 	form: NativeJobForm,
 	options: { teamScopes?: NativeJobTeamScope[] } = {}
