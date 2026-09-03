@@ -3,6 +3,7 @@ import {
 	findGuide,
 	GUIDE_CONTENTS,
 	type GuideContent,
+	guideTitle,
 } from "@/lib/bambi/guide";
 import {
 	findJobLandingIndustry,
@@ -80,4 +81,20 @@ describe("job guide content", () => {
 			});
 		});
 	}
+});
+
+describe("guideTitle", () => {
+	it("drops the keyword from the brand list when it matches exactly", () => {
+		const title = guideTitle(findGuide("bam-alba") as GuideContent);
+
+		// keyword("밤알바")가 병기 세트와 같으면 중복 제거 → title에 정확히 1회.
+		expect(title.split("밤알바").length - 1).toBe(1);
+		expect(title).toContain("퀸알바·여우알바");
+	});
+
+	it("keeps the full brand list when the keyword is not one of them", () => {
+		expect(guideTitle(findGuide("ten-pro-alba") as GuideContent)).toBe(
+			"텐프로알바 퀸알바·여우알바·밤알바 채용 가이드 | 밤비알바"
+		);
+	});
 });

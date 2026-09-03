@@ -56,9 +56,13 @@ export const guideSlugs = (): string[] => GUIDES.map((guide) => guide.slug);
 export const guidePath = (slug: string): string => `/jobs/guide/${slug}`;
 
 // SEO title: 타깃 키워드 선두 + 경쟁사명 병기(정책 순서 퀸알바→여우알바→밤알바) + | 밤비알바.
-// 랜딩 jobLandingTitle과 같은 병기 패턴을 따른다.
+// keyword가 병기 항목과 정확히 같으면 그 항목만 빼 title에서 키워드가 중복되지 않게 한다.
+const GUIDE_TITLE_BRANDS = ["퀸알바", "여우알바", "밤알바"] as const;
+
 export const guideTitle = (content: GuideContent): string =>
-	`${content.keyword} 퀸알바·여우알바·밤알바 채용 가이드 | 밤비알바`;
+	`${content.keyword} ${GUIDE_TITLE_BRANDS.filter(
+		(brand) => brand !== content.keyword
+	).join("·")} 채용 가이드 | 밤비알바`;
 
 // 업종 슬러그 → 관련 가이드 slug. 업종 랜딩 하단 가이드 소블록이 본다.
 // 각 업종에 가장 구체적으로 맞는 가이드 한 편을 건다(소블록은 단일 칩 렌더).

@@ -80,7 +80,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	let landingEntries: MetadataRoute.Sitemap;
 
 	try {
-		// 지역×업종 집계로 0건 조합을 빼고 lastmod를 채운다. 조회 실패 시 null → 현행 폴백
+		// 지역×업종 집계로 161개 전부 싣고 lastmod만 채운다. 조회 실패 시 null → 현행 폴백
 		// (161개 전부·lastmod 없음)을 pure 함수가 그대로 낸다.
 		const summary = await client.bambi.jobs.landingSummary();
 		landingEntries = buildJobLandingSitemapEntries(summary, BAMBI_COMPANY.url);
