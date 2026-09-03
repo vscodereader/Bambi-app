@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { JobDescriptionBlockEditor } from "@/src/components/job-description-block-editor";
+import { JobImagePickerSection } from "@/src/components/job-image-picker-section";
 import {
 	emptyNativeJobForm,
 	industryOptions,
@@ -18,6 +19,7 @@ import {
 	validateNativeJobForm,
 } from "@/src/lib/bambi-native";
 import { jobDescriptionBlocksError } from "@/src/lib/employer/job-description-blocks";
+import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
 import { orpc } from "@/src/lib/orpc";
 
 interface PostingScope {
@@ -31,6 +33,8 @@ interface PostingScope {
 interface NativeJobFormProps {
 	initialBeginnerFriendly?: boolean;
 	initialBlocks?: JobDescriptionBlock[];
+	initialCover?: JobMediaUploadItem | null;
+	initialDetail?: JobMediaUploadItem[];
 	initialInstantInterview?: boolean;
 	initialValue?: NativeJobForm;
 	isSubmitting: boolean;
@@ -137,6 +141,8 @@ function FieldError({
 export function NativeJobFormScreen({
 	initialBeginnerFriendly,
 	initialBlocks,
+	initialCover,
+	initialDetail,
 	initialInstantInterview,
 	initialValue,
 	isSubmitting,
@@ -159,6 +165,12 @@ export function NativeJobFormScreen({
 		initialBlocks ?? []
 	);
 	const [blocksError, setBlocksError] = useState<null | string>(null);
+	const [cover, setCover] = useState<JobMediaUploadItem | null>(
+		initialCover ?? null
+	);
+	const [detail, setDetail] = useState<JobMediaUploadItem[]>(
+		initialDetail ?? []
+	);
 	// 지역은 서버 마스터가 유일한 출처다 — 코드를 그대로 제출해야 저장 직전 정합 검사를 통과한다.
 	const regionsQuery = useQuery(orpc.bambi.regions.list.queryOptions());
 	const regionChoices = useMemo(
@@ -235,6 +247,7 @@ export function NativeJobFormScreen({
 			beginnerFriendly,
 			descriptionBlocks: normalizeJobDescriptionBlocks(blocks),
 			instantInterview,
+			media: { cover: cover ?? undefined, detail },
 		});
 	};
 
@@ -347,6 +360,23 @@ export function NativeJobFormScreen({
 					error={blocksError}
 					onChange={setBlocks}
 				/>
+
+				{form.organizationId ? (
+					<JobImagePickerSection
+						cover={cover}
+						detail={detail}
+						onChange={(next) => {
+							setCover(next.cover);
+							setDetail(next.detail);
+						}}
+						organizationId={form.organizationId}
+						teamId={form.teamId || null}
+					/>
+				) : (
+					<Text className="text-muted text-xs">
+						등록 범위를 먼저 선택하면 이미지를 올릴 수 있어요.
+					</Text>
+				)}
 
 				<View className="flex-row items-center justify-between gap-3">
 					<Text className="font-semibold text-foreground text-sm">
