@@ -65,7 +65,7 @@ export function ChatAttachmentMessage({
 	localImageUri: null | string;
 	sendStatus?: ChatSendStatus;
 }) {
-	const { width: windowWidth } = useWindowDimensions();
+	const { height: windowHeight, width: windowWidth } = useWindowDimensions();
 	const [isViewerOpen, setIsViewerOpen] = useState(false);
 	const foreground = useThemeColor("foreground");
 	const imageUri =
@@ -100,10 +100,16 @@ export function ChatAttachmentMessage({
 					) : null}
 				</Pressable>
 				<Dialog isOpen={isViewerOpen} onOpenChange={setIsViewerOpen}>
-					<Dialog.Portal>
+					<Dialog.Portal className="p-0">
 						<Dialog.Overlay />
-						<Dialog.Content className="h-full w-full bg-black p-0">
+						<Dialog.Content
+							className="rounded-none bg-black p-0"
+							isSwipeable={false}
+							style={{ height: windowHeight, width: windowWidth }}
+						>
 							<Pressable
+								accessibilityLabel="이미지 닫기"
+								accessibilityRole="button"
 								className="flex-1 items-center justify-center"
 								onPress={() => setIsViewerOpen(false)}
 							>
