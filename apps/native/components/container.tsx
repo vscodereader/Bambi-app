@@ -1,7 +1,10 @@
 import { cn } from "heroui-native";
-import type { PropsWithChildren } from "react";
+import { type PropsWithChildren, type ReactNode, useState } from "react";
 import { type ScrollViewProps, View, type ViewProps } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import {
+	KeyboardAwareScrollView,
+	KeyboardStickyView,
+} from "react-native-keyboard-controller";
 import Animated, { type AnimatedProps } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -12,6 +15,7 @@ type Props = AnimatedProps<ViewProps> & {
 	hasTopInset?: boolean;
 	isScrollable?: boolean;
 	scrollViewProps?: Omit<ScrollViewProps, "contentContainerStyle">;
+	stickyFooter?: ReactNode;
 };
 
 export function Container({
@@ -20,9 +24,15 @@ export function Container({
 	hasTopInset = false,
 	isScrollable = true,
 	scrollViewProps,
+	stickyFooter,
 	...props
 }: PropsWithChildren<Props>) {
 	const insets = useSafeAreaInsets();
+	// 고정 바가 스크롤 마지막 줄을 덮지 않게 그 높이만큼 스크롤 콘텐츠 아래에 여백을 준다.
+	// 상수 대신 onLayout 실측인 이유: 바 안에 오는 것이 버튼 한 개인지, 버튼+안내 문구
+	// 두 줄인지에 따라 높이가 달라져 어떤 상수를 골라도 늘 남거나 모자란다. 측정은 바를
+	// 넘긴 화면에서만 일어나고, 안 넘기면 값이 0에 머물러 아래 paddingBottom도 undefined다.
+	const [stickyFooterHeight, setStickyFooterHeight] = useState(0);
 
 	return (
 		<AnimatedView
@@ -49,7 +59,10 @@ export function Container({
 				// 래퍼 높이가 (프레임 − 키보드)로 줄어 가시 영역 기준으로 재정렬된다.
 				// 라이브러리는 성능상 "insets"를 권하지만 여기 목적은 레이아웃 재분배다.
 				<KeyboardAwareScrollView
-					contentContainerStyle={{ flexGrow: 1 }}
+					contentContainerStyle={{
+						flexGrow: 1,
+						paddingBottom: stickyFooter ? stickyFooterHeight : undefined,
+					}}
 					contentInsetAdjustmentBehavior="automatic"
 					keyboardShouldPersistTaps="handled"
 					mode="layout"
@@ -60,6 +73,27 @@ export function Container({
 			) : (
 				<View className="flex-1">{children}</View>
 			)}
+			{/* 스크롤 뷰 바깥·이 AnimatedView 안쪽이라 스크롤과 무관하게 화면 하단에 고정된다.
+			    (isScrollable=false면 flex-1 콘텐츠 바로 아래에 그대로 붙는다.)
+			    키보드: 위 주석대로 edge-to-edge라 IME 인셋이 RN 뷰에 안 실려, 고정 바를 그냥
+			    두면 키보드 뒤로 가려진다. KeyboardStickyView는 레이아웃이 아니라 translateY로
+			    바만 키보드 위로 올리므로 KeyboardAwareScrollView의 "layout" 재분배와 부딪히지
+			    않는다(KeyboardAvoidingView로 감싸면 스크롤 프레임 자체가 두 번 줄어든다).
+			    offset.opened=insets.bottom인 이유: 바 아래에는 이미 이 뷰의 paddingBottom(제스처
+			    바)이 깔려 있는데 키보드 높이는 화면 맨 아래부터 재므로, 보정하지 않으면 딱 그만큼
+			    키보드 위로 떠서 빈 띠가 생긴다. 바 자체에는 하단 인셋을 또 주지 않는다. */}
+			{stickyFooter ? (
+				<KeyboardStickyView offset={{ opened: insets.bottom }}>
+					<View
+						className="border-border border-t bg-background p-4"
+						onLayout={(event) =>
+							setStickyFooterHeight(event.nativeEvent.layout.height)
+						}
+					>
+						{stickyFooter}
+					</View>
+				</KeyboardStickyView>
+			) : null}
 		</AnimatedView>
 	);
 }

@@ -3,10 +3,22 @@ import {
 	normalizeJobDescriptionBlocks,
 } from "@bambi-app/api/services/bambi-job-description-blocks";
 import { useQuery } from "@tanstack/react-query";
-import { Button, Input, Surface, Switch, TextField } from "heroui-native";
-import { useMemo, useState } from "react";
+import {
+	Button,
+	Description,
+	FieldError,
+	Input,
+	Label,
+	Radio,
+	RadioGroup,
+	Surface,
+	Switch,
+	TextField,
+} from "heroui-native";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
+import { BambiScreen } from "@/src/components/bambi-screen";
 import { JobDescriptionBlockEditor } from "@/src/components/job-description-block-editor";
 import { JobImagePickerSection } from "@/src/components/job-image-picker-section";
 import {
@@ -15,6 +27,7 @@ import {
 	type NativeJobForm,
 	type NativeJobFormErrors,
 	type NativeJobPostInput,
+	NEGOTIABLE_PAY_UNIT,
 	payUnitOptions,
 	validateNativeJobForm,
 } from "@/src/lib/bambi-native";
@@ -40,6 +53,9 @@ interface NativeJobFormProps {
 	initialPreviews?: Record<string, string>;
 	initialValue?: NativeJobForm;
 	isSubmitting: boolean;
+	// 폼 위에 붙는 한 줄 안내(검수 규칙 등). 화면 제목은 네이티브 헤더가 이미 달고 있어
+	// 여기서 다시 제목을 그리지 않는다.
+	notice?: string;
 	onSubmit: (input: NativeJobPostInput) => void;
 	postingScopes: PostingScope[];
 	// 수정 화면은 등록 범위(조직·팀) 변경을 막는다 — 서버 update가 조직 변경을 FORBIDDEN으로
@@ -54,6 +70,7 @@ interface Choice<TValue extends string> {
 }
 
 interface ChoiceGroupProps<TValue extends string> {
+	isRequired?: boolean;
 	label: string;
 	onChange: (value: TValue) => void;
 	options: readonly Choice<TValue>[];
@@ -82,6 +99,7 @@ const toInitialForm = (value?: NativeJobForm): NativeJobForm => ({
 });
 
 function ChoiceGroup<TValue extends string>({
+	isRequired = false,
 	label,
 	onChange,
 	options,
@@ -89,16 +107,16 @@ function ChoiceGroup<TValue extends string>({
 }: ChoiceGroupProps<TValue>) {
 	return (
 		<View className="gap-2">
-			<Text className="font-semibold text-foreground text-sm" selectable>
-				{label}
-			</Text>
+			{/* 필수 표시는 heroui Label에 맡긴다 — TextField 라벨과 서체·별표가 어긋나지 않는다. */}
+			<Label isRequired={isRequired}>{label}</Label>
 			<View className="flex-row flex-wrap gap-2">
 				{options.map((option) => {
 					const isSelected = option.value === value;
 
 					return (
 						<Pressable
-							className={`rounded-full border px-3 py-2 active:opacity-75 ${
+							// min-h-12: 칩 하나가 최소 48dp 터치 타깃을 넘기도록.
+							className={`min-h-12 justify-center rounded-full border px-3 active:opacity-75 ${
 								isSelected
 									? "border-accent bg-accent"
 									: "border-border bg-background"
@@ -123,26 +141,6 @@ function ChoiceGroup<TValue extends string>({
 	);
 }
 
-function FieldError({
-	errors,
-	field,
-}: {
-	errors: NativeJobFormErrors;
-	field: keyof NativeJobForm;
-}) {
-	const message = errors[field];
-
-	if (!message) {
-		return null;
-	}
-
-	return (
-		<Text className="text-danger text-xs" selectable>
-			{message}
-		</Text>
-	);
-}
-
 export function NativeJobFormScreen({
 	initialBeginnerFriendly,
 	initialBlocks,
@@ -152,6 +150,7 @@ export function NativeJobFormScreen({
 	initialPreviews,
 	initialValue,
 	isSubmitting,
+	notice,
 	onSubmit,
 	postingScopes,
 	scopeLocked = false,
@@ -207,6 +206,26 @@ export function NativeJobFormScreen({
 	const selectedScopeOption = postingScopeOptions.find(
 		(option) => option.value === selectedScopeValue
 	);
+	// 고를 것이 하나뿐인 범위. 이 경우 선택을 강요하면 그 아래 이미지 섹션이 계속 잠겨 있다.
+	const onlyScope = useMemo(
+		() => (postingScopes.length === 1 ? (postingScopes[0] ?? null) : null),
+		[postingScopes]
+	);
+	// 협의는 서버가 금액을 저장하지 않는다(validateNativeJobForm이 payAmount를 null로 만든다).
+	const isPayNegotiable = form.payUnit === NEGOTIABLE_PAY_UNIT;
+
+	// 범위가 하나면 마운트 직후 자동 선택한다. 이미 값이 있거나 수정 화면(scopeLocked)이면 건드리지 않는다.
+	useEffect(() => {
+		if (scopeLocked || form.organizationId || !onlyScope) {
+			return;
+		}
+
+		setForm((current) => ({
+			...current,
+			organizationId: onlyScope.organizationId,
+			teamId: onlyScope.teamId ?? "",
+		}));
+	}, [form.organizationId, onlyScope, scopeLocked]);
 
 	const updateForm = (patch: Partial<NativeJobForm>) => {
 		setForm((current) => ({ ...current, ...patch }));
@@ -231,6 +250,12 @@ export function NativeJobFormScreen({
 			organizationId: selected.scope.organizationId,
 			teamId: selected.scope.teamId ?? "",
 		});
+	};
+	const handlePayUnitChange = (payUnit: string) => {
+		// 협의로 바꾸면 적어 둔 금액은 어차피 버려진다 — 화면에서도 함께 비워 오해를 없앤다.
+		updateForm(
+			payUnit === NEGOTIABLE_PAY_UNIT ? { payAmount: "", payUnit } : { payUnit }
+		);
 	};
 	const handleSubmit = () => {
 		const validation = validateNativeJobForm(form, {
@@ -269,116 +294,147 @@ export function NativeJobFormScreen({
 	};
 
 	return (
-		<View className="gap-4">
+		// 화면 껍데기를 폼이 직접 두른다 — 제출 CTA를 스크롤 밖 고정 바에 두려면 BambiScreen의
+		// stickyFooter를 폼이 잡고 있어야 한다(호출 화면은 안내 문구만 넘긴다).
+		<BambiScreen
+			stickyFooter={
+				<View className="gap-2">
+					{/* 검증 실패 요약은 버튼과 같은 고정 바에 둔다. 폼 본문에 두면 화면 서너 개
+					    아래라, 고정 바에서 제출한 사용자에게는 보이지 않는 곳에서 뜬다. */}
+					{formMessage ? (
+						<Text className="text-danger text-sm" selectable>
+							{formMessage}
+						</Text>
+					) : null}
+					<Button isDisabled={isSubmitting} onPress={handleSubmit}>
+						<Button.Label>
+							{isSubmitting ? "저장 중" : submitLabel}
+						</Button.Label>
+					</Button>
+				</View>
+			}
+		>
+			{notice ? (
+				<Text className="text-muted text-sm leading-5" selectable>
+					{notice}
+				</Text>
+			) : null}
 			<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 				<View className="gap-2">
-					<Text className="font-semibold text-foreground text-sm" selectable>
-						등록 범위
-					</Text>
+					<Label isRequired={!scopeLocked}>등록 범위</Label>
 					{scopeLocked ? (
 						<Text className="text-foreground" selectable>
 							{selectedScopeOption?.label ?? "등록 범위"}
 						</Text>
 					) : (
-						<View className="gap-2">
-							{postingScopeOptions.map((option) => {
-								const isSelected = option.value === selectedScopeValue;
-
-								return (
-									<Pressable
-										className={`rounded-lg border p-3 active:opacity-75 ${
-											isSelected
-												? "border-accent bg-accent"
-												: "border-border bg-background"
-										}`}
-										key={option.value}
-										onPress={() => handleScopeChange(option.value)}
-									>
-										<Text
-											className={
-												isSelected
-													? "font-semibold text-accent-foreground"
-													: "font-semibold text-foreground"
-											}
-										>
-											{option.label}
-										</Text>
-									</Pressable>
-								);
-							})}
-						</View>
+						// 선택 상태를 배경색이 아니라 라디오 마커로도 구분한다(색만으로 구분하지 않기).
+						<RadioGroup
+							onValueChange={handleScopeChange}
+							value={selectedScopeValue}
+						>
+							{postingScopeOptions.map((option) => (
+								<RadioGroup.Item
+									className="min-h-12"
+									key={option.value}
+									value={option.value}
+								>
+									<Label className="flex-1">{option.label}</Label>
+									<Radio />
+								</RadioGroup.Item>
+							))}
+						</RadioGroup>
 					)}
 					{scopeLocked ? null : (
-						<FieldError errors={errors} field="organizationId" />
+						<FieldError isInvalid={Boolean(errors.organizationId)}>
+							{errors.organizationId}
+						</FieldError>
 					)}
 				</View>
 
-				<TextField>
+				<TextField isInvalid={Boolean(errors.title)} isRequired>
+					<Label>공고 제목</Label>
 					<Input
 						onChangeText={(title) => updateForm({ title })}
-						placeholder="공고 제목"
+						placeholder="예: 강남 라운지 홀 스태프 모집"
 						value={form.title}
 					/>
+					<FieldError>{errors.title}</FieldError>
 				</TextField>
-				<FieldError errors={errors} field="title" />
 
 				<ChoiceGroup
+					isRequired
 					label="업종"
 					onChange={(industryCategory) => updateForm({ industryCategory })}
 					options={toChoices(industryOptions)}
 					value={form.industryCategory}
 				/>
-				<FieldError errors={errors} field="industryCategory" />
+				<FieldError isInvalid={Boolean(errors.industryCategory)}>
+					{errors.industryCategory}
+				</FieldError>
 
 				<ChoiceGroup
+					isRequired
 					label="지역"
 					onChange={(regionCode) => updateForm({ regionCode })}
 					options={regionChoices}
 					value={form.regionCode}
 				/>
-				<FieldError errors={errors} field="regionCode" />
+				<FieldError isInvalid={Boolean(errors.regionCode)}>
+					{errors.regionCode}
+				</FieldError>
 
-				<View className="flex-row gap-3">
-					<View className="flex-1">
-						<TextField>
-							<Input
-								keyboardType="number-pad"
-								onChangeText={(payAmount) => updateForm({ payAmount })}
-								placeholder="급여"
-								value={form.payAmount}
-							/>
-						</TextField>
-						<FieldError errors={errors} field="payAmount" />
-					</View>
-					<View className="flex-1">
-						<ChoiceGroup
-							label="단위"
-							onChange={(payUnit) => updateForm({ payUnit })}
-							options={toChoices(payUnitOptions)}
-							value={form.payUnit}
-						/>
-						<FieldError errors={errors} field="payUnit" />
-					</View>
-				</View>
+				<TextField
+					isDisabled={isPayNegotiable}
+					isInvalid={Boolean(errors.payAmount)}
+					isRequired={!isPayNegotiable}
+				>
+					<Label>급여</Label>
+					<Input
+						keyboardType="number-pad"
+						onChangeText={(payAmount) => updateForm({ payAmount })}
+						placeholder="예: 15000"
+						value={form.payAmount}
+					/>
+					{isPayNegotiable ? (
+						// 잠긴 필드라도 안내는 읽혀야 하므로 흐림 처리를 끈다.
+						<Description isDisabled={false}>
+							금액 없이 ‘급여 협의’로 등록됩니다.
+						</Description>
+					) : null}
+					<FieldError>{errors.payAmount}</FieldError>
+				</TextField>
 
-				<TextField>
+				<ChoiceGroup
+					isRequired
+					label="급여 단위"
+					onChange={handlePayUnitChange}
+					options={toChoices(payUnitOptions)}
+					value={form.payUnit}
+				/>
+				<FieldError isInvalid={Boolean(errors.payUnit)}>
+					{errors.payUnit}
+				</FieldError>
+
+				<TextField isInvalid={Boolean(errors.workSchedule)} isRequired>
+					<Label>근무 일정</Label>
 					<Input
 						onChangeText={(workSchedule) => updateForm({ workSchedule })}
-						placeholder="근무 일정"
+						placeholder="예: 주 3일, 오후 7시~새벽 2시"
 						value={form.workSchedule}
 					/>
+					<FieldError>{errors.workSchedule}</FieldError>
 				</TextField>
-				<FieldError errors={errors} field="workSchedule" />
 
-				<TextField>
+				<TextField isInvalid={Boolean(errors.description)} isRequired>
+					<Label>상세 설명</Label>
 					<Input
 						multiline
 						onChangeText={(description) => updateForm({ description })}
-						placeholder="상세 설명"
+						placeholder="예: 하는 일, 근무 조건, 우대 사항을 적어 주세요."
 						value={form.description}
 					/>
+					<FieldError>{errors.description}</FieldError>
 				</TextField>
-				<FieldError errors={errors} field="description" />
 
 				<JobDescriptionBlockEditor
 					blocks={blocks}
@@ -406,48 +462,35 @@ export function NativeJobFormScreen({
 				)}
 
 				<View className="flex-row items-center justify-between gap-3">
-					<Text className="font-semibold text-foreground text-sm">
-						초보 환영
-					</Text>
+					<Label>초보 환영</Label>
 					<Switch
 						isSelected={beginnerFriendly}
 						onSelectedChange={setBeginnerFriendly}
 					/>
 				</View>
 				<View className="flex-row items-center justify-between gap-3">
-					<Text className="font-semibold text-foreground text-sm">
-						당일/즉시 면접
-					</Text>
+					<Label>당일/즉시 면접</Label>
 					<Switch
 						isSelected={instantInterview}
 						onSelectedChange={setInstantInterview}
 					/>
 				</View>
 
-				<TextField>
+				<TextField isInvalid={Boolean(errors.interviewNotes)}>
+					<Label>면접 안내</Label>
 					<Input
 						multiline
 						onChangeText={(interviewNotes) => updateForm({ interviewNotes })}
-						placeholder="면접 안내"
+						placeholder="예: 평일 오후 2시~6시 매장 방문 면접"
 						value={form.interviewNotes}
 					/>
+					<FieldError>{errors.interviewNotes}</FieldError>
 				</TextField>
-				<FieldError errors={errors} field="interviewNotes" />
-
-				{formMessage ? (
-					<Text className="text-danger text-sm" selectable>
-						{formMessage}
-					</Text>
-				) : null}
 
 				<Text className="text-muted text-xs leading-5" selectable>
 					광고 노출 상품·결제는 밤비알바 웹사이트에서 진행할 수 있어요.
 				</Text>
-
-				<Button isDisabled={isSubmitting} onPress={handleSubmit}>
-					<Button.Label>{isSubmitting ? "저장 중" : submitLabel}</Button.Label>
-				</Button>
 			</Surface>
-		</View>
+		</BambiScreen>
 	);
 }
