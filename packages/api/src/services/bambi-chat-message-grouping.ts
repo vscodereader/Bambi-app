@@ -1,5 +1,6 @@
 // 카카오톡식 말풍선 묶음의 순수 계산부. 날짜 칩·아바타·시간 표시 여부만 정하고
 // 렌더는 컴포넌트에 맡긴다 — 브라우저 API 없이 단위 테스트할 수 있게.
+// web(apps/web)·native(apps/native)가 함께 import한다. 화면 로직을 여기 넣지 말 것.
 
 export interface ChatMessageLike {
 	createdAt: Date | string;

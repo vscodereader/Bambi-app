@@ -1,4 +1,5 @@
 // 채팅방 화면의 순수 계산부. 컴포넌트에서 떼어 두면 브라우저 API 없이 단위 테스트할 수 있다.
+// web(apps/web)·native(apps/native)가 함께 import한다. 화면 로직을 여기 넣지 말 것.
 
 /** 방 이력 keyset 커서. 정렬 총순서 (createdAt, id)와 같은 축이다. */
 export interface ChatMessageCursor {

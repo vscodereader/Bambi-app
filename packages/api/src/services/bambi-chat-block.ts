@@ -3,6 +3,7 @@
 // 서버(packages/api chats.ts)는 막힌 채팅을 전부 맨 FORBIDDEN으로 돌려주던 시절을 지나
 // error data에 chatBlockReason·counterpartName을 함께 싣는다. 채팅방·채팅 목록·채팅 시작
 // 프리플라이트가 각자 이 data를 해석하면 문구가 갈라지므로 해석을 여기 한 곳에 모은다.
+// web(apps/web)·native(apps/native)가 함께 import한다. 화면 로직을 여기 넣지 말 것.
 
 export type ChatBlockReason =
 	| "blocked_by_counterpart"

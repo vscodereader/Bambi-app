@@ -29,11 +29,8 @@ export default function SeekerLayout() {
 			{/* me/* 나머지 6개는 화면이 스스로 Stack.Screen title을 주입하지만 blocks만 없어
 			    커스텀 헤더 제목이 빈칸으로 뜬다(seeker-header는 options.title ?? ""). */}
 			<Stack.Screen name="me/blocks" options={{ title: "차단한 상대" }} />
-			<Stack.Screen name="chats/[id]" options={{ title: "채팅방" }} />
-			<Stack.Screen
-				name="chats/[id]/reveal"
-				options={{ title: "연락처 공개" }}
-			/>
+			{/* 채팅방은 상대 아바타·공고명·메뉴를 가진 전용 헤더(ChatRoomHeader)를 화면이 직접 그린다. */}
+			<Stack.Screen name="chats/[id]" options={{ headerShown: false }} />
 		</Stack>
 	);
 }

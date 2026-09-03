@@ -67,11 +67,6 @@ type NativeJobFormValidationResult =
 			ok: true;
 	  };
 
-export interface NativeScheduleSummary {
-	id: string;
-	status: string;
-}
-
 export const industryOptions = [
 	"룸싸롱",
 	"텐프로/쩜오",
@@ -240,11 +235,6 @@ export const validateNativeJobForm = (
 		ok: true,
 	};
 };
-
-export const getConfirmedScheduleId = (
-	schedules: NativeScheduleSummary[]
-): null | string =>
-	schedules.find((schedule) => schedule.status === "confirmed")?.id ?? null;
 
 export interface NativeLoginErrors {
 	loginId?: string;

@@ -7,7 +7,6 @@ import {
 	describeJobForScreenReader,
 	emptyNativeJobForm,
 	formatAdPeriod,
-	getConfirmedScheduleId,
 	getNativeHomeRoute,
 	groupDetailImageSlices,
 	isEmailLoginId,
@@ -98,21 +97,6 @@ describe("bambi native helpers", () => {
 			},
 			ok: true,
 		});
-	});
-
-	it("rejects contact reveal when no confirmed schedule exists", () => {
-		expect(
-			getConfirmedScheduleId([
-				{ id: "schedule-1", status: "proposed" },
-				{ id: "schedule-2", status: "declined" },
-			])
-		).toBeNull();
-		expect(
-			getConfirmedScheduleId([
-				{ id: "schedule-1", status: "proposed" },
-				{ id: "schedule-2", status: "confirmed" },
-			])
-		).toBe("schedule-2");
 	});
 
 	it("splits login ids by @ like the web form", () => {

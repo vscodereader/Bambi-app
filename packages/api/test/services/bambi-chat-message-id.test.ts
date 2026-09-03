@@ -46,4 +46,24 @@ describe("채팅 메시지 id 생성", () => {
 
 		expect(older < newer).toBe(true);
 	});
+
+	it("crypto가 없어도 형식을 지킨다(Hermes 폴백)", () => {
+		const original = globalThis.crypto;
+		Object.defineProperty(globalThis, "crypto", {
+			configurable: true,
+			value: undefined,
+		});
+
+		try {
+			const id = generateChatMessageId();
+
+			expect(id).toMatch(UUID_PATTERN);
+			expect(id[14]).toBe("7");
+		} finally {
+			Object.defineProperty(globalThis, "crypto", {
+				configurable: true,
+				value: original,
+			});
+		}
+	});
 });
