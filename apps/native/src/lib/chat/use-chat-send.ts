@@ -1,5 +1,5 @@
 import { generateChatMessageId } from "@bambi-app/api/services/bambi-chat-message-id";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { orpc } from "@/src/lib/orpc";
@@ -16,7 +16,7 @@ import {
 	dropSettledOptimistic,
 	type OptimisticChatMessage,
 } from "./chat-optimistic";
-import { CHAT_MESSAGE_PAGE_SIZE, type ChatRoomDetail } from "./chat-types";
+import { CHAT_MESSAGE_PAGE_SIZE } from "./chat-types";
 
 const MAX_SEND_ATTEMPTS = 3;
 
@@ -65,12 +65,14 @@ export function useChatSend({
 		[queryClient, roomKey]
 	);
 
-	// 서버 최신 페이지가 갱신될 때마다 도착한 낙관적 항목을 정리한다.
-	const serverMessages = queryClient.getQueryData<ChatRoomDetail>(
-		orpc.bambi.chats.getById.queryKey({
+	// 서버 최신 페이지가 갱신될 때마다 도착한 낙관적 항목을 정리한다. 렌더 중 getQueryData로
+	// 읽으면 구독이 아니라 다른 useQuery의 리렌더에 얹혀야만 도니, 같은 키를 useQuery로 구독한다
+	// (관찰자만 추가, 네트워크 추가 없음).
+	const serverMessages = useQuery(
+		orpc.bambi.chats.getById.queryOptions({
 			input: { id: roomId, limit: CHAT_MESSAGE_PAGE_SIZE },
 		})
-	)?.messages;
+	).data?.messages;
 
 	useEffect(() => {
 		if (!serverMessages) {
@@ -254,7 +256,7 @@ export function useChatSend({
 		(id: string) => {
 			const item = optimistic.find((candidate) => candidate.id === id);
 
-			if (!item || item.attempts >= MAX_SEND_ATTEMPTS) {
+			if (item?.sendStatus !== "failed" || item.attempts >= MAX_SEND_ATTEMPTS) {
 				return;
 			}
 
@@ -283,7 +285,9 @@ export function useChatSend({
 	return {
 		discardFailed,
 		isUploading,
-		optimistic,
+		// 같은 라우트로 방을 바꿔도 컴포넌트가 재사용돼 state가 유지되므로, 노출은 현재 방 것만.
+		// 내부 state는 그대로 둬 A로 돌아오면 실패 메시지 retry가 가능하다.
+		optimistic: optimistic.filter((item) => item.chatRoomId === roomId),
 		retry,
 		sendAttachment,
 		sendText,
