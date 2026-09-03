@@ -94,4 +94,17 @@ describe("canAddJobBlock / jobDescriptionBlocksError", () => {
 	it("빈 배열은 null(상세설명 블록은 선택 입력)", () => {
 		expect(jobDescriptionBlocksError([])).toBeNull();
 	});
+
+	it("13개(한도 초과)면 too_many_blocks 문구", () => {
+		const tooMany = Array.from({ length: 13 }, (_, i) => block(String(i)));
+		expect(jobDescriptionBlocksError(tooMany)).toBe(
+			"상세설명 블록은 최대 12개까지 추가할 수 있어요."
+		);
+	});
+
+	it("801자면 block_text_too_long 문구", () => {
+		expect(jobDescriptionBlocksError([block("a", "가".repeat(801))])).toBe(
+			"상세설명 블록은 한 블록당 800자 이하로 입력해 주세요."
+		);
+	});
 });

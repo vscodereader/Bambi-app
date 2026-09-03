@@ -79,6 +79,28 @@ describe("getJobStatusNote", () => {
 		).toBe("수정 후 제출하면 재검수를 거칩니다.");
 	});
 
+	it("미결제 게시는 입금 확인 안내", () => {
+		expect(
+			getJobStatusNote({
+				listingQueuePosition: null,
+				paymentStatus: "unpaid",
+				rejectionReason: null,
+				status: "published",
+			})
+		).toBe("입금 확인 후 노출됩니다.");
+	});
+
+	it("미결제 검수대기는 검수·입금 안내", () => {
+		expect(
+			getJobStatusNote({
+				listingQueuePosition: null,
+				paymentStatus: "unpaid",
+				rejectionReason: null,
+				status: "pending_review",
+			})
+		).toBe("검수 통과와 입금 확인을 모두 마쳐야 노출됩니다.");
+	});
+
 	it("정상 게시는 note 없음", () => {
 		expect(
 			getJobStatusNote({

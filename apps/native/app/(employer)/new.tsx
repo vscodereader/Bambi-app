@@ -11,6 +11,7 @@ import {
 } from "@/src/components/bambi-screen";
 import { NativeJobFormScreen } from "@/src/components/native-job-form";
 import type { NativeJobPostInput } from "@/src/lib/bambi-native";
+import { localErrorMessage } from "@/src/lib/chat/chat-errors";
 import { orpc } from "@/src/lib/orpc";
 
 export default function NewEmployerJobScreen() {
@@ -21,7 +22,7 @@ export default function NewEmployerJobScreen() {
 			onError: (error) => {
 				Alert.alert(
 					"공고를 등록하지 못했어요",
-					error.message || "잠시 후 다시 시도해 주세요."
+					localErrorMessage(error, "잠시 후 다시 시도해 주세요.")
 				);
 			},
 			onSuccess: async () => {

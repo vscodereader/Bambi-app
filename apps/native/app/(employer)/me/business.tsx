@@ -3,7 +3,12 @@ import { Button, Dialog, Input, Surface, TextField } from "heroui-native";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Text, View } from "react-native";
 
-import { BambiScreen, LoadingState, Pill } from "@/src/components/bambi-screen";
+import {
+	BambiScreen,
+	ErrorState,
+	LoadingState,
+	Pill,
+} from "@/src/components/bambi-screen";
 import {
 	type BusinessDocumentItem,
 	BusinessDocumentSection,
@@ -102,6 +107,10 @@ export default function EmployerBusinessScreen() {
 
 	if (mineQuery.isLoading) {
 		return <LoadingState label="사업자 인증 정보를 불러오고 있어요." />;
+	}
+
+	if (mineQuery.isError) {
+		return <ErrorState onRetry={() => mineQuery.refetch()} />;
 	}
 
 	const status = organizationProfile?.verificationStatus ?? "none";

@@ -5,6 +5,7 @@ import { Alert, Text, View } from "react-native";
 
 import {
 	BambiScreen,
+	ErrorState,
 	LoadingState,
 	Pill,
 	StateCard,
@@ -41,6 +42,10 @@ export default function EmployerOrganizationScreen() {
 
 	if (mineQuery.isLoading) {
 		return <LoadingState label="업체 정보를 불러오고 있어요." />;
+	}
+
+	if (mineQuery.isError) {
+		return <ErrorState onRetry={() => mineQuery.refetch()} />;
 	}
 
 	if (!organizationProfile) {

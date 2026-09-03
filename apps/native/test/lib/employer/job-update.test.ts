@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { NativeJobPostInput } from "@/src/lib/bambi-native";
 import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
-import { buildJobUpdateData } from "@/src/lib/employer/job-update";
+import {
+	buildJobUpdateData,
+	type EditableMediaItem,
+	toInitialMedia,
+} from "@/src/lib/employer/job-update";
 
 const banner = (storageKey: string): JobMediaUploadItem => ({
 	altText: "",
@@ -80,5 +84,97 @@ describe("buildJobUpdateData", () => {
 
 		expect(result.media && "adHorizontal" in result.media).toBe(false);
 		expect(result.media && "adVertical" in result.media).toBe(false);
+	});
+});
+
+const editableItem = (
+	overrides: Partial<EditableMediaItem> & { storageKey: string }
+): EditableMediaItem => ({
+	altText: null,
+	byteSize: 100,
+	fileName: `${overrides.storageKey}.jpg`,
+	height: 800,
+	mimeType: "image/jpeg",
+	sliceGroupId: null,
+	sliceIndex: null,
+	width: 600,
+	...overrides,
+});
+
+const hasNoNullValue = (item: Record<string, unknown>): boolean =>
+	Object.values(item).every((value) => value !== null);
+
+describe("toInitialMedia → buildJobUpdateData 왕복", () => {
+	// getEditableById 형태: 커버 + 2조각 detail 그룹 + 조각 메타 없는 detail + 배너 가로·세로.
+	const editableMedia = {
+		adHorizontal: editableItem({ fileName: "h.gif", storageKey: "banner-h" }),
+		adVertical: editableItem({ fileName: "v.gif", storageKey: "banner-v" }),
+		cover: editableItem({ storageKey: "cover-1" }),
+		detail: [
+			editableItem({
+				sliceGroupId: "grp",
+				sliceIndex: 0,
+				storageKey: "d-slice-0",
+			}),
+			editableItem({
+				sliceGroupId: "grp",
+				sliceIndex: 1,
+				storageKey: "d-slice-1",
+			}),
+			editableItem({ storageKey: "d-single" }),
+		],
+	};
+
+	it("커버·조각 메타·배너를 보존하고 null 키를 남기지 않는다", () => {
+		const { banners, cover, detail, previews } = toInitialMedia(
+			editableMedia,
+			"https://cdn.example.com/"
+		);
+
+		const input: NativeJobPostInput = {
+			...base,
+			media: { cover: cover ?? undefined, detail },
+		};
+		const result = buildJobUpdateData(input, adSource, banners);
+		const media = result.media;
+
+		// 커버 보존
+		expect(media?.cover?.storageKey).toBe("cover-1");
+
+		// detail 3행 모두 + 조각 메타 보존
+		const rows = media?.detail ?? [];
+		expect(rows.map((row) => row.storageKey)).toEqual([
+			"d-slice-0",
+			"d-slice-1",
+			"d-single",
+		]);
+		expect(rows[0].sliceGroupId).toBe("grp");
+		expect(rows[0].sliceIndex).toBe(0);
+		expect(rows[1].sliceIndex).toBe(1);
+		// 조각 아님 → 슬라이스 키 자체가 없다(null 아님, 생략)
+		expect("sliceGroupId" in rows[2]).toBe(false);
+		expect("sliceIndex" in rows[2]).toBe(false);
+
+		// 배너 보존
+		expect(media?.adHorizontal?.storageKey).toBe("banner-h");
+		expect(media?.adVertical?.storageKey).toBe("banner-v");
+
+		// null 값을 실은 키가 없다(altText null→"", 슬라이스 null→생략)
+		const items: (JobMediaUploadItem | undefined)[] = [
+			media?.cover,
+			media?.adHorizontal,
+			media?.adVertical,
+			...rows,
+		];
+		for (const item of items) {
+			expect(item).toBeDefined();
+			expect(hasNoNullValue(item as unknown as Record<string, unknown>)).toBe(
+				true
+			);
+		}
+		expect((media?.cover as JobMediaUploadItem).altText).toBe("");
+
+		// 미리보기는 base URL + storageKey로 조립된다(env 미주입 시 폴백은 화면이 처리)
+		expect(previews["cover-1"]).toBe("https://cdn.example.com/cover-1");
 	});
 });

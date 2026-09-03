@@ -15,6 +15,7 @@ import {
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { verificationStatusLabels } from "@/src/lib/bambi-native";
+import { localErrorMessage } from "@/src/lib/chat/chat-errors";
 import { getEmployerGateNotice } from "@/src/lib/employer/business";
 import {
 	countJobStatuses,
@@ -170,8 +171,10 @@ export default function EmployerJobsScreen() {
 			onError: (error) => {
 				Alert.alert(
 					"삭제하지 못했어요",
-					error.message ||
+					localErrorMessage(
+						error,
 						"공고를 삭제하지 못했습니다. 삭제 권한을 확인한 뒤 다시 시도해 주세요."
+					)
 				);
 			},
 			onSuccess: async () => {
@@ -211,7 +214,7 @@ export default function EmployerJobsScreen() {
 			<BambiHeader
 				action={
 					<Link asChild href={NEW_HREF}>
-						<Button size="sm">
+						<Button size="sm" variant={gate ? "secondary" : undefined}>
 							<Button.Label>공고 등록</Button.Label>
 						</Button>
 					</Link>
@@ -266,7 +269,7 @@ export default function EmployerJobsScreen() {
 				<StateCard
 					action={
 						<Link asChild href={NEW_HREF}>
-							<Button>
+							<Button variant="secondary">
 								<Button.Label>새 공고 등록</Button.Label>
 							</Button>
 						</Link>

@@ -11,16 +11,12 @@ import {
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { NativeJobFormScreen } from "@/src/components/native-job-form";
-import {
-	type NativeJobForm,
-	type NativeJobPostInput,
-	publicObjectUri,
-} from "@/src/lib/bambi-native";
-import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
+import type { NativeJobForm, NativeJobPostInput } from "@/src/lib/bambi-native";
+import { localErrorMessage } from "@/src/lib/chat/chat-errors";
 import {
 	buildJobUpdateData,
 	type EditableAdSource,
-	type EditableBanners,
+	toInitialMedia,
 } from "@/src/lib/employer/job-update";
 import { orpc } from "@/src/lib/orpc";
 
@@ -52,61 +48,6 @@ const toNativeJobForm = (job: {
 	workSchedule: job.workSchedule,
 });
 
-interface EditableMediaItem {
-	altText: null | string;
-	byteSize: number;
-	fileName: string;
-	height: null | number;
-	mimeType: string;
-	sliceGroupId: null | string;
-	sliceIndex: null | number;
-	storageKey: string;
-	width: null | number;
-}
-
-const toUploadItem = (item: EditableMediaItem): JobMediaUploadItem => ({
-	altText: item.altText ?? "",
-	byteSize: item.byteSize,
-	fileName: item.fileName,
-	height: item.height ?? undefined,
-	mimeType: item.mimeType,
-	storageKey: item.storageKey,
-	width: item.width ?? undefined,
-	// web이 만든 detail 조각 그룹 메타를 보존한다 — 빠뜨리면 재저장 시 조각이 흩어진다.
-	...(item.sliceGroupId === null ? {} : { sliceGroupId: item.sliceGroupId }),
-	...(item.sliceIndex === null ? {} : { sliceIndex: item.sliceIndex }),
-});
-
-// getEditableById 미디어를 폼 초기값으로. 원격 미디어는 로컬 uri가 없어 공개 버킷 URL을
-// 미리보기로 조립하고, env 미설정·비공개 객체라 조립이 안 되면 폼이 파일명으로 폴백한다.
-const toInitialMedia = (media?: {
-	adHorizontal: EditableMediaItem | null;
-	adVertical: EditableMediaItem | null;
-	cover: EditableMediaItem | null;
-	detail: EditableMediaItem[];
-}): {
-	banners: EditableBanners;
-	cover: JobMediaUploadItem | null;
-	detail: JobMediaUploadItem[];
-	previews: Record<string, string>;
-} => {
-	const cover = media?.cover ? toUploadItem(media.cover) : null;
-	const detail = (media?.detail ?? []).map(toUploadItem);
-	// 배너는 폼에 노출하지 않지만 저장 시 보존해야 한다(media 전량 교체 방어).
-	const banners: EditableBanners = {
-		adHorizontal: media?.adHorizontal ? toUploadItem(media.adHorizontal) : null,
-		adVertical: media?.adVertical ? toUploadItem(media.adVertical) : null,
-	};
-	const previews: Record<string, string> = {};
-	for (const item of cover ? [cover, ...detail] : detail) {
-		const uri = publicObjectUri(item.storageKey, GCS_PUBLIC_BASE_URL);
-		if (uri) {
-			previews[item.storageKey] = uri;
-		}
-	}
-	return { banners, cover, detail, previews };
-};
-
 export default function EditEmployerJobScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const queryClient = useQueryClient();
@@ -119,7 +60,7 @@ export default function EditEmployerJobScreen() {
 			onError: (error) => {
 				Alert.alert(
 					"공고를 저장하지 못했어요",
-					error.message || "잠시 후 다시 시도해 주세요."
+					localErrorMessage(error, "잠시 후 다시 시도해 주세요.")
 				);
 			},
 			onSuccess: async () => {
@@ -165,7 +106,7 @@ export default function EditEmployerJobScreen() {
 		cover: initialCover,
 		detail: initialDetail,
 		previews: initialPreviews,
-	} = toInitialMedia(editable.media);
+	} = toInitialMedia(editable.media, GCS_PUBLIC_BASE_URL);
 	const adSource: EditableAdSource = {
 		adProductId: editable.adProductId ?? null,
 		exposureAmount: editable.exposureAmount ?? null,
@@ -197,6 +138,7 @@ export default function EditEmployerJobScreen() {
 				isSubmitting={updateMutation.isPending}
 				onSubmit={handleSubmit}
 				postingScopes={postingScopes}
+				scopeLocked
 				submitLabel="공고 저장"
 			/>
 		</BambiScreen>

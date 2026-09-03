@@ -42,6 +42,9 @@ interface NativeJobFormProps {
 	isSubmitting: boolean;
 	onSubmit: (input: NativeJobPostInput) => void;
 	postingScopes: PostingScope[];
+	// 수정 화면은 등록 범위(조직·팀) 변경을 막는다 — 서버 update가 조직 변경을 FORBIDDEN으로
+	// 거절하고, web도 수정 시 범위를 읽기 전용으로 보여준다.
+	scopeLocked?: boolean;
 	submitLabel: string;
 }
 
@@ -151,6 +154,7 @@ export function NativeJobFormScreen({
 	isSubmitting,
 	onSubmit,
 	postingScopes,
+	scopeLocked = false,
 	submitLabel,
 }: NativeJobFormProps) {
 	const [form, setForm] = useState<NativeJobForm>(() =>
@@ -200,6 +204,9 @@ export function NativeJobFormScreen({
 		teamDisplayName: null,
 		teamId: form.teamId || null,
 	});
+	const selectedScopeOption = postingScopeOptions.find(
+		(option) => option.value === selectedScopeValue
+	);
 
 	const updateForm = (patch: Partial<NativeJobForm>) => {
 		setForm((current) => ({ ...current, ...patch }));
@@ -211,6 +218,13 @@ export function NativeJobFormScreen({
 
 		if (!selected) {
 			return;
+		}
+
+		// 조직이 바뀌면 이전 조직에서 발급받은 업로드 키를 그대로 보내면 서버가 FORBIDDEN이다
+		// — 미디어를 비운다. 미리보기 state는 picker의 key(organizationId) 리마운트로 함께 초기화.
+		if (selected.scope.organizationId !== form.organizationId) {
+			setCover(null);
+			setDetail([]);
 		}
 
 		updateForm({
@@ -261,34 +275,42 @@ export function NativeJobFormScreen({
 					<Text className="font-semibold text-foreground text-sm" selectable>
 						등록 범위
 					</Text>
-					<View className="gap-2">
-						{postingScopeOptions.map((option) => {
-							const isSelected = option.value === selectedScopeValue;
+					{scopeLocked ? (
+						<Text className="text-foreground" selectable>
+							{selectedScopeOption?.label ?? "등록 범위"}
+						</Text>
+					) : (
+						<View className="gap-2">
+							{postingScopeOptions.map((option) => {
+								const isSelected = option.value === selectedScopeValue;
 
-							return (
-								<Pressable
-									className={`rounded-lg border p-3 active:opacity-75 ${
-										isSelected
-											? "border-accent bg-accent"
-											: "border-border bg-background"
-									}`}
-									key={option.value}
-									onPress={() => handleScopeChange(option.value)}
-								>
-									<Text
-										className={
+								return (
+									<Pressable
+										className={`rounded-lg border p-3 active:opacity-75 ${
 											isSelected
-												? "font-semibold text-accent-foreground"
-												: "font-semibold text-foreground"
-										}
+												? "border-accent bg-accent"
+												: "border-border bg-background"
+										}`}
+										key={option.value}
+										onPress={() => handleScopeChange(option.value)}
 									>
-										{option.label}
-									</Text>
-								</Pressable>
-							);
-						})}
-					</View>
-					<FieldError errors={errors} field="organizationId" />
+										<Text
+											className={
+												isSelected
+													? "font-semibold text-accent-foreground"
+													: "font-semibold text-foreground"
+											}
+										>
+											{option.label}
+										</Text>
+									</Pressable>
+								);
+							})}
+						</View>
+					)}
+					{scopeLocked ? null : (
+						<FieldError errors={errors} field="organizationId" />
+					)}
 				</View>
 
 				<TextField>
@@ -369,6 +391,7 @@ export function NativeJobFormScreen({
 						cover={cover}
 						detail={detail}
 						initialPreviews={initialPreviews}
+						key={form.organizationId}
 						onChange={(next) => {
 							setCover(next.cover);
 							setDetail(next.detail);
