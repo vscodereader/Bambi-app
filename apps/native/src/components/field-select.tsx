@@ -64,7 +64,12 @@ export function FieldSelect({
 				presentation="bottom-sheet"
 				value={selectedOption}
 			>
-				<Select.Trigger>
+				{/* 값이 들어간 필드는 테두리만 accent로 바꾼다 — 배경까지 칠하면 입력칸 넷이
+				    코럴 덩어리가 되어 하단 등록 CTA와 색 위계가 뒤집힌다. 두께는 기본(1)을 그대로
+				    둬서 아직 안 고른 필드와 높이가 어긋나지 않는다. */}
+				<Select.Trigger
+					className={selectedOption ? "border-accent" : undefined}
+				>
 					<Select.Value placeholder={placeholder} />
 					<Select.TriggerIndicator />
 				</Select.Trigger>
