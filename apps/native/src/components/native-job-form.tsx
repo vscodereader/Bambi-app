@@ -1,8 +1,14 @@
+import {
+	type JobDescriptionBlock,
+	normalizeJobDescriptionBlocks,
+} from "@bambi-app/api/services/bambi-job-description-blocks";
 import { useQuery } from "@tanstack/react-query";
-import { Button, Input, Surface, TextField } from "heroui-native";
+import { Button, Input, Surface, Switch, TextField } from "heroui-native";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
+import { JobDescriptionBlockEditor } from "@/src/components/job-description-block-editor";
+import { JobImagePickerSection } from "@/src/components/job-image-picker-section";
 import {
 	emptyNativeJobForm,
 	industryOptions,
@@ -12,6 +18,8 @@ import {
 	payUnitOptions,
 	validateNativeJobForm,
 } from "@/src/lib/bambi-native";
+import { jobDescriptionBlocksError } from "@/src/lib/employer/job-description-blocks";
+import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
 import { orpc } from "@/src/lib/orpc";
 
 interface PostingScope {
@@ -23,10 +31,20 @@ interface PostingScope {
 }
 
 interface NativeJobFormProps {
+	initialBeginnerFriendly?: boolean;
+	initialBlocks?: JobDescriptionBlock[];
+	initialCover?: JobMediaUploadItem | null;
+	initialDetail?: JobMediaUploadItem[];
+	initialInstantInterview?: boolean;
+	// 원격(수정 프리필) 미디어의 storageKey→미리보기 URL. 없으면 파일명으로 폴백한다.
+	initialPreviews?: Record<string, string>;
 	initialValue?: NativeJobForm;
 	isSubmitting: boolean;
 	onSubmit: (input: NativeJobPostInput) => void;
 	postingScopes: PostingScope[];
+	// 수정 화면은 등록 범위(조직·팀) 변경을 막는다 — 서버 update가 조직 변경을 FORBIDDEN으로
+	// 거절하고, web도 수정 시 범위를 읽기 전용으로 보여준다.
+	scopeLocked?: boolean;
 	submitLabel: string;
 }
 
@@ -126,10 +144,17 @@ function FieldError({
 }
 
 export function NativeJobFormScreen({
+	initialBeginnerFriendly,
+	initialBlocks,
+	initialCover,
+	initialDetail,
+	initialInstantInterview,
+	initialPreviews,
 	initialValue,
 	isSubmitting,
 	onSubmit,
 	postingScopes,
+	scopeLocked = false,
 	submitLabel,
 }: NativeJobFormProps) {
 	const [form, setForm] = useState<NativeJobForm>(() =>
@@ -137,6 +162,22 @@ export function NativeJobFormScreen({
 	);
 	const [errors, setErrors] = useState<NativeJobFormErrors>({});
 	const [formMessage, setFormMessage] = useState<null | string>(null);
+	const [beginnerFriendly, setBeginnerFriendly] = useState(
+		initialBeginnerFriendly ?? false
+	);
+	const [instantInterview, setInstantInterview] = useState(
+		initialInstantInterview ?? false
+	);
+	const [blocks, setBlocks] = useState<JobDescriptionBlock[]>(
+		initialBlocks ?? []
+	);
+	const [blocksError, setBlocksError] = useState<null | string>(null);
+	const [cover, setCover] = useState<JobMediaUploadItem | null>(
+		initialCover ?? null
+	);
+	const [detail, setDetail] = useState<JobMediaUploadItem[]>(
+		initialDetail ?? []
+	);
 	// 지역은 서버 마스터가 유일한 출처다 — 코드를 그대로 제출해야 저장 직전 정합 검사를 통과한다.
 	const regionsQuery = useQuery(orpc.bambi.regions.list.queryOptions());
 	const regionChoices = useMemo(
@@ -163,6 +204,9 @@ export function NativeJobFormScreen({
 		teamDisplayName: null,
 		teamId: form.teamId || null,
 	});
+	const selectedScopeOption = postingScopeOptions.find(
+		(option) => option.value === selectedScopeValue
+	);
 
 	const updateForm = (patch: Partial<NativeJobForm>) => {
 		setForm((current) => ({ ...current, ...patch }));
@@ -174,6 +218,13 @@ export function NativeJobFormScreen({
 
 		if (!selected) {
 			return;
+		}
+
+		// 조직이 바뀌면 이전 조직에서 발급받은 업로드 키를 그대로 보내면 서버가 FORBIDDEN이다
+		// — 미디어를 비운다. 미리보기 state는 picker의 key(organizationId) 리마운트로 함께 초기화.
+		if (selected.scope.organizationId !== form.organizationId) {
+			setCover(null);
+			setDetail([]);
 		}
 
 		updateForm({
@@ -197,9 +248,24 @@ export function NativeJobFormScreen({
 			return;
 		}
 
+		const blockError = jobDescriptionBlocksError(blocks);
+
+		if (blockError) {
+			setBlocksError(blockError);
+			setFormMessage(blockError);
+			return;
+		}
+
 		setErrors({});
+		setBlocksError(null);
 		setFormMessage(null);
-		onSubmit(validation.input);
+		onSubmit({
+			...validation.input,
+			beginnerFriendly,
+			descriptionBlocks: normalizeJobDescriptionBlocks(blocks),
+			instantInterview,
+			media: { cover: cover ?? undefined, detail },
+		});
 	};
 
 	return (
@@ -209,34 +275,42 @@ export function NativeJobFormScreen({
 					<Text className="font-semibold text-foreground text-sm" selectable>
 						등록 범위
 					</Text>
-					<View className="gap-2">
-						{postingScopeOptions.map((option) => {
-							const isSelected = option.value === selectedScopeValue;
+					{scopeLocked ? (
+						<Text className="text-foreground" selectable>
+							{selectedScopeOption?.label ?? "등록 범위"}
+						</Text>
+					) : (
+						<View className="gap-2">
+							{postingScopeOptions.map((option) => {
+								const isSelected = option.value === selectedScopeValue;
 
-							return (
-								<Pressable
-									className={`rounded-lg border p-3 active:opacity-75 ${
-										isSelected
-											? "border-accent bg-accent"
-											: "border-border bg-background"
-									}`}
-									key={option.value}
-									onPress={() => handleScopeChange(option.value)}
-								>
-									<Text
-										className={
+								return (
+									<Pressable
+										className={`rounded-lg border p-3 active:opacity-75 ${
 											isSelected
-												? "font-semibold text-accent-foreground"
-												: "font-semibold text-foreground"
-										}
+												? "border-accent bg-accent"
+												: "border-border bg-background"
+										}`}
+										key={option.value}
+										onPress={() => handleScopeChange(option.value)}
 									>
-										{option.label}
-									</Text>
-								</Pressable>
-							);
-						})}
-					</View>
-					<FieldError errors={errors} field="organizationId" />
+										<Text
+											className={
+												isSelected
+													? "font-semibold text-accent-foreground"
+													: "font-semibold text-foreground"
+											}
+										>
+											{option.label}
+										</Text>
+									</Pressable>
+								);
+							})}
+						</View>
+					)}
+					{scopeLocked ? null : (
+						<FieldError errors={errors} field="organizationId" />
+					)}
 				</View>
 
 				<TextField>
@@ -306,6 +380,50 @@ export function NativeJobFormScreen({
 				</TextField>
 				<FieldError errors={errors} field="description" />
 
+				<JobDescriptionBlockEditor
+					blocks={blocks}
+					error={blocksError}
+					onChange={setBlocks}
+				/>
+
+				{form.organizationId ? (
+					<JobImagePickerSection
+						cover={cover}
+						detail={detail}
+						initialPreviews={initialPreviews}
+						key={form.organizationId}
+						onChange={(next) => {
+							setCover(next.cover);
+							setDetail(next.detail);
+						}}
+						organizationId={form.organizationId}
+						teamId={form.teamId || null}
+					/>
+				) : (
+					<Text className="text-muted text-xs">
+						등록 범위를 먼저 선택하면 이미지를 올릴 수 있어요.
+					</Text>
+				)}
+
+				<View className="flex-row items-center justify-between gap-3">
+					<Text className="font-semibold text-foreground text-sm">
+						초보 환영
+					</Text>
+					<Switch
+						isSelected={beginnerFriendly}
+						onSelectedChange={setBeginnerFriendly}
+					/>
+				</View>
+				<View className="flex-row items-center justify-between gap-3">
+					<Text className="font-semibold text-foreground text-sm">
+						당일/즉시 면접
+					</Text>
+					<Switch
+						isSelected={instantInterview}
+						onSelectedChange={setInstantInterview}
+					/>
+				</View>
+
 				<TextField>
 					<Input
 						multiline
@@ -321,6 +439,10 @@ export function NativeJobFormScreen({
 						{formMessage}
 					</Text>
 				) : null}
+
+				<Text className="text-muted text-xs leading-5" selectable>
+					광고 노출 상품·결제는 밤비알바 웹사이트에서 진행할 수 있어요.
+				</Text>
 
 				<Button isDisabled={isSubmitting} onPress={handleSubmit}>
 					<Button.Label>{isSubmitting ? "저장 중" : submitLabel}</Button.Label>
