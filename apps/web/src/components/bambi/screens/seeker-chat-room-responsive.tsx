@@ -66,6 +66,10 @@ import {
 } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 import {
+	ChatActionConfirmation,
+	type ChatActionConfirmationTarget,
+} from "../chat-action-confirmation";
+import {
 	ChatAttachmentPreview,
 	type ChatAttachmentPreviewItem,
 } from "../chat-attachment-preview";
@@ -1432,6 +1436,8 @@ export function SeekerChatRoomResponsive({
 	// 서랍이 같이 여는 자리라 여기서 한 벌만 들고 있는다.
 	const [isSheetOpen, setIsSheetOpen] = useState(false);
 	const [isReportOpen, setIsReportOpen] = useState(false);
+	const [confirmationTarget, setConfirmationTarget] =
+		useState<ChatActionConfirmationTarget | null>(null);
 	const [scheduleErrorMessage, setScheduleErrorMessage] = useState<
 		null | string
 	>(null);
@@ -1996,6 +2002,10 @@ export function SeekerChatRoomResponsive({
 		messageId: string,
 		decision: ContactRevealDecision
 	) => {
+		if (decision === "reveal") {
+			setConfirmationTarget({ id: messageId, kind: "contact" });
+			return;
+		}
 		respondContactRevealMutation.mutate({ decision, messageId });
 	};
 	const stopTyping = () => {
@@ -2118,10 +2128,43 @@ export function SeekerChatRoomResponsive({
 		interviewScheduleId: string,
 		status: "canceled" | "confirmed" | "declined"
 	) => {
+		if (status === "confirmed") {
+			setConfirmationTarget({ id: interviewScheduleId, kind: "interview" });
+			return;
+		}
 		setInterviewStatusMutation.mutate({
 			interviewScheduleId,
 			status,
 		});
+	};
+	const isConfirmationPending =
+		respondContactRevealMutation.isPending ||
+		setInterviewStatusMutation.isPending;
+	const handleConfirmationDecision = (confirmed: boolean) => {
+		if (!confirmationTarget || isConfirmationPending) {
+			return;
+		}
+		const onSuccess = () => setConfirmationTarget(null);
+		if (confirmationTarget.kind === "contact") {
+			respondContactRevealMutation.mutate(
+				{
+					decision: confirmed ? "reveal" : "decline",
+					messageId: confirmationTarget.id,
+				},
+				{ onSuccess }
+			);
+			return;
+		}
+		setInterviewStatusMutation.mutate(
+			{
+				interviewScheduleId: confirmationTarget.id,
+				status: confirmed ? "confirmed" : "declined",
+			},
+			{
+				onError: (error) => toast.error(getMutationErrorMessage(error)),
+				onSuccess,
+			}
+		);
 	};
 	// 신고한 방은 검토가 끝날 때까지 서버가 감춘다. 창을 닫을 때 방 조회를 다시 돌려
 	// "신고를 검토하고 있는 채팅이에요" 안내와 함께 목록으로 나가게 한다.
@@ -2332,6 +2375,12 @@ export function SeekerChatRoomResponsive({
 					{sidePanel}
 				</SheetContent>
 			</Sheet>
+			<ChatActionConfirmation
+				isPending={isConfirmationPending}
+				onClose={() => setConfirmationTarget(null)}
+				onDecision={handleConfirmationDecision}
+				target={confirmationTarget}
+			/>
 			{isJobSeeker ? (
 				<ReportDialog
 					onOpenChange={handleReportOpenChange}
