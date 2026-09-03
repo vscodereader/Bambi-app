@@ -97,17 +97,18 @@ function findLastMineIndex(
 }
 
 function resolveSendBlockedMessage({
+	blockMessage,
 	counterpartWithdrawn,
-	isBlocked,
 }: {
+	blockMessage: null | string;
 	counterpartWithdrawn: boolean;
-	isBlocked: boolean;
 }): null | string {
+	// 보던 중 차단되면 getById가 FORBIDDEN을 던진다 — 그 사유 문구를 우선 안내한다.
+	if (blockMessage) {
+		return blockMessage;
+	}
 	if (counterpartWithdrawn) {
 		return "상대가 탈퇴해 메시지를 보낼 수 없어요.";
-	}
-	if (isBlocked) {
-		return "차단된 채팅방이에요.";
 	}
 	return null;
 }
@@ -181,14 +182,16 @@ function SeekerChatRoomInner() {
 		roomId: id,
 	});
 
-	// 첫 로드가 끝나면 지연 없이 읽음 처리한다.
-	const firstLoadedRef = useRef(false);
+	// 첫 로드가 끝나면 지연 없이 읽음 처리한다. 같은 라우트에서 방만 갈아탈 수 있으므로
+	// boolean이 아니라 "읽음 처리한 방 id"를 들어 방이 바뀌면 다시 돈다.
+	const firstLoadedRoomIdRef = useRef<string | null>(null);
 	useEffect(() => {
-		if (room && !firstLoadedRef.current) {
-			firstLoadedRef.current = true;
+		if (room && firstLoadedRoomIdRef.current !== id) {
+			firstLoadedRoomIdRef.current = id;
 			autoRead.markReadNow(latestMessageId);
+			setHasUnseenNew(false);
 		}
-	}, [autoRead, latestMessageId, room]);
+	}, [autoRead, id, latestMessageId, room]);
 
 	const invalidateRoom = useCallback(
 		() =>
@@ -274,22 +277,9 @@ function SeekerChatRoomInner() {
 		setHasUnseenNew(false);
 	};
 
-	if (roomQuery.isLoading) {
-		return (
-			<View className="flex-1 bg-background">
-				<ChatRoomHeader
-					counterpartName={null}
-					counterpartProfileImageUrl={null}
-					jobTitle={null}
-					onBack={() => router.back()}
-					statusLine={null}
-				/>
-				<RoomSkeleton />
-			</View>
-		);
-	}
-
-	if (roomQuery.isError || !room) {
+	// 캐시된 방 데이터가 아예 없는 초기 실패만 전체 화면을 갈아 끼운다. 보던 중 차단되면
+	// room(직전 성공 데이터)이 남아 이력을 유지하고, 사유는 입력바 자리에 띄운다(아래).
+	if (roomQuery.isError && !room) {
 		const blockMessage = getChatBlockMessage(roomQuery.error);
 		return (
 			<View className="flex-1 bg-background">
@@ -313,14 +303,30 @@ function SeekerChatRoomInner() {
 		);
 	}
 
+	// 최초 로딩(데이터 없음)도 여기로 떨어져 스켈레톤을 그린다 — 위 에러 분기만 통과하면 된다.
+	if (!room) {
+		return (
+			<View className="flex-1 bg-background">
+				<ChatRoomHeader
+					counterpartName={null}
+					counterpartProfileImageUrl={null}
+					jobTitle={null}
+					onBack={() => router.back()}
+					statusLine={null}
+				/>
+				<RoomSkeleton />
+			</View>
+		);
+	}
+
 	const confirmedScheduleId = getConfirmedScheduleId(room.schedules);
 	const statusLine = resolveStatusLine({
 		counterpartWithdrawn: room.counterpartWithdrawn,
 		jobStatus: room.jobPost?.status ?? null,
 	});
 	const sendBlockedMessage = resolveSendBlockedMessage({
+		blockMessage: getChatBlockMessage(roomQuery.error),
 		counterpartWithdrawn: room.counterpartWithdrawn,
-		isBlocked: room.room.isBlocked,
 	});
 	const isBusy = respondContact.isPending || setInterviewStatus.isPending;
 
@@ -357,11 +363,12 @@ function SeekerChatRoomInner() {
 			/>
 		);
 
-		// inverted라 날짜 칩은 같은 아이템 "위"(=렌더 순서상 뒤)에 붙인다.
+		// inverted여도 각 셀은 scaleY:-1이 두 번 걸려 내용이 정방향이라 JSX 순서가 곧
+		// 시각 순서 — 날짜 칩은 메시지 "위"에 오도록 body 앞에 둔다.
 		return (
 			<View>
-				{body}
 				{dateLabel ? <ChatDateChip label={dateLabel} /> : null}
+				{body}
 			</View>
 		);
 	};
