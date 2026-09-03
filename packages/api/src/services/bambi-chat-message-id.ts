@@ -6,6 +6,26 @@ const VERSION_RANDOM_SPAN = 16;
 const VARIANT_BASE = 128;
 const VARIANT_RANDOM_SPAN = 64;
 
+// Hermes(React Native)에는 globalThis.crypto가 없다. 이 id는 보안 토큰이 아니라
+// 정렬 가능한 멱등키라, 웹크립토가 없을 때만 Math.random으로 채운다(서버·브라우저는
+// 항상 crypto 경로). 앞 48비트 타임스탬프 + 74비트 난수라 충돌은 무시할 수 있다.
+const fillRandomBytes = (bytes: Uint8Array): void => {
+	const webCrypto = (
+		globalThis as {
+			crypto?: { getRandomValues?: (bytes: Uint8Array) => void };
+		}
+	).crypto;
+
+	if (typeof webCrypto?.getRandomValues === "function") {
+		webCrypto.getRandomValues(bytes);
+		return;
+	}
+
+	for (let index = 0; index < bytes.length; index += 1) {
+		bytes[index] = Math.floor(Math.random() * BYTE);
+	}
+};
+
 /**
  * 채팅 메시지 id의 단일 진실원 — UUIDv7.
  * 앞 48비트가 Unix ms 타임스탬프라 id 자체가 생성 시간순으로 정렬된다.
@@ -17,7 +37,7 @@ const VARIANT_RANDOM_SPAN = 64;
  */
 export const generateChatMessageId = (): string => {
 	const bytes = new Uint8Array(16);
-	crypto.getRandomValues(bytes);
+	fillRandomBytes(bytes);
 
 	let timestamp = Date.now();
 	for (let index = TIMESTAMP_BYTES - 1; index >= 0; index -= 1) {
