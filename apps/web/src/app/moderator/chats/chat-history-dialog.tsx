@@ -5,6 +5,10 @@
 // 페이지에서 떼어냈다. 열람은 읽기 전용(getChatMessagesForModeration)이라 상대에게
 // 읽음으로 보이지 않고, 누가 언제 열었는지만 감사 로그에 남는다.
 
+import {
+	annotateChatMessages,
+	formatChatTimeLabel,
+} from "@bambi-app/api/services/bambi-chat-message-grouping";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
@@ -19,10 +23,6 @@ import { useQuery } from "@tanstack/react-query";
 import { DownloadIcon, FileTextIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/bambi/ds";
-import {
-	annotateChatMessages,
-	formatChatTimeLabel,
-} from "@/lib/bambi/chat-message-grouping";
 import { orpc } from "@/utils/orpc";
 
 // 채팅 내역 열람 대상(방 id + 표시용 제목).

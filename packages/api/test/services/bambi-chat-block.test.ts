@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getChatBlockMessage } from "@/lib/bambi/chat-block";
+import { getChatBlockMessage } from "@/services/bambi-chat-block";
 
 const blockError = (chatBlockReason: string, counterpartName?: string) => ({
 	data: { chatBlockReason, counterpartName: counterpartName ?? null },

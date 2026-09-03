@@ -1,13 +1,13 @@
 "use client";
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
-import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
-import { orpc } from "@/utils/orpc";
 import {
 	mergeChatMessagesById,
 	resolveOldestChatMessageCursor,
-} from "./chat-room-messages";
+} from "@bambi-app/api/services/bambi-chat-room-messages";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
+import { orpc } from "@/utils/orpc";
 
 type ChatRoomMessage = Awaited<
 	ReturnType<AppRouterClient["bambi"]["chats"]["getById"]>

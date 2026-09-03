@@ -3,7 +3,7 @@ import {
 	isScrolledToBottom,
 	mergeChatMessagesById,
 	resolveOldestChatMessageCursor,
-} from "@/lib/bambi/chat-room-messages";
+} from "@/services/bambi-chat-room-messages";
 
 const message = (id: string, createdAt: string) => ({ createdAt, id });
 

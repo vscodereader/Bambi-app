@@ -1,5 +1,6 @@
 "use client";
 
+import { getChatBlockMessage } from "@bambi-app/api/services/bambi-chat-block";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import {
@@ -19,7 +20,6 @@ import {
 	useIsBlockedEmployer,
 	useMarketplaceJob,
 } from "@/lib/bambi/api-jobs";
-import { getChatBlockMessage } from "@/lib/bambi/chat-block";
 import { orpc } from "@/utils/orpc";
 
 const getErrorCode = (error: Error): string | undefined =>

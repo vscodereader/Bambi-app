@@ -19,6 +19,7 @@ import {
 import { JobDescriptionSection } from "@/src/components/job-description-section";
 import { MemberOnly } from "@/src/components/member-only";
 import { JobReportDialog } from "@/src/components/report-dialog";
+import { startChatErrorMessage } from "@/src/lib/chat/chat-errors";
 import { orpc } from "@/src/lib/orpc";
 
 // 상세 이미지는 storageKey만 내려오므로 공개 버킷 base와 합쳐 URL을 만든다(목록 커버와 동일).
@@ -140,8 +141,7 @@ function SeekerJobDetailInner() {
 			>
 				{startChatMutation.isError ? (
 					<Text className="text-danger text-sm" selectable>
-						채팅을 시작하지 못했습니다. 프로필과 휴대폰 인증 상태를 확인해
-						주세요.
+						{startChatErrorMessage(startChatMutation.error)}
 					</Text>
 				) : null}
 				<Button

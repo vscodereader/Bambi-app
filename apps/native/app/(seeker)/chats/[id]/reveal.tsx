@@ -17,7 +17,7 @@ import { orpc } from "@/src/lib/orpc";
 
 function ContactRevealInner() {
 	const { id } = useLocalSearchParams<{ id: string }>();
-	const [contactValue, setContactValue] = useState("010-0000-0000");
+	const [contactValue, setContactValue] = useState("");
 	const [message, setMessage] = useState<null | string>(null);
 	const chatQuery = useQuery(
 		orpc.bambi.chats.getById.queryOptions({ input: { id } })
@@ -76,7 +76,9 @@ function ContactRevealInner() {
 					</Text>
 				) : null}
 				<Button
-					isDisabled={revealMutation.isPending}
+					isDisabled={
+						revealMutation.isPending || contactValue.trim().length < 3
+					}
 					onPress={() =>
 						revealMutation.mutate({
 							contactMethod: "phone",
