@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { NativeJobPostInput } from "@/src/lib/bambi-native";
+import { withSlotBackground } from "@/src/lib/employer/ad-banner-layout";
 import type { NativeExposureState } from "@/src/lib/employer/ad-exposure";
 import {
 	buildDraftSubmission,
@@ -25,6 +26,8 @@ const baseInput: NativeJobPostInput = {
 };
 
 const paidExposure: NativeExposureState = {
+	detailDesignAmount: null,
+	detailDesignRequested: false,
 	paymentMethod: "bank_transfer",
 	pointsToUse: 5000,
 	selection: {
@@ -50,7 +53,10 @@ describe("emptyJobDraft", () => {
 		expect(emptyJobDraft()).toEqual({
 			base: null,
 			banners: {},
+			bannerLayout: null,
 			exposure: {
+				detailDesignAmount: null,
+				detailDesignRequested: false,
 				paymentMethod: "bank_transfer",
 				pointsToUse: 0,
 				selection: null,
@@ -63,11 +69,13 @@ describe("buildDraftSubmission", () => {
 	it("무료 선택이면 base를 그대로 둔다(배너·결제 필드 없음)", () => {
 		const free = emptyJobDraft().exposure;
 
-		expect(buildDraftSubmission(baseInput, free, banners)).toEqual(baseInput);
+		expect(buildDraftSubmission(baseInput, free, banners, null)).toEqual(
+			baseInput
+		);
 	});
 
 	it("유료 선택이면 노출·결제 필드와 배너를 media에 병합하고 cover/detail은 보존한다", () => {
-		const result = buildDraftSubmission(baseInput, paidExposure, banners);
+		const result = buildDraftSubmission(baseInput, paidExposure, banners, null);
 
 		expect(result.adProductId).toBe("p1");
 		expect(result.exposureAmount).toBe(330_000);
@@ -78,6 +86,39 @@ describe("buildDraftSubmission", () => {
 		expect(result.media?.detail).toEqual([]);
 		expect(result.media?.adHorizontal).toEqual(banners.adHorizontal);
 		expect(result.media?.adVertical).toEqual(banners.adVertical);
+		// 레이아웃을 안 만졌으면 키를 생략한다(서버 기본 = 이미지 배경).
+		expect("adBannerLayout" in result).toBe(false);
+	});
+
+	it("상세 디자인을 신청하면 값과 가격을 함께 싣는다", () => {
+		const result = buildDraftSubmission(
+			baseInput,
+			{
+				...paidExposure,
+				detailDesignAmount: 50_000,
+				detailDesignRequested: true,
+			},
+			banners,
+			null
+		);
+
+		expect(result.detailDesignRequested).toBe(true);
+		expect(result.detailDesignAmount).toBe(50_000);
+	});
+
+	it("배너 레이아웃을 만졌으면 adBannerLayout을 싣는다", () => {
+		const layout = withSlotBackground(null, "ad_horizontal", {
+			color: "#1f2937",
+			type: "color",
+		});
+		const result = buildDraftSubmission(
+			baseInput,
+			paidExposure,
+			banners,
+			layout
+		);
+
+		expect(result.adBannerLayout).toBe(layout);
 	});
 });
 
@@ -89,20 +130,38 @@ describe("hasMissingRequiredBanners", () => {
 			hasMissingRequiredBanners(
 				paidExposure,
 				{ adHorizontal: banners.adHorizontal },
-				required
+				required,
+				null
 			)
 		).toBe(true);
 	});
 
 	it("유료라도 필수 배너를 모두 채우면 false다", () => {
-		expect(hasMissingRequiredBanners(paidExposure, banners, required)).toBe(
-			false
-		);
+		expect(
+			hasMissingRequiredBanners(paidExposure, banners, required, null)
+		).toBe(false);
 	});
 
 	it("무료(선택 없음)면 요구 슬롯과 무관하게 false다", () => {
 		expect(
-			hasMissingRequiredBanners(emptyJobDraft().exposure, {}, required)
+			hasMissingRequiredBanners(emptyJobDraft().exposure, {}, required, null)
+		).toBe(false);
+	});
+
+	// 단색 배경 슬롯은 이미지가 없어도 통과한다 — 이미지가 빈 세로형만 남으면 그것만 막는다.
+	it("단색 배경 슬롯은 이미지 없이도 통과다", () => {
+		const layout = withSlotBackground(null, "ad_horizontal", {
+			color: "#1f2937",
+			type: "color",
+		});
+
+		expect(
+			hasMissingRequiredBanners(
+				paidExposure,
+				{ adVertical: banners.adVertical },
+				required,
+				layout
+			)
 		).toBe(false);
 	});
 });

@@ -1,3 +1,4 @@
+import type { AdBannerLayoutInput } from "@bambi-app/api/services/bambi-ad-banner-layout";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type Href, router } from "expo-router";
 import { Button } from "heroui-native";
@@ -103,6 +104,12 @@ export default function NewEmployerJobExposureScreen() {
 		setBannerError(null);
 	};
 
+	const handleLayoutChange = (next: AdBannerLayoutInput | null) => {
+		setJobDraft((prev) => ({ ...prev, bannerLayout: next }));
+		// 단색으로 바꿨을 수 있으니 배너 게이트 메시지를 지운다(단색은 이미지가 필요 없다).
+		setBannerError(null);
+	};
+
 	// "공고 등록하기". 유료인데 필수 배너가 비면 등록을 막고 사유를 띄운다. 통과하면 초안의
 	// 노출 선택·배너를 base에 병합해 실제 등록한다(무료면 배너·결제 없이 그대로 등록).
 	const handleRegister = () => {
@@ -110,7 +117,8 @@ export default function NewEmployerJobExposureScreen() {
 			hasMissingRequiredBanners(
 				draft.exposure,
 				draft.banners,
-				requiredBannerUsages
+				requiredBannerUsages,
+				draft.bannerLayout
 			)
 		) {
 			setBannerError(REQUIRED_BANNER_ERROR);
@@ -119,7 +127,12 @@ export default function NewEmployerJobExposureScreen() {
 
 		isRegisteringRef.current = true;
 
-		const input = buildDraftSubmission(base, draft.exposure, draft.banners);
+		const input = buildDraftSubmission(
+			base,
+			draft.exposure,
+			draft.banners,
+			draft.bannerLayout
+		);
 		// 무통장입금 유료 건이면 입금액(노출금액 − 사용 포인트)을 안내한다. 무료는 안내 없음.
 		depositNoticeRef.current =
 			input.paymentMethod === "bank_transfer" &&
@@ -160,8 +173,10 @@ export default function NewEmployerJobExposureScreen() {
 				bannerSlot={
 					<JobBannerPickerSection
 						key={base.organizationId}
+						layout={draft.bannerLayout}
 						media={draft.banners}
 						onChange={handleBannersChange}
+						onLayoutChange={handleLayoutChange}
 						organizationId={base.organizationId}
 						requiredUsages={requiredBannerUsages}
 						teamId={base.teamId || null}

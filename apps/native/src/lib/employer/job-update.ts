@@ -1,3 +1,5 @@
+import type { AdBannerLayoutInput } from "@bambi-app/api/services/bambi-ad-banner-layout";
+
 import {
 	type NativeJobPostInput,
 	publicObjectUri,
@@ -97,35 +99,76 @@ const withBanners = (
 	};
 };
 
+// 상세 디자인 신청 변경 인자. price는 신청을 켤 때 서버에 보낼 재확인 금액이다.
+export interface DetailDesignChange {
+	detailDesignPrice: null | number;
+	nextRequested: boolean;
+	previousRequested: boolean;
+}
+
+// 배너 레이아웃 변경 인자. changed일 때만 next를 싣는다(생략 = 서버 보존).
+export interface AdBannerLayoutChange {
+	changed: boolean;
+	next: AdBannerLayoutInput | null;
+}
+
 /**
  * 수정 payload를 만든다. native는 광고 상품을 편집하지 않지만, 서버 update는 jobPostInput
  * 전체를 받고 resolveJobPostExposure(data.adProductId)가 adProductId를 안 보내면 노출을
  * "standard"로 되돌려 유료 광고를 무료로 강등하고 결제 상태를 미결제로 리셋한다. 그래서
  * web에서 만든 광고 공고를 native에서 수정할 때는 광고 4필드(adProductId·기간·금액·결제수단)를
- * getEditableById 값 그대로 되돌려 보낸다. adBannerLayout·boostOptionTypes·detailDesignRequested는
- * 키를 생략하면 서버가 기존 값을 보존하므로 보내지 않는다.
+ * getEditableById 값 그대로 되돌려 보낸다. boostOptionTypes는 키를 생략하면 서버가 보존한다.
+ *
+ * 상세 디자인·배너 레이아웃은 "값이 바뀐 경우에만" 싣는다 — 항상 보내면 서버의 "생략=보존"
+ * 경로가 죽고, 항상 생략하면 신청·해제·단색 배경 전환이 불가능하다. detailDesign/adBannerLayout
+ * 인자를 안 넘기면(수정 UI가 없는 경로) 종전대로 두 키를 모두 생략해 기존 값을 보존한다.
  */
 export const buildJobUpdateData = (
 	input: NativeJobPostInput,
 	editable: EditableAdSource,
-	banners?: EditableBanners
+	banners?: EditableBanners,
+	detailDesign?: DetailDesignChange,
+	adBannerLayout?: AdBannerLayoutChange
 ): NativeJobPostInput => {
 	const media = withBanners(input.media, banners);
 
-	if (!editable.adProductId) {
-		return media === input.media ? input : { ...input, media };
+	let base: NativeJobPostInput;
+	if (editable.adProductId) {
+		base = {
+			...input,
+			adProductId: editable.adProductId,
+			exposureAmount: editable.exposureAmount,
+			exposureDurationDays: editable.exposureDurationDays,
+			media,
+			paymentMethod:
+				editable.paymentMethod === "bank_transfer" ||
+				editable.paymentMethod === "card"
+					? editable.paymentMethod
+					: null,
+		};
+	} else if (media === input.media) {
+		base = input;
+	} else {
+		base = { ...input, media };
 	}
 
-	return {
-		...input,
-		adProductId: editable.adProductId,
-		exposureAmount: editable.exposureAmount,
-		exposureDurationDays: editable.exposureDurationDays,
-		media,
-		paymentMethod:
-			editable.paymentMethod === "bank_transfer" ||
-			editable.paymentMethod === "card"
-				? editable.paymentMethod
-				: null,
-	};
+	const extras: Partial<NativeJobPostInput> = {};
+
+	// 신청 상태가 바뀐 경우에만 두 키를 싣는다. 켜면 가격도 함께(서버 재확인용), 끄면 false만.
+	if (
+		detailDesign &&
+		detailDesign.nextRequested !== detailDesign.previousRequested
+	) {
+		extras.detailDesignRequested = detailDesign.nextRequested;
+
+		if (detailDesign.nextRequested) {
+			extras.detailDesignAmount = detailDesign.detailDesignPrice;
+		}
+	}
+
+	if (adBannerLayout?.changed) {
+		extras.adBannerLayout = adBannerLayout.next;
+	}
+
+	return Object.keys(extras).length > 0 ? { ...base, ...extras } : base;
 };

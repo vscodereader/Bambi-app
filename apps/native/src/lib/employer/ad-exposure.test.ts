@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { withSlotBackground } from "./ad-banner-layout";
 import {
 	describeAdSelection,
 	formatAdPriceLabel,
 	getMissingBannerUsages,
 	getRequiredBannerUsages,
 	resolveAdAmount,
+	resolveDetailDesignSelection,
 	resolvePayableAmount,
 	resolveUsablePoints,
 	validatePointsToUse,
@@ -50,6 +52,39 @@ describe("getMissingBannerUsages", () => {
 
 	it("요구 슬롯이 없으면 미디어가 비어도 통과다", () => {
 		expect(getMissingBannerUsages({}, [])).toEqual([]);
+	});
+
+	it("단색 배경 슬롯은 이미지가 없어도 통과한다", () => {
+		const layout = withSlotBackground(null, "ad_horizontal", {
+			color: "#1f2937",
+			type: "color",
+		});
+
+		expect(
+			getMissingBannerUsages(
+				{ adVertical: { storageKey: "b" } },
+				["ad_horizontal", "ad_vertical"],
+				layout
+			)
+		).toEqual([]);
+	});
+});
+
+describe("resolveDetailDesignSelection", () => {
+	it("상품이 옵션을 팔면 선택을 유지한다", () => {
+		expect(
+			resolveDetailDesignSelection({
+				detailDesignPrice: 50_000,
+				requested: true,
+			})
+		).toEqual({ amount: 50_000, requested: true });
+	});
+
+	// 옵션을 안 파는 상품으로 바꾸면 선택이 남아 있으면 안 된다(서버도 스냅샷을 정리한다).
+	it("옵션이 없으면 선택을 해제한다", () => {
+		expect(
+			resolveDetailDesignSelection({ detailDesignPrice: null, requested: true })
+		).toEqual({ amount: null, requested: false });
 	});
 });
 

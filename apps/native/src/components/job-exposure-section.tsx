@@ -1,4 +1,5 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
 import { useQuery } from "@tanstack/react-query";
 import {
 	Alert,
@@ -6,6 +7,7 @@ import {
 	FieldError,
 	Input,
 	Label,
+	Switch,
 	TextField,
 } from "heroui-native";
 import type { ReactElement, ReactNode } from "react";
@@ -19,6 +21,7 @@ import {
 	formatAdPriceLabel,
 	type NativeExposureState,
 	resolveAdAmount,
+	resolveDetailDesignSelection,
 	resolvePayableAmount,
 	resolveUsablePoints,
 	validatePointsToUse,
@@ -74,6 +77,17 @@ const cardClassName = (selected: boolean): string =>
 	selected
 		? "gap-1 rounded-lg border-2 border-accent bg-surface-secondary p-3"
 		: "gap-1 rounded-lg border-2 border-border bg-surface p-3";
+
+// 결제 예정 총액 = 노출 금액 + 상세 디자인 옵션. 둘 다 없으면 0이다(포인트 상한·요약·입금액이
+// 모두 이 값을 본다).
+const resolvePaymentGross = (
+	exposureAmount: number,
+	detailDesignAmount: null | number
+): number =>
+	sumJobPaymentAmount(
+		exposureAmount > 0 ? exposureAmount : null,
+		detailDesignAmount
+	) ?? 0;
 
 // 기간 칩도 같은 규칙(두께 고정·색만). 터치 타깃 44dp를 위해 min-h-11.
 const chipClassName = (selected: boolean): string =>
@@ -267,11 +281,39 @@ function PaymentMethodPicker(): ReactElement {
 	);
 }
 
-// 결제 요약 — 노출 금액 → 포인트 차감 → 입금 예정 금액.
+// 상세이미지 디자인 제작 애드온 신청 스위치. 선택 상품이 옵션을 팔 때만 부모가 렌더한다.
+function DetailDesignField({
+	onChange,
+	price,
+	requested,
+}: {
+	onChange: (requested: boolean) => void;
+	price: number;
+	requested: boolean;
+}): ReactElement {
+	return (
+		<View className="gap-2 rounded-lg border border-border bg-surface p-3">
+			<View className="flex-row items-center justify-between gap-3">
+				<Label>{`상세이미지 디자인 제작 (+${formatAdPrice(price)})`}</Label>
+				<Switch isSelected={requested} onSelectedChange={onChange} />
+			</View>
+			<Text className="text-muted text-xs" selectable>
+				디자이너가 공고 상세페이지 이미지를 제작해 드립니다. 제작 요청 내용은
+				결제 확인 후 운영자가 채팅으로 안내합니다.
+			</Text>
+		</View>
+	);
+}
+
+// 결제 요약 — 노출 금액(+상세 디자인) → 포인트 차감 → 입금 예정 금액.
 function PaymentSummary({
+	detailDesignAmount,
+	exposureAmount,
 	gross,
 	pointsToUse,
 }: {
+	detailDesignAmount: null | number;
+	exposureAmount: number;
 	gross: number;
 	pointsToUse: number;
 }): ReactElement {
@@ -279,8 +321,18 @@ function PaymentSummary({
 		<View className="gap-1 rounded-lg border border-border bg-surface-secondary px-4 py-3">
 			<View className="flex-row items-center justify-between gap-2">
 				<Text className="text-muted text-sm">노출 금액</Text>
-				<Text className="text-foreground text-sm">{formatAdPrice(gross)}</Text>
+				<Text className="text-foreground text-sm">
+					{formatAdPrice(exposureAmount)}
+				</Text>
 			</View>
+			{detailDesignAmount ? (
+				<View className="flex-row items-center justify-between gap-2">
+					<Text className="text-muted text-sm">상세이미지 디자인 제작</Text>
+					<Text className="text-foreground text-sm">
+						{formatAdPrice(detailDesignAmount)}
+					</Text>
+				</View>
+			) : null}
 			{pointsToUse > 0 ? (
 				<View className="flex-row items-center justify-between gap-2">
 					<Text className="text-muted text-sm">포인트 사용</Text>
@@ -333,7 +385,11 @@ export function JobExposureSection({
 		enabled: isPremiumSelection,
 	});
 
-	const gross = value.selection?.amount ?? 0;
+	const exposureAmount = value.selection?.amount ?? 0;
+	// 선택 상품이 상세 디자인 옵션을 파는지. null이면 옵션 자체를 노출하지 않는다.
+	const detailDesignPrice = selectedProduct?.detailDesignPrice ?? null;
+	const detailDesignAmount = value.selection ? value.detailDesignAmount : null;
+	const gross = resolvePaymentGross(exposureAmount, detailDesignAmount);
 	const isPaid = value.selection !== null && gross > 0;
 
 	// 포인트 상한·검증에 쓰는 운영자 설정 + 보유 포인트. 유료 선택일 때만 조회한다.
@@ -378,6 +434,7 @@ export function JobExposureSection({
 	};
 
 	// 상품을 고르면 기간은 첫 옵션으로, 금액은 그 할인가로 확정하고 포인트는 새 상한으로 클램프한다.
+	// 상세 디자인 신청은 새 상품 기준으로 다시 맞춘다 — 옵션을 안 파는 상품이면 해제된다.
 	const selectProduct = (product: AdCatalogProduct) => {
 		const first = product.priceOptions[0];
 
@@ -386,10 +443,19 @@ export function JobExposureSection({
 		}
 
 		const amount = resolveAdAmount(first.amount, first.discountPercent);
+		const detail = resolveDetailDesignSelection({
+			detailDesignPrice: product.detailDesignPrice ?? null,
+			requested: value.detailDesignRequested,
+		});
 
 		onChange({
+			detailDesignAmount: detail.amount,
+			detailDesignRequested: detail.requested,
 			paymentMethod: "bank_transfer",
-			pointsToUse: clampPoints(value.pointsToUse, amount),
+			pointsToUse: clampPoints(
+				value.pointsToUse,
+				amount + (detail.amount ?? 0)
+			),
 			selection: {
 				adProductId: product.id,
 				amount,
@@ -400,7 +466,7 @@ export function JobExposureSection({
 		});
 	};
 
-	// 기간만 바꾼다 — 상품·이름은 유지하고 금액/일수와 포인트 상한만 재계산한다.
+	// 기간만 바꾼다 — 상품·이름·상세 디자인은 유지하고 금액/일수와 포인트 상한만 재계산한다.
 	const selectDuration = (option: AdPriceOption) => {
 		if (!value.selection) {
 			return;
@@ -410,8 +476,29 @@ export function JobExposureSection({
 
 		onChange({
 			...value,
-			pointsToUse: clampPoints(value.pointsToUse, amount),
+			pointsToUse: clampPoints(
+				value.pointsToUse,
+				amount + (value.detailDesignAmount ?? 0)
+			),
 			selection: { ...value.selection, amount, durationDays: option.days },
+		});
+	};
+
+	// 상세 디자인 신청 토글 — 옵션 가격에 맞춰 금액을 싣고 포인트 상한을 다시 잡는다.
+	const handleDetailDesignChange = (requested: boolean) => {
+		const detail = resolveDetailDesignSelection({
+			detailDesignPrice,
+			requested,
+		});
+
+		onChange({
+			...value,
+			detailDesignAmount: detail.amount,
+			detailDesignRequested: detail.requested,
+			pointsToUse: clampPoints(
+				value.pointsToUse,
+				exposureAmount + (detail.amount ?? 0)
+			),
 		});
 	};
 
@@ -431,6 +518,8 @@ export function JobExposureSection({
 				isLoading={catalogQuery.isLoading}
 				onSelectFree={() =>
 					onChange({
+						detailDesignAmount: null,
+						detailDesignRequested: false,
 						paymentMethod: "bank_transfer",
 						pointsToUse: 0,
 						selection: null,
@@ -458,6 +547,15 @@ export function JobExposureSection({
 					</Alert.Content>
 				</Alert>
 			) : null}
+
+			{/* 상세이미지 디자인 제작 — 선택 상품이 옵션을 팔 때만(가격 있음) 그린다. */}
+			{detailDesignPrice === null ? null : (
+				<DetailDesignField
+					onChange={handleDetailDesignChange}
+					price={detailDesignPrice}
+					requested={value.detailDesignRequested}
+				/>
+			)}
 
 			{/* 배너 픽커 — 폼이 선택 상품에 맞춰 넘겨줄 때만 그린다. */}
 			{bannerSlot}
@@ -487,7 +585,12 @@ export function JobExposureSection({
 			{value.selection ? <PaymentMethodPicker /> : null}
 
 			{isPaid ? (
-				<PaymentSummary gross={gross} pointsToUse={value.pointsToUse} />
+				<PaymentSummary
+					detailDesignAmount={detailDesignAmount}
+					exposureAmount={exposureAmount}
+					gross={gross}
+					pointsToUse={value.pointsToUse}
+				/>
 			) : null}
 
 			{isPaid ? (
