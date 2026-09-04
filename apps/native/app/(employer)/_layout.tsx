@@ -54,6 +54,9 @@ export default function EmployerLayout() {
 				options={{ title: "업체 정보 수정" }}
 			/>
 			<Stack.Screen name="me/business" options={{ title: "사업자 인증" }} />
+			<Stack.Screen name="me/teams" options={{ title: "팀 관리" }} />
+			<Stack.Screen name="promotions" options={{ title: "광고 관리" }} />
+			<Stack.Screen name="analytics" options={{ title: "성과 분석" }} />
 		</Stack>
 	);
 }

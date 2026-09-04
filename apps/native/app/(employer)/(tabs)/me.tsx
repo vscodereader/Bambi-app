@@ -33,6 +33,7 @@ import { orpc } from "@/src/lib/orpc";
 
 const ORG_HREF = "/(employer)/me/organization" as Href;
 const BUSINESS_HREF = "/(employer)/me/business" as Href;
+const TEAMS_HREF = "/(employer)/me/teams" as Href;
 const SETTINGS_HREF = "/(seeker)/me/settings" as Href;
 
 interface MenuItem {
@@ -54,6 +55,12 @@ const MENU_ITEMS: MenuItem[] = [
 		href: BUSINESS_HREF,
 		icon: "shield-checkmark-outline",
 		label: "사업자 인증",
+	},
+	{
+		description: "팀을 만들고 멤버 초대·권한을 관리해요.",
+		href: TEAMS_HREF,
+		icon: "people-outline",
+		label: "팀 관리",
 	},
 	{
 		description: "표시 이름·본인인증을 관리해요.",
@@ -179,10 +186,6 @@ function MeInner() {
 					</Fragment>
 				))}
 			</ListGroup>
-			<StateCard
-				description="팀 관리와 멤버 초대는 앱에서는 준비 중이에요. 웹에서 이용해 주세요."
-				title="팀 관리는 웹에서"
-			/>
 			<View className="items-start">
 				<LogoutButton />
 			</View>
