@@ -17,12 +17,18 @@ import { authClient } from "@/lib/auth-client";
 import {
 	BambiHeader,
 	BambiScreen,
+	formatDateTime,
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { LogoutButton } from "@/src/components/logout-button";
 import { MemberOnly } from "@/src/components/member-only";
-import { verificationStatusLabels } from "@/src/lib/bambi-native";
+import {
+	accountStatusBadge,
+	profileRoleLabel,
+	verificationStatusLabels,
+} from "@/src/lib/bambi-native";
+import { formatPhoneNumber } from "@/src/lib/me-settings";
 import { orpc } from "@/src/lib/orpc";
 
 const ORG_HREF = "/(employer)/me/organization" as Href;
@@ -89,12 +95,15 @@ function ProfileCard() {
 		);
 	}
 
+	const profile = mineQuery.data?.bambiProfile;
 	const organizationProfile = mineQuery.data?.employerOrganizationProfiles[0];
 	const displayName =
 		organizationProfile?.displayName?.trim() ||
 		session.data?.user?.name?.trim() ||
 		"구인자 회원";
 	const status = organizationProfile?.verificationStatus ?? "none";
+	const accountStatus = accountStatusBadge(profile?.status);
+	const phoneNumber = profile?.phoneNumber?.trim();
 
 	return (
 		<Surface className="gap-3 rounded-lg p-4" variant="secondary">
@@ -109,12 +118,28 @@ function ProfileCard() {
 					<Text className="font-bold text-foreground text-lg" selectable>
 						{displayName}
 					</Text>
-					<Pill tone={status === "verified" ? "success" : "neutral"}>
-						{verificationStatusLabels[
-							status as keyof typeof verificationStatusLabels
-						] ?? status}
-					</Pill>
+					<Text className="text-muted text-sm" selectable>
+						{profile?.isPhoneVerified ? "전화 인증 완료" : "전화 미인증"} ·
+						연락처 {phoneNumber ? formatPhoneNumber(phoneNumber) : "미등록"}
+					</Text>
+					{/* 프로필 행이 없는 계정(온보딩 전)은 가입일 자체가 없어 줄을 그리지 않는다. */}
+					{profile?.createdAt ? (
+						<Text className="text-muted text-xs">
+							가입 {formatDateTime(profile.createdAt)}
+						</Text>
+					) : null}
 				</View>
+			</View>
+			{/* 배지 셋을 아바타 옆 좁은 컬럼에 두면 작은 폰에서 세 줄로 흐른다 — 카드 전체 폭을
+			    쓰는 아래 줄로 내리고, 그래도 넘치면 줄바꿈한다(가로 스크롤 금지). */}
+			<View className="flex-row flex-wrap items-center gap-2">
+				<Pill>{profileRoleLabel(profile?.role)}</Pill>
+				<Pill tone={accountStatus.tone}>{accountStatus.label}</Pill>
+				<Pill tone={status === "verified" ? "success" : "neutral"}>
+					{verificationStatusLabels[
+						status as keyof typeof verificationStatusLabels
+					] ?? status}
+				</Pill>
 			</View>
 		</Surface>
 	);
@@ -126,8 +151,8 @@ function MeInner() {
 	return (
 		<BambiScreen>
 			<BambiHeader
-				description="업체 정보와 계정을 관리합니다."
-				title="내 정보"
+				description="계정과 사업자 인증 상태를 확인하고 설정을 관리합니다."
+				title="업체 관리"
 			/>
 			<ProfileCard />
 			<ListGroup className="rounded-lg" variant="secondary">

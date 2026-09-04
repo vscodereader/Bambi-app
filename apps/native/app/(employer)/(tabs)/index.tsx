@@ -1,7 +1,8 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type Href, Link, router } from "expo-router";
-import { Button, Dialog, Surface } from "heroui-native";
+import { Button, Dialog, Menu, Surface, useThemeColor } from "heroui-native";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 
@@ -14,9 +15,15 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { FieldSelect } from "@/src/components/field-select";
 import { verificationStatusLabels } from "@/src/lib/bambi-native";
 import { localErrorMessage } from "@/src/lib/chat/chat-errors";
 import { getEmployerGateNotice } from "@/src/lib/employer/business";
+import {
+	EMPLOYER_JOB_SORT_OPTIONS,
+	type EmployerJobSort,
+	sortEmployerJobs,
+} from "@/src/lib/employer/job-sort";
 import {
 	countJobStatuses,
 	type DeleteRefundPreview,
@@ -29,6 +36,11 @@ import { orpc, queryClient } from "@/src/lib/orpc";
 const PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
 const BUSINESS_HREF = "/(employer)/me/business" as Href;
 const NEW_HREF = "/(employer)/new" as Href;
+// 한 번에 보여줄 공고 수. 웹 목록 페이지 크기와 같다.
+const JOB_PAGE_SIZE = 5;
+const MENU_WIDTH = 180;
+// 옵션이 넷뿐이라 기본 시트(50%)보다 낮게 연다.
+const SORT_SNAP_POINTS = ["35%"];
 
 type EmployerJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["jobs"]["listMine"]>
@@ -45,6 +57,52 @@ function StatTile({ label, value }: { label: string; value: number }) {
 	);
 }
 
+// 카드마다 붙는 액션 메뉴. 버튼 두 개를 늘어놓으면 카드 하단이 액션에 먹혀서
+// 목록을 훑기 어려워진다 — 아이콘 하나로 접고 눌렀을 때만 펼친다.
+function JobActionsMenu({
+	job,
+	onDelete,
+}: {
+	job: EmployerJob;
+	onDelete: (id: string) => void;
+}) {
+	const foreground = useThemeColor("foreground");
+
+	return (
+		<Menu>
+			<Menu.Trigger asChild>
+				{/* 아이콘만 담되 터치 타깃은 44dp를 지킨다. */}
+				<Pressable
+					accessibilityLabel="공고 관리 메뉴"
+					accessibilityRole="button"
+					className="h-11 w-11 shrink-0 items-center justify-center rounded-2xl active:opacity-75"
+				>
+					<Ionicons color={foreground} name="settings-outline" size={20} />
+				</Pressable>
+			</Menu.Trigger>
+			<Menu.Portal>
+				<Menu.Overlay />
+				{/* 트리거가 카드 오른쪽 끝이라 end 정렬이 아니면 화면 밖으로 밀린다. */}
+				<Menu.Content align="end" presentation="popover" width={MENU_WIDTH}>
+					<Menu.Item
+						onPress={() =>
+							router.push({
+								params: { id: job.id },
+								pathname: "/(employer)/jobs/[id]/edit",
+							} as unknown as Href)
+						}
+					>
+						<Menu.ItemTitle>공고 수정</Menu.ItemTitle>
+					</Menu.Item>
+					<Menu.Item onPress={() => onDelete(job.id)} variant="danger">
+						<Menu.ItemTitle>공고 삭제</Menu.ItemTitle>
+					</Menu.Item>
+				</Menu.Content>
+			</Menu.Portal>
+		</Menu>
+	);
+}
+
 function JobCard({
 	job,
 	onDelete,
@@ -57,13 +115,19 @@ function JobCard({
 
 	return (
 		<Surface className="gap-2 rounded-lg p-4" variant="secondary">
-			<View className="flex-row flex-wrap items-center gap-2">
-				<Pill tone={display.tone}>{display.label}</Pill>
-				<Pill>{job.region}</Pill>
+			<View className="flex-row items-start gap-2">
+				{/* min-w-0이 없으면 긴 제목이 아이콘 버튼을 카드 밖으로 밀어낸다. */}
+				<View className="min-w-0 flex-1 gap-2">
+					<View className="flex-row flex-wrap items-center gap-2">
+						<Pill tone={display.tone}>{display.label}</Pill>
+						<Pill>{job.region}</Pill>
+					</View>
+					<Text className="font-bold text-foreground text-lg" selectable>
+						{job.title}
+					</Text>
+				</View>
+				<JobActionsMenu job={job} onDelete={onDelete} />
 			</View>
-			<Text className="font-bold text-foreground text-lg" selectable>
-				{job.title}
-			</Text>
 			<Text className="text-muted text-sm" selectable>
 				{job.industryCategory} · {formatPay(job.payAmount, job.payUnit)}
 			</Text>
@@ -72,28 +136,56 @@ function JobCard({
 					{note}
 				</Text>
 			) : null}
-			<View className="flex-row gap-2 pt-1">
+		</Surface>
+	);
+}
+
+// 정렬·노출 개수 state를 화면이 아니라 여기 둔다 — 화면은 로딩/에러에서 조기 return하므로
+// 그 위에 훅을 더 얹을 수 없다.
+function OwnedJobsSection({
+	jobs,
+	onDelete,
+}: {
+	jobs: readonly EmployerJob[];
+	onDelete: (id: string) => void;
+}) {
+	const [sort, setSort] = useState<EmployerJobSort>("recent");
+	const [visibleCount, setVisibleCount] = useState(JOB_PAGE_SIZE);
+	const sortedJobs = sortEmployerJobs(jobs, sort);
+	const visibleJobs = sortedJobs.slice(0, visibleCount);
+	const remaining = sortedJobs.length - visibleJobs.length;
+
+	return (
+		<View className="gap-3">
+			<View className="flex-row items-center justify-between gap-2">
+				<Text className="font-bold text-base text-foreground">등록한 공고</Text>
+				<Text className="text-muted text-sm">총 {sortedJobs.length}건</Text>
+			</View>
+			<FieldSelect
+				label="정렬"
+				onChange={(value) => {
+					setSort(value as EmployerJobSort);
+					// 정렬이 바뀌면 위에서부터 다시 본다 — 이어보던 개수는 의미가 없다.
+					setVisibleCount(JOB_PAGE_SIZE);
+				}}
+				options={EMPLOYER_JOB_SORT_OPTIONS}
+				placeholder="정렬 방식"
+				snapPoints={SORT_SNAP_POINTS}
+				value={sort}
+			/>
+			{visibleJobs.map((job) => (
+				<JobCard job={job} key={job.id} onDelete={onDelete} />
+			))}
+			{remaining > 0 ? (
 				<Button
-					onPress={() =>
-						router.push({
-							params: { id: job.id },
-							pathname: "/(employer)/jobs/[id]/edit",
-						} as unknown as Href)
-					}
-					size="sm"
+					accessibilityLabel="공고 더보기"
+					onPress={() => setVisibleCount((count) => count + JOB_PAGE_SIZE)}
 					variant="secondary"
 				>
-					<Button.Label>수정</Button.Label>
+					<Button.Label>공고 더보기 ({remaining}건)</Button.Label>
 				</Button>
-				<Button
-					onPress={() => onDelete(job.id)}
-					size="sm"
-					variant="danger-soft"
-				>
-					<Button.Label>삭제</Button.Label>
-				</Button>
-			</View>
-		</Surface>
+			) : null}
+		</View>
 	);
 }
 
@@ -278,11 +370,7 @@ export default function EmployerJobsScreen() {
 					title="등록한 공고가 없어요"
 				/>
 			) : (
-				<View className="gap-3">
-					{jobs.map((job) => (
-						<JobCard job={job} key={job.id} onDelete={setDeletingId} />
-					))}
-				</View>
+				<OwnedJobsSection jobs={jobs} onDelete={setDeletingId} />
 			)}
 
 			<DeleteJobDialog
