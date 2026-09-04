@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type Href, Link, router } from "expo-router";
 import { Button, Dialog, Menu, Surface, useThemeColor } from "heroui-native";
+import type { ComponentProps } from "react";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 
@@ -16,7 +17,6 @@ import {
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { FieldSelect } from "@/src/components/field-select";
-import { verificationStatusLabels } from "@/src/lib/bambi-native";
 import { localErrorMessage } from "@/src/lib/chat/chat-errors";
 import { getEmployerGateNotice } from "@/src/lib/employer/business";
 import {
@@ -36,15 +36,62 @@ import { orpc, queryClient } from "@/src/lib/orpc";
 const PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
 const BUSINESS_HREF = "/(employer)/me/business" as Href;
 const NEW_HREF = "/(employer)/new" as Href;
+// 광고·성과는 공고관리에서만 닿는 하위 화면이다(웹 /employer 퀵링크와 같은 IA).
+const QUICK_LINKS: {
+	href: Href;
+	icon: ComponentProps<typeof Ionicons>["name"];
+	label: string;
+}[] = [
+	{
+		href: "/(employer)/promotions" as Href,
+		icon: "megaphone-outline",
+		label: "광고 관리",
+	},
+	{
+		href: "/(employer)/analytics" as Href,
+		icon: "bar-chart-outline",
+		label: "성과 분석",
+	},
+];
 // 한 번에 보여줄 공고 수. 웹 목록 페이지 크기와 같다.
 const JOB_PAGE_SIZE = 5;
-const MENU_WIDTH = 180;
-// 옵션이 넷뿐이라 기본 시트(50%)보다 낮게 연다.
+// 옵션이 넷뿐이라 기본 시트(50%)보다 낮게 연다. 카드 액션 메뉴는 항목이 둘이라 같이 쓴다.
 const SORT_SNAP_POINTS = ["35%"];
+const MENU_SNAP_POINTS = SORT_SNAP_POINTS;
 
 type EmployerJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["jobs"]["listMine"]>
 >[number];
+
+// 광고·성과 화면 진입 타일. CardLink는 chevron 달린 전폭 행이라 두 개를 나란히 두면
+// 화살표만 두 번 반복돼 시선이 갈린다 — 아이콘+라벨만 남긴 정사각 타일로 둔다.
+function QuickLinks() {
+	const foregroundColor = useThemeColor("foreground");
+
+	return (
+		<View className="flex-row gap-3">
+			{QUICK_LINKS.map((item) => (
+				<Link asChild href={item.href} key={item.label}>
+					<Pressable
+						accessibilityLabel={item.label}
+						accessibilityRole="button"
+						className="flex-1 rounded-lg active:opacity-75"
+					>
+						<Surface
+							className="flex-row items-center gap-2 rounded-lg p-4"
+							variant="secondary"
+						>
+							<Ionicons color={foregroundColor} name={item.icon} size={20} />
+							<Text className="font-semibold text-foreground text-sm">
+								{item.label}
+							</Text>
+						</Surface>
+					</Pressable>
+				</Link>
+			))}
+		</View>
+	);
+}
 
 function StatTile({ label, value }: { label: string; value: number }) {
 	return (
@@ -69,7 +116,11 @@ function JobActionsMenu({
 	const foreground = useThemeColor("foreground");
 
 	return (
-		<Menu>
+		// 팝오버가 아니라 바텀시트다. heroui의 popover 배치는 bottom placement에서
+		// Dimensions.get("screen") 기준으로만 클램프하고 maxHeight를 걸지 않아, 목록 맨
+		// 아래 카드에서 메뉴 끝이 제스처 내비 영역 뒤로 잘린다(팀원 카드에서 실제로 났다).
+		// 시트는 트리거 위치와 무관하게 화면 하단에 붙으므로 그 실패가 아예 없다.
+		<Menu presentation="bottom-sheet">
 			<Menu.Trigger asChild>
 				{/* 아이콘만 담되 터치 타깃은 44dp를 지킨다. */}
 				<Pressable
@@ -82,8 +133,8 @@ function JobActionsMenu({
 			</Menu.Trigger>
 			<Menu.Portal>
 				<Menu.Overlay />
-				{/* 트리거가 카드 오른쪽 끝이라 end 정렬이 아니면 화면 밖으로 밀린다. */}
-				<Menu.Content align="end" presentation="popover" width={MENU_WIDTH}>
+				{/* 항목이 둘뿐이라 정렬 시트와 같은 높이로 둔다. */}
+				<Menu.Content presentation="bottom-sheet" snapPoints={MENU_SNAP_POINTS}>
 					<Menu.Item
 						onPress={() =>
 							router.push({
@@ -297,8 +348,9 @@ export default function EmployerJobsScreen() {
 		);
 	}
 
-	const organizationProfile = mineQuery.data?.employerOrganizationProfiles[0];
-	const verificationStatus = organizationProfile?.verificationStatus ?? "none";
+	const verificationStatus =
+		mineQuery.data?.employerOrganizationProfiles[0]?.verificationStatus ??
+		"none";
 	const gate = getEmployerGateNotice(verificationStatus, "공고를 등록");
 	const jobs = jobsQuery.data ?? [];
 	const counts = countJobStatuses(jobs);
@@ -334,24 +386,6 @@ export default function EmployerJobsScreen() {
 				/>
 			) : null}
 
-			{organizationProfile ? (
-				<Surface
-					className="flex-row items-center justify-between gap-2 rounded-lg p-4"
-					variant="secondary"
-				>
-					<Text className="font-semibold text-foreground" selectable>
-						{organizationProfile.displayName}
-					</Text>
-					<Pill
-						tone={verificationStatus === "verified" ? "success" : "neutral"}
-					>
-						{verificationStatusLabels[
-							verificationStatus as keyof typeof verificationStatusLabels
-						] ?? verificationStatus}
-					</Pill>
-				</Surface>
-			) : null}
-
 			{jobs.length > 0 ? (
 				<Surface className="flex-row gap-3 rounded-lg p-4" variant="secondary">
 					<StatTile label="게시" value={counts.published} />
@@ -359,6 +393,8 @@ export default function EmployerJobsScreen() {
 					<StatTile label="반려" value={counts.rejected} />
 				</Surface>
 			) : null}
+
+			<QuickLinks />
 
 			{jobs.length === 0 ? (
 				<StateCard
