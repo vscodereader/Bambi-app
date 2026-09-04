@@ -33,6 +33,7 @@
     "better-auth": "catalog:",
     "dotenv": "catalog:",
     "expo": "~56.0.3",
+    "expo-clipboard": "~56.0.4",
     "expo-constants": "~56.0.14",
     "expo-document-picker": "catalog:",
     "expo-font": "~56.0.5",

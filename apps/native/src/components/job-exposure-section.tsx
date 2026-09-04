@@ -11,6 +11,7 @@ import {
 import type { ReactElement, ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 
+import { BankAccounts } from "@/src/components/bank-accounts";
 import {
 	CARD_PAYMENT_NOTICE,
 	FREE_EXPOSURE_LABEL,
@@ -34,9 +35,6 @@ type AdCatalogPlacement = Awaited<
 >[number];
 type AdCatalogProduct = AdCatalogPlacement["products"][number];
 type AdPriceOption = AdCatalogProduct["priceOptions"][number];
-type PaymentAccount = Awaited<
-	ReturnType<AppRouterClient["bambi"]["siteSettings"]["getPaymentAccounts"]>
->[number];
 
 // 프리미엄 배너 풀로 통합된 미리보기 템플릿. 이 상품을 고르면 전체 정원·대기열 안내를 붙인다.
 // 레거시 side-* 도 서버에서 프리미엄 풀로 흡수되므로 같은 정원을 쓴다(web BANNER_PREVIEW_TEMPLATES와 동일).
@@ -301,45 +299,6 @@ function PaymentSummary({
 	);
 }
 
-// 무통장 계좌 안내 — 유료 선택일 때만 부모가 렌더한다.
-function BankAccounts({
-	accounts,
-}: {
-	accounts: PaymentAccount[];
-}): ReactElement {
-	return (
-		<View className="gap-2">
-			<Text className="font-semibold text-foreground text-sm">입금 계좌</Text>
-			{accounts.length > 0 ? (
-				<View className="gap-2">
-					{accounts.map((account) => (
-						<View
-							className="gap-0.5 rounded-lg border border-border bg-surface px-3 py-2"
-							key={`${account.bank}-${account.accountNumber}`}
-						>
-							<Text className="font-medium text-foreground text-sm" selectable>
-								{`${account.bank} ${account.accountNumber}`}
-							</Text>
-							<Text className="text-muted text-xs">
-								{`예금주 ${account.holder}`}
-							</Text>
-						</View>
-					))}
-					<Text className="text-muted text-xs">
-						입금자명은 업체명(상호)과 동일하게 입금해 주세요. 입금 확인 후
-						공고가 게시됩니다.
-					</Text>
-				</View>
-			) : (
-				<Text className="text-danger text-xs">
-					입금 계좌가 준비되기 전이라 무통장입금으로 등록할 수 없어요.
-					고객센터로 문의해 주세요.
-				</Text>
-			)}
-		</View>
-	);
-}
-
 // 노출 상품·결제 섹션 본문. 모든 서버 조회·파생·값 변경 로직이 여기 모인다 — 표시
 // 컴포넌트들에 props로 내려준다. 예전엔 요약 행+전체화면 모달이 이 파일에 있었지만, 이제
 // 폼이 2단계(작성 → 노출·결제)를 소유하고 그 2단계 화면이 이 섹션을 그대로 스크롤에 담는다.
@@ -531,7 +490,17 @@ export function JobExposureSection({
 				<PaymentSummary gross={gross} pointsToUse={value.pointsToUse} />
 			) : null}
 
-			{isPaid ? <BankAccounts accounts={accountsQuery.data ?? []} /> : null}
+			{isPaid ? (
+				<View className="gap-2">
+					<Text className="font-semibold text-foreground text-sm">
+						입금 계좌
+					</Text>
+					<BankAccounts
+						accounts={accountsQuery.data ?? []}
+						emptyMessage="입금 계좌가 준비되기 전이라 무통장입금으로 등록할 수 없어요. 고객센터로 문의해 주세요."
+					/>
+				</View>
+			) : null}
 		</>
 	);
 }

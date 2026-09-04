@@ -1,11 +1,11 @@
 import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { type Href, router } from "expo-router";
 import { Button, Dialog, Surface, Tabs, useThemeColor } from "heroui-native";
 import type { PropsWithChildren } from "react";
 import { useState } from "react";
 import { Alert, Text, View } from "react-native";
-
 import {
 	BambiScreen,
 	ErrorState,
@@ -14,6 +14,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { BankAccounts } from "@/src/components/bank-accounts";
 import { localErrorMessage } from "@/src/lib/chat/chat-errors";
 import { formatAdPrice } from "@/src/lib/employer/ad-exposure";
 import {
@@ -30,6 +31,7 @@ import {
 	manualBoostBadges,
 	premiumQueueBadge,
 } from "@/src/lib/employer/ad-promotions";
+import { canOpenBoostPurchase } from "@/src/lib/employer/boost-options";
 import { getJobDisplayStatus } from "@/src/lib/employer/job-status";
 import { orpc, queryClient } from "@/src/lib/orpc";
 
@@ -155,8 +157,23 @@ function AdCard({
 				<Text className="text-right text-muted text-xs">{disabledReason}</Text>
 			) : null}
 
-			{/* 끌어올리기가 오른쪽 끝에 오도록 입금 안내를 먼저 그린다. */}
+			{/* 끌어올리기가 오른쪽 끝에 오도록 옵션 구매·입금 안내를 먼저 그린다. */}
 			<View className="flex-row flex-wrap items-center justify-end gap-2">
+				{/* 배너 광고는 옵션 판매 대상이 아니라 진입 버튼을 감춘다. */}
+				{canOpenBoostPurchase(ad.exposureType) ? (
+					<Button
+						onPress={() =>
+							router.push({
+								params: { jobPostId: ad.jobPostId, jobTitle: ad.title },
+								pathname: "/(employer)/boost-options",
+							} as unknown as Href)
+						}
+						size="sm"
+						variant="outline"
+					>
+						<Button.Label>옵션 구매</Button.Label>
+					</Button>
+				) : null}
 				{/* 미결제 건만 입금 안내를 연다(web Popover 자리 — native에는 Popover가 없다). */}
 				{ad.paymentStatus === "unpaid" ? (
 					<Button
@@ -221,36 +238,11 @@ function BankGuideDialog({
 							: `결제 예정 금액 ${formatAdPrice(amount)}`}
 					</Dialog.Description>
 					<View className="gap-2 pt-2">
-						{accounts.length > 0 ? (
-							<>
-								{accounts.map((account) => (
-									<View
-										className="gap-0.5 rounded-lg border border-border bg-surface px-3 py-2"
-										key={`${account.bank}-${account.accountNumber}`}
-									>
-										<Text
-											className="font-medium text-foreground text-sm"
-											selectable
-										>
-											{`${account.bank} ${account.accountNumber}`}
-										</Text>
-										<Text className="text-muted text-xs">
-											{`예금주 ${account.holder}`}
-										</Text>
-									</View>
-								))}
-								<Text className="text-muted text-xs">
-									입금자명은 업체명(상호)과 동일하게 입금해 주세요. 입금 확인 후
-									공고가 게시됩니다.
-								</Text>
-							</>
-						) : (
-							<Text className="text-danger text-xs">
-								{accountsQuery.isLoading
-									? "입금 계좌를 불러오고 있어요."
-									: "입금 계좌가 준비되기 전이에요. 고객센터로 문의해 주세요."}
-							</Text>
-						)}
+						<BankAccounts
+							accounts={accounts}
+							emptyMessage="입금 계좌가 준비되기 전이에요. 고객센터로 문의해 주세요."
+							isLoading={accountsQuery.isLoading}
+						/>
 						<View className="flex-row justify-end pt-2">
 							<Button onPress={onClose} size="sm" variant="secondary">
 								<Button.Label>닫기</Button.Label>

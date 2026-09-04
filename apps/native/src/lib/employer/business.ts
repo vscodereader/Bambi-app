@@ -207,3 +207,35 @@ export const businessErrorMessage = (error: unknown): string => {
 		"요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요."
 	);
 };
+
+// 임시 저장(saveEmployerBusinessDraft)을 걸어도 되는 상태인지. 조직이 만들어지기 전에는
+// 저장 대상이 없고, 심사 대기(pending) 중에는 서버가 거부한다. web /employer/me와 같은 규칙.
+export const canAutosaveBusinessDraft = ({
+	organizationId,
+	status,
+}: {
+	organizationId: string | undefined;
+	status: string;
+}): boolean =>
+	Boolean(organizationId) &&
+	(status === "verified" || status === "changes_unsubmitted");
+
+export interface BusinessDraftValues {
+	brn: string;
+	displayName: string;
+	representativeName: string;
+	startDate: string;
+}
+
+// 값이 서버에 저장된 것과 같으면 저장하지 않는다. saveEmployerBusinessDraft는 값이 같아도
+// verified 조직을 changes_unsubmitted로 강등하므로, 이 가드가 없으면 화면을 열기만 해도
+// 업체 인증이 풀린다. web /employer/me의 changed 판정과 같은 규칙(개업일자는 이미 같은
+// 표기로 정규화돼 있어 그대로 비교한다).
+export const hasBusinessDraftChanges = (
+	next: BusinessDraftValues,
+	saved: BusinessDraftValues
+): boolean =>
+	next.displayName.trim() !== saved.displayName.trim() ||
+	next.brn.trim() !== saved.brn.trim() ||
+	next.representativeName.trim() !== saved.representativeName.trim() ||
+	next.startDate !== saved.startDate;
