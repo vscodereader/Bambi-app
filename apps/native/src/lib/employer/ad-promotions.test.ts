@@ -40,7 +40,7 @@ describe("getBoostState", () => {
 		},
 		{
 			expected:
-				"사용할 수 있는 끌어올리기가 없어요. 웹에서 끌어올리기 옵션을 구매할 수 있어요.",
+				"사용할 수 있는 끌어올리기가 없어요. 끌어올리기 옵션을 구매해 보세요.",
 			name: "한도도 횟수권도 없으면 옵션 구매를 안내한다",
 			overrides: { boostCountRemaining: 0, manualBoostsPerDay: 0 },
 		},

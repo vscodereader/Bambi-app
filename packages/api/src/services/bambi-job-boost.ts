@@ -266,3 +266,44 @@ export const resolveBoostEligibility = ({
 
 	return { eligible: false, reason: "daily_limit_reached" };
 };
+
+// 공고 끌어올리기 옵션의 화면 표시용 라벨·포매터. web과 native가 같은 문구를 쓰도록
+// 서비스에 둔다(EXPOSURE_TYPE_LABELS와 같은 축). DB enum 원값은 화면에 노출하지 않는다.
+export type JobBoostOptionTypeKey =
+	| "auto_period"
+	| "manual_count"
+	| "manual_period";
+
+export const JOB_BOOST_OPTION_TYPE_LABELS: Record<
+	JobBoostOptionTypeKey,
+	string
+> = {
+	auto_period: "자동 끌어올리기",
+	manual_count: "끌어올리기 횟수권",
+	manual_period: "끌어올리기",
+};
+
+/**
+ * 옵션 스펙 한 줄 요약. 기간제(manual_period·auto_period)는 "하루 2회 · 30일",
+ * 횟수권(manual_count)은 "10회 충전". 스냅샷/카탈로그에 아직 값이 안 채워진(null)
+ * 항목은 빼고 남은 것만 이어붙인다(재료가 하나도 없으면 빈 문자열).
+ */
+export function formatBoostOptionSpec(option: {
+	boostCount: null | number;
+	boostsPerDay: null | number;
+	durationDays: null | number;
+	optionType: JobBoostOptionTypeKey;
+}): string {
+	if (option.optionType === "manual_count") {
+		return option.boostCount === null ? "" : `${option.boostCount}회 충전`;
+	}
+
+	const parts: string[] = [];
+	if (option.boostsPerDay !== null) {
+		parts.push(`하루 ${option.boostsPerDay}회`);
+	}
+	if (option.durationDays !== null) {
+		parts.push(`${option.durationDays}일`);
+	}
+	return parts.join(" · ");
+}
