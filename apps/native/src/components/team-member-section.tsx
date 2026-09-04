@@ -1,7 +1,9 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { Ionicons } from "@expo/vector-icons";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+	BottomSheet,
 	Button,
 	Checkbox,
 	Input,
@@ -13,7 +15,7 @@ import {
 	TextField,
 	useThemeColor,
 } from "heroui-native";
-import { useState } from "react";
+import { type PropsWithChildren, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 
 import { formatDateTime, Pill, StateCard } from "@/src/components/bambi-screen";
@@ -29,6 +31,7 @@ import {
 	type MemberActionPermissions,
 	memberStatusLabel,
 	memberStatusTone,
+	NO_TEAM_TO_ASSIGN_REASON,
 	organizationRoleLabel,
 	validateInviteForm,
 } from "@/src/lib/employer/teams";
@@ -58,6 +61,8 @@ const MIN_SEARCH_LENGTH = 2;
 // 공고관리 카드의 액션 메뉴와 같은 폭.
 // 사유 문구가 붙는 항목이 있어 네 항목 기준으로 잡는다(정렬 시트 35%보다 한 단계 높게).
 const MENU_SNAP_POINTS = ["45%"];
+// 옵션 목록이 길어져도 시트가 화면을 다 먹지 않는 높이. 목록만 스크롤한다.
+const EDIT_SHEET_SNAP_POINTS = ["55%"];
 
 const alertError = (title: string, error: unknown, fallback: string) =>
 	Alert.alert(title, localErrorMessage(error, fallback));
@@ -271,22 +276,76 @@ function InviteForm({
 	);
 }
 
-// 권한 축만 다루는 패널. 대상 멤버 단위로 key remount 되므로 초기 선택은 마운트 시 props로
+// 편집 시트의 공통 껍데기. 목록 끝에 패널을 끼워 넣던 방식은 편집 대상 카드와 편집 UI가
+// 다른 스크롤 위치에 놓여 문맥이 끊기고, 목록이 밀리며, 저장 버튼이 화면 밖으로 나갈 수
+// 있었다. 시트는 대상 이름을 제목에 고정하고 저장 CTA를 하단에 붙여 그 셋을 한 번에 없앤다.
+// 옵션 영역만 스크롤하고 CTA는 스크롤 밖에 둔다(스크롤은 경계가 잡힌 부모 안에서만 일어나야
+// 하므로 높이 제약은 Content에 건다 — field-select와 같은 heroui 권장 조합).
+function MemberEditSheet({
+	children,
+	isOpen,
+	isSaveDisabled,
+	onClose,
+	onSave,
+	saveLabel,
+	title,
+}: PropsWithChildren<{
+	isOpen: boolean;
+	isSaveDisabled: boolean;
+	onClose: () => void;
+	onSave: () => void;
+	saveLabel: string;
+	title: string;
+}>) {
+	return (
+		<BottomSheet isOpen={isOpen} onOpenChange={(next) => next || onClose()}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					contentContainerClassName="h-full"
+					enableDynamicSizing={false}
+					enableOverDrag={false}
+					snapPoints={EDIT_SHEET_SNAP_POINTS}
+				>
+					<View className="flex-1 gap-4 p-4">
+						<BottomSheet.Title>{title}</BottomSheet.Title>
+						<BottomSheetScrollView>{children}</BottomSheetScrollView>
+						<Button isDisabled={isSaveDisabled} onPress={onSave}>
+							<Button.Label>{saveLabel}</Button.Label>
+						</Button>
+					</View>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
+	);
+}
+
+// 권한 축만 다루는 시트. 대상 멤버 단위로 key remount 되므로 초기 선택은 마운트 시 props로
 // 세팅된다(웹 TeamAssignmentDialog와 같은 이유).
-function MemberRolePanel({
+function MemberRoleSheet({
 	initialRole,
 	isPending,
+	memberLabel,
+	onClose,
 	onSave,
 }: {
 	initialRole: AssignableRole;
 	isPending: boolean;
+	memberLabel: string;
+	onClose: () => void;
 	onSave: (role: AssignableRole) => void;
 }) {
 	const [role, setRole] = useState<AssignableRole>(initialRole);
 
 	return (
-		<View className="gap-2">
-			<Label>권한</Label>
+		<MemberEditSheet
+			isOpen
+			isSaveDisabled={role === initialRole || isPending}
+			onClose={onClose}
+			onSave={() => onSave(role)}
+			saveLabel={isPending ? "변경 중" : "권한 저장"}
+			title={`${memberLabel} 님 권한 변경`}
+		>
 			<RadioGroup
 				onValueChange={(value) => setRole(toAssignableRole(value))}
 				value={role}
@@ -297,27 +356,23 @@ function MemberRolePanel({
 					</RadioGroup.Item>
 				))}
 			</RadioGroup>
-			<Button
-				isDisabled={role === initialRole || isPending}
-				onPress={() => onSave(role)}
-				size="sm"
-				variant="secondary"
-			>
-				<Button.Label>{isPending ? "변경 중" : "권한 저장"}</Button.Label>
-			</Button>
-		</View>
+		</MemberEditSheet>
 	);
 }
 
-// 소속 팀 축만 다루는 패널. 위와 같은 이유로 key remount 전제다.
-function MemberTeamsPanel({
+// 소속 팀 축만 다루는 시트. 위와 같은 이유로 key remount 전제다.
+function MemberTeamsSheet({
 	initialTeamIds,
 	isPending,
+	memberLabel,
+	onClose,
 	onSave,
 	teams,
 }: {
 	initialTeamIds: string[];
 	isPending: boolean;
+	memberLabel: string;
+	onClose: () => void;
 	onSave: (teamIds: string[]) => void;
 	teams: SectionTeam[];
 }) {
@@ -327,18 +382,23 @@ function MemberTeamsPanel({
 		teamIds.some((id) => !initialTeamIds.includes(id));
 
 	return (
-		<View className="gap-2">
-			<Label>소속 팀</Label>
-			{teams.length === 0 ? (
-				<Text className="text-muted text-xs">
-					먼저 팀을 만들어야 소속을 지정할 수 있어요.
-				</Text>
-			) : null}
+		<MemberEditSheet
+			isOpen
+			isSaveDisabled={!isChanged || isPending}
+			onClose={onClose}
+			onSave={() => onSave(teamIds)}
+			saveLabel={isPending ? "변경 중" : "팀 소속 저장"}
+			title={`${memberLabel} 님 팀 소속 변경`}
+		>
+			{/* 아무 팀도 고르지 않으면 전체 조직 소속이 된다(초대 폼의 "전체 조직"과 같은 축). */}
+			<Text className="pb-2 text-muted text-xs">
+				고르지 않으면 전체 조직 소속이 돼요.
+			</Text>
 			{teams.map((team) => (
 				<Pressable
 					accessibilityRole="checkbox"
 					accessibilityState={{ checked: teamIds.includes(team.teamId) }}
-					className="flex-row items-center gap-3 py-2 active:opacity-75"
+					className="flex-row items-center gap-3 py-3 active:opacity-75"
 					key={team.teamId}
 					onPress={() =>
 						setTeamIds((prev) =>
@@ -354,15 +414,7 @@ function MemberTeamsPanel({
 					</Text>
 				</Pressable>
 			))}
-			<Button
-				isDisabled={!isChanged || isPending}
-				onPress={() => onSave(teamIds)}
-				size="sm"
-				variant="secondary"
-			>
-				<Button.Label>{isPending ? "변경 중" : "팀 소속 저장"}</Button.Label>
-			</Button>
-		</View>
+		</MemberEditSheet>
 	);
 }
 
@@ -379,14 +431,21 @@ interface MemberCardHandlers {
 // 서버가 거부할 항목은 숨기지 않고 비활성으로 두고 사유를 함께 보여준다.
 function MemberActionsMenu({
 	handlers,
+	hasTeams,
 	permissions,
 	row,
 }: {
 	handlers: MemberCardHandlers;
+	hasTeams: boolean;
 	permissions: MemberActionPermissions;
 	row: OrganizationMember;
 }) {
 	const foreground = useThemeColor("foreground");
+	// 팀 소속 변경이 막히는 사유는 둘이다 — 지정할 팀이 아예 없거나, 서버가 활성 멤버로만
+	// 제한하거나. 어느 쪽인지 알려 주지 않으면 팀부터 만들어야 한다는 걸 알 수 없다.
+	const teamsDisabledReason = hasTeams
+		? MEMBER_NOT_ACTIVE_REASON
+		: NO_TEAM_TO_ASSIGN_REASON;
 
 	return (
 		// 팝오버가 아니라 바텀시트다. heroui의 popover 배치는 bottom placement에서
@@ -417,9 +476,7 @@ function MemberActionsMenu({
 					>
 						<Menu.ItemTitle>팀 소속 변경</Menu.ItemTitle>
 						{permissions.canSetTeams ? null : (
-							<Menu.ItemDescription>
-								{MEMBER_NOT_ACTIVE_REASON}
-							</Menu.ItemDescription>
+							<Menu.ItemDescription>{teamsDisabledReason}</Menu.ItemDescription>
 						)}
 					</Menu.Item>
 					<Menu.Item
@@ -445,16 +502,19 @@ function MemberActionsMenu({
 function MemberCard({
 	canManageOrganization,
 	handlers,
+	hasTeams,
 	isVerified,
 	row,
 }: {
 	canManageOrganization: boolean;
 	handlers: MemberCardHandlers;
+	hasTeams: boolean;
 	isVerified: boolean;
 	row: OrganizationMember;
 }) {
 	const permissions = getMemberActionPermissions({
 		canManageOrganization,
+		hasTeams,
 		isVerified,
 		row,
 	});
@@ -474,6 +534,7 @@ function MemberCard({
 				{permissions.canChangeRole ? (
 					<MemberActionsMenu
 						handlers={handlers}
+						hasTeams={hasTeams}
 						permissions={permissions}
 						row={row}
 					/>
@@ -530,6 +591,7 @@ function MemberCard({
 function MemberList({
 	canManageOrganization,
 	handlers,
+	hasTeams,
 	isVerified,
 	members,
 	onRetry,
@@ -537,6 +599,7 @@ function MemberList({
 }: {
 	canManageOrganization: boolean;
 	handlers: MemberCardHandlers;
+	hasTeams: boolean;
 	isVerified: boolean;
 	members: OrganizationMember[];
 	onRetry: () => void;
@@ -575,6 +638,7 @@ function MemberList({
 				<MemberCard
 					canManageOrganization={canManageOrganization}
 					handlers={handlers}
+					hasTeams={hasTeams}
 					isVerified={isVerified}
 					key={`${row.kind}-${row.id}`}
 					row={row}
@@ -815,56 +879,46 @@ export function TeamMemberSection({
 			<MemberList
 				canManageOrganization={canManageOrganization}
 				handlers={handlers}
+				hasTeams={teams.length > 0}
 				isVerified={isVerified}
 				members={membersQuery.data ?? []}
 				onRetry={() => membersQuery.refetch()}
 				status={status}
 			/>
 
-			{manageTarget ? (
-				<Surface className="gap-4 rounded-lg p-4" variant="secondary">
-					<View className="flex-row items-center justify-between gap-3">
-						<Text className="flex-1 font-semibold text-base text-foreground">
-							{getMemberLabel(manageTarget.row)} 님{" "}
-							{manageTarget.mode === "role" ? "권한 변경" : "팀 소속 변경"}
-						</Text>
-						<Button
-							onPress={() => setManageTarget(null)}
-							size="sm"
-							variant="ghost"
-						>
-							<Button.Label>닫기</Button.Label>
-						</Button>
-					</View>
-					{manageTarget.mode === "role" ? (
-						<MemberRolePanel
-							initialRole={toAssignableRole(manageTarget.row.role)}
-							isPending={setRoleMutation.isPending}
-							key={manageTarget.row.id}
-							onSave={(nextRole) =>
-								setRoleMutation.mutate({
-									memberId: manageTarget.row.id,
-									organizationId,
-									role: nextRole,
-								})
-							}
-						/>
-					) : (
-						<MemberTeamsPanel
-							initialTeamIds={manageTarget.row.teams.map((team) => team.id)}
-							isPending={setMemberTeamsMutation.isPending}
-							key={manageTarget.row.id}
-							onSave={(teamIds) =>
-								setMemberTeamsMutation.mutate({
-									memberId: manageTarget.row.id,
-									organizationId,
-									teamIds,
-								})
-							}
-							teams={teams}
-						/>
-					)}
-				</Surface>
+			{manageTarget?.mode === "role" ? (
+				<MemberRoleSheet
+					initialRole={toAssignableRole(manageTarget.row.role)}
+					isPending={setRoleMutation.isPending}
+					key={manageTarget.row.id}
+					memberLabel={getMemberLabel(manageTarget.row)}
+					onClose={() => setManageTarget(null)}
+					onSave={(nextRole) =>
+						setRoleMutation.mutate({
+							memberId: manageTarget.row.id,
+							organizationId,
+							role: nextRole,
+						})
+					}
+				/>
+			) : null}
+
+			{manageTarget?.mode === "teams" ? (
+				<MemberTeamsSheet
+					initialTeamIds={manageTarget.row.teams.map((team) => team.id)}
+					isPending={setMemberTeamsMutation.isPending}
+					key={manageTarget.row.id}
+					memberLabel={getMemberLabel(manageTarget.row)}
+					onClose={() => setManageTarget(null)}
+					onSave={(teamIds) =>
+						setMemberTeamsMutation.mutate({
+							memberId: manageTarget.row.id,
+							organizationId,
+							teamIds,
+						})
+					}
+					teams={teams}
+				/>
 			) : null}
 		</View>
 	);

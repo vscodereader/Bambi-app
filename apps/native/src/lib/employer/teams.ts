@@ -179,15 +179,22 @@ const NO_MEMBER_ACTIONS: MemberActionPermissions = {
 // 숨기지 않고 비활성으로 두고 이 사유를 함께 보여준다.
 export const MEMBER_NOT_ACTIVE_REASON = "활성 멤버만 할 수 있어요.";
 
+// 팀이 하나도 없으면 지정할 소속 자체가 없다. 팀이 하나뿐인 경우는 막지 않는다 —
+// "그 팀 소속"과 "전체 조직"이 서로 다른 상태라 여전히 고를 값이 있다.
+export const NO_TEAM_TO_ASSIGN_REASON =
+	"먼저 팀을 만들어야 소속을 지정할 수 있어요.";
+
 // 웹 MemberRowActions의 노출 규칙 + 서버 가드를 합친 판정. 소유자 행에는 아무 액션도 열지
 // 않는다(서버가 setMemberRole·removeMember에서 소유자를 거부한다). 미승인 조직은
 // assertOrganizationVerified에 걸리므로 전부 닫는다.
 export const getMemberActionPermissions = ({
 	canManageOrganization,
+	hasTeams,
 	isVerified,
 	row,
 }: {
 	canManageOrganization: boolean;
+	hasTeams: boolean;
 	isVerified: boolean;
 	row: MemberRowLike;
 }): MemberActionPermissions => {
@@ -205,8 +212,8 @@ export const getMemberActionPermissions = ({
 			canDeleteInvitation: false,
 			canRemove: true,
 			canResubmit: false,
-			// setMemberTeams는 활성 멤버만 허용한다.
-			canSetTeams: row.status === "active",
+			// setMemberTeams는 활성 멤버만 허용한다. 지정할 팀이 없으면 열어도 할 일이 없다.
+			canSetTeams: row.status === "active" && hasTeams,
 			// transferOwnership도 같은 축이다 — 초대 수락 전 멤버는 서버가 거부한다.
 			canTransferOwnership: row.status === "active",
 		};
