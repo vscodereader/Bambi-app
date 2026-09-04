@@ -55,9 +55,9 @@ const QUICK_LINKS: {
 ];
 // 한 번에 보여줄 공고 수. 웹 목록 페이지 크기와 같다.
 const JOB_PAGE_SIZE = 5;
-const MENU_WIDTH = 180;
-// 옵션이 넷뿐이라 기본 시트(50%)보다 낮게 연다.
+// 옵션이 넷뿐이라 기본 시트(50%)보다 낮게 연다. 카드 액션 메뉴는 항목이 둘이라 같이 쓴다.
 const SORT_SNAP_POINTS = ["35%"];
+const MENU_SNAP_POINTS = SORT_SNAP_POINTS;
 
 type EmployerJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["jobs"]["listMine"]>
@@ -116,7 +116,11 @@ function JobActionsMenu({
 	const foreground = useThemeColor("foreground");
 
 	return (
-		<Menu>
+		// 팝오버가 아니라 바텀시트다. heroui의 popover 배치는 bottom placement에서
+		// Dimensions.get("screen") 기준으로만 클램프하고 maxHeight를 걸지 않아, 목록 맨
+		// 아래 카드에서 메뉴 끝이 제스처 내비 영역 뒤로 잘린다(팀원 카드에서 실제로 났다).
+		// 시트는 트리거 위치와 무관하게 화면 하단에 붙으므로 그 실패가 아예 없다.
+		<Menu presentation="bottom-sheet">
 			<Menu.Trigger asChild>
 				{/* 아이콘만 담되 터치 타깃은 44dp를 지킨다. */}
 				<Pressable
@@ -129,8 +133,8 @@ function JobActionsMenu({
 			</Menu.Trigger>
 			<Menu.Portal>
 				<Menu.Overlay />
-				{/* 트리거가 카드 오른쪽 끝이라 end 정렬이 아니면 화면 밖으로 밀린다. */}
-				<Menu.Content align="end" presentation="popover" width={MENU_WIDTH}>
+				{/* 항목이 둘뿐이라 정렬 시트와 같은 높이로 둔다. */}
+				<Menu.Content presentation="bottom-sheet" snapPoints={MENU_SNAP_POINTS}>
 					<Menu.Item
 						onPress={() =>
 							router.push({

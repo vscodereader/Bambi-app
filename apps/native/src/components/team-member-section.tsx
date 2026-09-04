@@ -56,7 +56,8 @@ const ALL_ORGANIZATION_TEAM = { label: "전체 조직", value: "" };
 const MIN_SEARCH_LENGTH = 2;
 
 // 공고관리 카드의 액션 메뉴와 같은 폭.
-const MENU_WIDTH = 180;
+// 사유 문구가 붙는 항목이 있어 네 항목 기준으로 잡는다(정렬 시트 35%보다 한 단계 높게).
+const MENU_SNAP_POINTS = ["45%"];
 
 const alertError = (title: string, error: unknown, fallback: string) =>
 	Alert.alert(title, localErrorMessage(error, fallback));
@@ -388,7 +389,11 @@ function MemberActionsMenu({
 	const foreground = useThemeColor("foreground");
 
 	return (
-		<Menu>
+		// 팝오버가 아니라 바텀시트다. heroui의 popover 배치는 bottom placement에서
+		// Dimensions.get("screen") 기준으로만 클램프하고 maxHeight를 걸지 않아, 목록 맨
+		// 아래 카드에서 메뉴 끝이 제스처 내비 영역 뒤로 잘리고 더 스크롤할 여지도 없다.
+		// 시트는 트리거 위치와 무관하게 화면 하단에 붙으므로 그 실패가 아예 없다.
+		<Menu presentation="bottom-sheet">
 			<Menu.Trigger asChild>
 				{/* 아이콘만 담되 터치 타깃은 44dp를 지킨다. */}
 				<Pressable
@@ -401,8 +406,8 @@ function MemberActionsMenu({
 			</Menu.Trigger>
 			<Menu.Portal>
 				<Menu.Overlay />
-				{/* 트리거가 카드 오른쪽 끝이라 end 정렬이 아니면 화면 밖으로 밀린다. */}
-				<Menu.Content align="end" presentation="popover" width={MENU_WIDTH}>
+				{/* 사유 문구가 붙는 항목이 있어 네 항목 기준으로 넉넉히 잡는다. */}
+				<Menu.Content presentation="bottom-sheet" snapPoints={MENU_SNAP_POINTS}>
 					<Menu.Item onPress={() => handlers.onChangeRole(row)}>
 						<Menu.ItemTitle>권한 변경</Menu.ItemTitle>
 					</Menu.Item>
