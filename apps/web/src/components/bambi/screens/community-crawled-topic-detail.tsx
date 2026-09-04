@@ -4,6 +4,7 @@
 
 import type { AppRouter } from "@bambi-app/api/routers/index";
 import {
+	COMMUNITY_COMMENT_BODY_MAX_LENGTH,
 	COMMUNITY_PASSWORD_MAX_LENGTH,
 	COMMUNITY_PASSWORD_MIN_LENGTH,
 } from "@bambi-app/api/services/bambi-community-post-policy";
@@ -43,12 +44,7 @@ import {
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
-// 수집 글은 밤문화 이야기(work_talk) 게시판에 합류하므로 목록으로 돌아가는 버튼도 그 게시판을 가리킨다.
-
-// 닉네임이 비어 오는 댓글의 폴백. 커뮤니티 기본값("회원")과 달리 수집 원본은 익명 작성이 흔해
-// "익명"으로 표기한다.
-
-const COMMENT_MAX = 1000;
+const COMMENT_MAX = COMMUNITY_COMMENT_BODY_MAX_LENGTH;
 const PASSWORD_MIN = COMMUNITY_PASSWORD_MIN_LENGTH;
 const PASSWORD_MAX = COMMUNITY_PASSWORD_MAX_LENGTH;
 

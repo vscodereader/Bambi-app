@@ -97,7 +97,7 @@ const TOPIC_LIST_COLUMNS = {
 	commentCount: crawledCommunityTopic.commentCount,
 	id: crawledCommunityTopic.id,
 	removedAt: crawledCommunityTopic.removedAt,
-	sourcePostedAt: crawledDisplayDate,
+	displayedAt: crawledDisplayDate,
 	title: crawledDisplayTitle,
 	viewCount: crawledCommunityTopic.viewCount,
 } as const;

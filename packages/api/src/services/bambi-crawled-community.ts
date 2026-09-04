@@ -23,6 +23,7 @@ import {
 	sourceCommentId,
 } from "./bambi-crawled-community-policy";
 import type { GradeBadge } from "./bambi-member-points";
+import { SITE_SETTINGS_ROW_ID } from "./bambi-point-settings";
 import { resolveGradeIconUrl } from "./bambi-storage";
 
 export const crawledDisplayTitle = sql<string>`coalesce(${crawledCommunityTopic.editedTitle}, ${crawledCommunityTopic.title})`;
@@ -64,7 +65,7 @@ export const loadCrawledEditorGrade = async (): Promise<GradeBadge | null> => {
 			bambiMemberGrade,
 			eq(bambiMemberGrade.id, bambiSiteSettings.crawledCommunityEditorGradeId)
 		)
-		.where(eq(bambiSiteSettings.id, "default"))
+		.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 		.limit(1);
 	return grade
 		? {

@@ -1,8 +1,10 @@
 import type { CrawledCommunityCommentRecord } from "@bambi-app/db/schema/bambi";
+import { COMMUNITY_COMMENT_BODY_MAX_LENGTH } from "./bambi-community-post-policy";
 
 // 운영자 편집 수집 글의 표시 정책. 실제 관리자 계정의 이름/등급을 변경하지 않는다.
 export const CRAWLED_EDITED_AUTHOR_NAME = "ㅇㅇ";
-export const CRAWLED_SOURCE_COMMENT_MAX_LENGTH = 1000;
+export const CRAWLED_SOURCE_COMMENT_MAX_LENGTH =
+	COMMUNITY_COMMENT_BODY_MAX_LENGTH;
 
 export const sourceCommentId = (
 	topicId: string,
@@ -20,8 +22,3 @@ export const crawledTextToDocument = (text: string): string =>
 			...(line ? { content: [{ type: "text", text: line }] } : {}),
 		})),
 	});
-
-export const crawledActivityDate = (topic: {
-	activityAt: Date | null;
-	sourcePostedAt: Date | null;
-}): Date | null => topic.activityAt ?? topic.sourcePostedAt;

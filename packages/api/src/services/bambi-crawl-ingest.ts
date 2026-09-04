@@ -74,6 +74,7 @@ import {
 } from "./bambi-crawl-queenalba-main";
 import { requireCrawlBoard } from "./bambi-crawled-community";
 import { type CrawledLimits, readCrawledLimits } from "./bambi-crawled-limits";
+import { SITE_SETTINGS_ROW_ID } from "./bambi-point-settings";
 import { loadRegionIndex, matchRegionCodes } from "./bambi-region";
 
 // 목록에서 수집기가 쓰는 최소 규약. 사이트별 목록 파서가 더 많은 필드를 채워도 상관없다 —
@@ -443,7 +444,7 @@ const readSettings = async (): Promise<CrawlTickSettings> => {
 			crawlSourceSite: bambiSiteSettings.crawlSourceSite,
 		})
 		.from(bambiSiteSettings)
-		.where(eq(bambiSiteSettings.id, "default"));
+		.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID));
 
 	return (
 		row ?? {
@@ -461,7 +462,7 @@ const touchLastRunAt = (now: Date) =>
 	db
 		.update(bambiSiteSettings)
 		.set({ crawlLastRunAt: now })
-		.where(eq(bambiSiteSettings.id, "default"));
+		.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID));
 
 // 목록에서 본 ID의 생존 표시를 갱신한다. 파라미터 개수 상한에 걸리지 않도록 나눠 보낸다.
 const MARK_SEEN_CHUNK = 500;

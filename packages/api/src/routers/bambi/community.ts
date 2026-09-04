@@ -76,6 +76,7 @@ import {
 import {
 	COMMUNITY_AUTHOR_NAME_MAX_LENGTH,
 	COMMUNITY_BODY_JSON_MAX_LENGTH,
+	COMMUNITY_COMMENT_BODY_MAX_LENGTH,
 	COMMUNITY_PASSWORD_MAX_LENGTH,
 	COMMUNITY_PASSWORD_MIN_LENGTH,
 	COMMUNITY_TITLE_MAX_LENGTH,
@@ -397,7 +398,7 @@ const postReadInput = postIdInput.extend({
 // 소유권 증명용 비밀번호다. 비회원은 잠긴 글에 댓글을 달 수 없어(공개 보드 한정) 두 뜻이
 // 한 요청에서 겹치지 않는다.
 const createCommentInput = postIdInput.extend({
-	body: z.string().trim().min(1).max(1000),
+	body: z.string().trim().min(1).max(COMMUNITY_COMMENT_BODY_MAX_LENGTH),
 	parentCommentId: z.string().uuid().optional(),
 	password: z.string().trim().max(30).optional(),
 });
@@ -405,7 +406,7 @@ const createCommentInput = postIdInput.extend({
 // 수집 글 댓글 입력. 우리 글 댓글과 같은 필드에 대상만 topicId로 갈린다(잠금이 없어
 // password는 언제나 비회원 소유권 비밀번호 한 가지 뜻이다).
 const createCrawledCommentInput = z.object({
-	body: z.string().trim().min(1).max(1000),
+	body: z.string().trim().min(1).max(COMMUNITY_COMMENT_BODY_MAX_LENGTH),
 	parentCommentId: z.string().uuid().optional(),
 	password: z.string().trim().max(30).optional(),
 	topicId: z.string().uuid(),
@@ -418,7 +419,7 @@ const deleteCommentInput = z.object({
 });
 
 const updateCommentInput = z.object({
-	body: z.string().trim().min(1).max(1000),
+	body: z.string().trim().min(1).max(COMMUNITY_COMMENT_BODY_MAX_LENGTH),
 	commentId: z.string().uuid(),
 	password: z.string().trim().max(30).optional(),
 });
@@ -859,14 +860,14 @@ const toPublicSummary = (
 	viewCount: summary.viewCount,
 });
 
-// 순수 work_talk + 수집 커뮤니티 글을 한 쿼리로 합쳐 페이지네이션한다. 애플리케이션에서
+// 선택 게시판의 순수 글 + 수집 커뮤니티 글을 한 쿼리로 합쳐 페이지네이션한다. 애플리케이션에서
 // 두 배열을 합치는 대신 UNION ALL을 쓰는 이유는 정렬·limit·offset을 DB에서 끝내야 수집
 // 테이블이 커져도 무너지지 않기 때문이다(bambi-job-feed.listJobFeed와 같은 판단). ALL인
 // 이유는 두 원천에 같은 행이 있을 수 없어 DISTINCT가 불필요해서다. 정렬은 공고와 같은
 // 우선순위 규칙 — 1순위 순수(is_crawled 0), 2순위 수집(1), 각 구간 내 최신순.
 // nativeFilters·crawledFilters는 각 원천 where에 그대로 얹는다(검색어를 순수·수집 양쪽에
 // 함께 걸 때 쓴다). overview는 인자 없이 전체를 섞는다.
-const selectWorkTalkFeedUnion = ({
+const selectBoardFeedUnion = ({
 	board,
 	limit,
 	offset,
@@ -1419,7 +1420,7 @@ export const communityRouter = {
 				// includeCrawled면 mine·양성 필터가 모두 꺼져 listFilters엔 검색어 필터만 남는다.
 				const crawledSearchFilters = buildCrawledSearchFilters(input.q);
 				const [items, [nativeTotal], crawledTotal] = await Promise.all([
-					selectWorkTalkFeedUnion({
+					selectBoardFeedUnion({
 						board: input.board,
 						limit: PAGE_SIZE,
 						offset,
@@ -1495,7 +1496,7 @@ export const communityRouter = {
 			const profile = await findCommunityMember(context.session);
 
 			const windowStart = bestWindowStart();
-			// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
+			// 각 실제 게시판 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
 			const [communityFeedOn, bestIcon, boards, homeLayout] = await Promise.all(
 				[
 					isCrawledCommunityFeedEnabled(),
@@ -1574,7 +1575,7 @@ export const communityRouter = {
 			const postsPerBoard = await Promise.all(
 				previews.map((board) =>
 					board.key !== BEST_BOARD && communityFeedOn
-						? selectWorkTalkFeedUnion({
+						? selectBoardFeedUnion({
 								board: board.key,
 								limit: OVERVIEW_LIMIT,
 								nativeFilters: [eq(communityPost.board, board.key)],

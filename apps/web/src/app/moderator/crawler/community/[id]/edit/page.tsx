@@ -64,9 +64,7 @@ function EditForm({
 				title: initial.title,
 				body: initial.body,
 				authorName: CRAWLED_EDITED_AUTHOR_NAME,
-				authorRole: "job_seeker",
 				isAnonymous: true,
-				isLocked: false,
 			}}
 		/>
 	);

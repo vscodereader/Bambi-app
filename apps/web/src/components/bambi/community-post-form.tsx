@@ -141,8 +141,9 @@ const canSubmitPost = ({
 
 interface CommunityPostInitial {
 	authorName: string;
-	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
-	authorRole: "admin" | "employer" | "guest" | "job_seeker" | "legal_advisor";
+	// 일반 글은 작성자의 role 스냅샷(getPost.authorRole)을 넘겨 수정 모드 광고 Switch 게이트에 쓴다.
+	// 계정 소유자가 없는 수집 글 편집 모드는 생략한다.
+	authorRole?: "admin" | "employer" | "guest" | "job_seeker" | "legal_advisor";
 	// 글이 실제로 속한 게시판 key(getPost.board). 교차 노출된 게시판 경로로 수정에
 	// 들어와도 공지/이벤트 판정이 URL slug가 아니라 글의 원래 게시판을 따르게 한다.
 	board?: string;
@@ -153,7 +154,7 @@ interface CommunityPostInitial {
 	id: string;
 	isAnonymous?: boolean;
 	isEvent?: boolean;
-	isLocked: boolean;
+	isLocked?: boolean;
 	// 수정 모드 광고글 초기값. 편집 페이지가 getPost.isPromotion을 넘겨주면 사용한다.
 	isPromotion?: boolean;
 	noticeBoardKeys?: string[];
