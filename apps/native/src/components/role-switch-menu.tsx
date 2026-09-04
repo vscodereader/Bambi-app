@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type Href, router } from "expo-router";
 import { Menu, useThemeColor } from "heroui-native";
 import type { ReactElement } from "react";
-import { Pressable, Text } from "react-native";
+import { Pressable } from "react-native";
 
 import { authClient } from "@/lib/auth-client";
 import {
@@ -15,10 +15,7 @@ import {
 } from "@/src/lib/bambi-native";
 import { orpc } from "@/src/lib/orpc";
 
-const MENU_WIDTH = 200;
-
-// 전환할 곳이 하나뿐이면(=현재 화면만) 메뉴가 할 일이 없다.
-const MIN_SWITCHABLE_AREAS = 2;
+const MENU_WIDTH = 220;
 
 // 역할 영역(구인자·운영자) 헤더 우측의 화면 전환 메뉴. 역할 영역은 루트 스택에 push된
 // 별도 탭 셸이라 뒤로 버튼도, 구직자 라우트를 가리키는 탭도 없다 — 이 메뉴가 유일한
@@ -34,22 +31,20 @@ export function RoleSwitchMenu({
 		...orpc.bambi.onboarding.getMine.queryOptions(),
 		enabled: Boolean(session.data?.user),
 	});
-	const options = getNativeAreaOptions(
+	// 지금 있는 영역은 갈 곳이 아니므로 목록에서 뺀다 — 보통 구인자·운영자 영역에선
+	// "메인 공고 화면으로 이동" 하나만 남는다(admin이 구인자 영역에 있으면 현재 영역이
+	// 애초에 자기 목록에 없어 두 개가 남을 수 있는데, 그건 정상이라 그대로 둔다).
+	const targets = getNativeAreaOptions(
 		mineQuery.data?.bambiProfile?.role as NativeProfileRole | null | undefined
-	);
+	).filter((option) => option.href !== currentArea);
 
-	// 조회 중이거나 전환할 곳이 없으면 아무것도 그리지 않는다. 헤더의 보조 컨트롤이라
+	// 조회 중이거나 나갈 곳이 없으면 아무것도 그리지 않는다. 헤더의 보조 컨트롤이라
 	// 스켈레톤을 깜빡이는 것보다 늦게 나타나는 편이 낫다.
-	if (options.length < MIN_SWITCHABLE_AREAS) {
+	if (targets.length === 0) {
 		return null;
 	}
 
 	const handleSelect = (href: NativeAreaRoute) => {
-		// 현재 영역은 선택 표시만 하고 아무 데도 가지 않는다(메뉴만 닫힌다).
-		if (href === currentArea) {
-			return;
-		}
-
 		if (href !== "/(seeker)") {
 			router.push(href as Href);
 			return;
@@ -66,38 +61,27 @@ export function RoleSwitchMenu({
 		router.replace(href as Href);
 	};
 
-	// 운영자는 구인자 영역에도 들어갈 수 있어(EmployerLayout이 admin을 통과시킨다) 현재
-	// 영역이 자기 목록에 없을 수 있다 — 그때는 이름 대신 메뉴의 용도를 그대로 쓴다.
-	const currentTitle =
-		options.find((option) => option.href === currentArea)?.title ?? "화면 전환";
-
 	return (
 		<Menu>
 			<Menu.Trigger asChild>
-				{/* 헤더 안에 들어가는 보조 컨트롤이라 폭은 글자에 맞추되, 높이는 48dp를 지킨다. */}
+				{/* 헤더 우측의 보조 컨트롤. 아이콘만 담되 터치 타깃은 48dp(h-12 w-12)를 지킨다. */}
 				<Pressable
-					accessibilityLabel="화면 전환"
+					accessibilityLabel="화면 전환 메뉴"
 					accessibilityRole="button"
-					className="h-12 flex-row items-center gap-1 rounded-2xl border border-border bg-surface px-3 active:opacity-75"
-					hitSlop={8}
+					className="h-12 w-12 items-center justify-center rounded-2xl active:opacity-75"
 				>
-					<Text className="font-medium text-foreground text-sm">
-						{currentTitle}
-					</Text>
-					<Ionicons color={foreground} name="chevron-down" size={16} />
+					<Ionicons color={foreground} name="ellipsis-horizontal" size={24} />
 				</Pressable>
 			</Menu.Trigger>
 			<Menu.Portal>
 				<Menu.Overlay />
 				{/* 트리거가 헤더 오른쪽 끝이라 end 정렬이 아니면 화면 밖으로 밀린다. */}
 				<Menu.Content align="end" presentation="popover" width={MENU_WIDTH}>
-					{options.map((option) => (
+					{targets.map((option) => (
 						<Menu.Item
-							isSelected={option.href === currentArea}
 							key={option.href}
 							onPress={() => handleSelect(option.href)}
 						>
-							<Menu.ItemIndicator />
 							<Menu.ItemTitle>{option.title}</Menu.ItemTitle>
 						</Menu.Item>
 					))}
