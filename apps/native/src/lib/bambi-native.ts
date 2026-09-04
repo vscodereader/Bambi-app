@@ -1,4 +1,8 @@
+import type { JobDescriptionBlock } from "@bambi-app/api/services/bambi-job-description-blocks";
 import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
+
+import type { AdPreviewTemplateValue } from "@/src/lib/employer/ad-exposure";
+import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
 
 const TITLE_MIN_LENGTH = 2;
 const TITLE_MAX_LENGTH = 80;
@@ -14,16 +18,21 @@ const INTERVIEW_NOTES_MAX_LENGTH = 500;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 
-export type NativeHomeRoute =
-	| "/(employer)"
-	| "/(moderator)"
-	| "/(seeker)"
-	| "/onboarding";
+export type NativeHomeRoute = "/(seeker)" | "/onboarding";
 
 export type NativeProfileRole = "admin" | "employer" | "job_seeker";
 
+export type NativeRoleAreaRoute = "/(employer)" | "/(moderator)";
+
+export interface NativeRoleTab {
+	href: NativeRoleAreaRoute;
+	title: string;
+}
+
 export interface NativeJobForm {
 	description: string;
+	// 시/도(regionCode) 안의 시군구. 빈 문자열이면 미선택 = "시/도 전체"(서버가 키 없음으로 처리).
+	districtCode: string;
 	industryCategory: string;
 	interviewNotes: string;
 	organizationId: string;
@@ -36,13 +45,33 @@ export interface NativeJobForm {
 }
 
 export interface NativeJobPostInput {
+	adProductId?: null | string;
+	beginnerFriendly?: boolean;
 	description: string;
+	descriptionBlocks?: JobDescriptionBlock[];
+	// 세부지역(시군구). 미선택이면 웹 폼과 같이 키 자체를 빼서 보낸다(서버가 "시/도 전체").
+	districtCode?: string;
+	exposureAmount?: null | number;
+	exposureDurationDays?: null | number;
 	// 서버 입력이 업종 enum이라 제출 페이로드는 확정 목록 값으로 좁힌다(폼 상태는 string 유지).
 	industryCategory: NativeIndustryOption;
+	instantInterview?: boolean;
 	interviewNotes?: string;
+	// 배너(adHorizontal/adVertical)는 native가 편집하지 않지만, media는 전량 교체라 web이 올린
+	// 배너를 되돌려 보내지 않으면 서버가 배너 행·GCS 객체를 지운다 — 수정 시 그대로 실어 보낸다.
+	media?: {
+		adHorizontal?: JobMediaUploadItem;
+		adVertical?: JobMediaUploadItem;
+		cover?: JobMediaUploadItem;
+		detail: JobMediaUploadItem[];
+	};
 	organizationId: string;
-	payAmount: number;
+	// "협의" 단위는 금액이 없다 — 서버 jobPostInput refine이 짝을 강제한다.
+	payAmount: null | number;
+	paymentMethod?: "bank_transfer" | "card" | null;
 	payUnit: string;
+	// 이번 결제에 쓸 포인트(1P=1원). 서버 jobPostInput이 min(0).default(0)로 받으므로 무료면 0.
+	pointsToUse?: number;
 	regionCode: string;
 	teamId?: string;
 	title: string;
@@ -80,7 +109,10 @@ export const industryOptions = [
 
 export type NativeIndustryOption = (typeof industryOptions)[number];
 
-export const payUnitOptions = ["시급", "일급", "주급", "월급"] as const;
+export const payUnitOptions = ["시급", "일급", "주급", "월급", "협의"] as const;
+
+// 급여 협의 단위 — 금액 없이 저장한다(web bambi-options.ts의 NEGOTIABLE_PAY_UNIT과 같은 값).
+export const NEGOTIABLE_PAY_UNIT = "협의";
 
 export const jobStatusLabels = {
 	draft: "임시 저장",
@@ -92,6 +124,7 @@ export const jobStatusLabels = {
 } as const;
 
 export const verificationStatusLabels = {
+	changes_unsubmitted: "변경사항 미제출",
 	none: "미인증",
 	pending: "인증 대기",
 	rejected: "인증 반려",
@@ -100,6 +133,8 @@ export const verificationStatusLabels = {
 
 export const emptyNativeJobForm: NativeJobForm = {
 	description: "",
+	// 세부지역은 선택 항목이라 기본은 미선택(빈 문자열).
+	districtCode: "",
 	industryCategory: industryOptions[0] ?? "",
 	interviewNotes: "",
 	organizationId: "",
@@ -120,20 +155,76 @@ const isLengthBetween = (value: string, min: number, max: number): boolean =>
 const findFirstError = (errors: NativeJobFormErrors): string | undefined =>
 	Object.values(errors).find((message) => Boolean(message));
 
+// 세부지역(선택 항목) 검증. 값이 없으면 빈 객체라 errors에 키가 남지 않고, 값이 있으면
+// regionCode와 같은 10자리만 허용한다. 오류 없음도 빈 객체로 돌려 호출부가 분기 없이 합친다.
+const districtCodeErrors = (districtCode: string): NativeJobFormErrors =>
+	districtCode && districtCode.length !== REGION_CODE_LENGTH
+		? { districtCode: "세부지역을 다시 선택해 주세요." }
+		: {};
+
+// 협의 단위면 금액을 받지 않고, 그 외 단위만 1 이상 정수를 요구한다. 검증 함수의 인지
+// 복잡도를 낮추려 조건식을 이름 있는 헬퍼로 뺐다(동작은 그대로).
+const isValidPayAmount = (
+	payAmount: null | number,
+	isNegotiable: boolean
+): boolean =>
+	isNegotiable || (Number.isInteger(payAmount) && (payAmount ?? 0) > 0);
+
+// 앱 시작 홈은 역할과 무관하게 구직자 홈이다(웹 redirectToRoleHome과 같은 규칙 —
+// 루트는 항상 /seeker로 보내고, 구인자·운영자는 하단 탭의 역할 탭으로 자기 영역에 들어간다).
+// 프로필이 없는 사용자만 온보딩으로 보낸다.
 export const getNativeHomeRoute = (
 	role: NativeProfileRole | null | undefined
-): NativeHomeRoute => {
-	switch (role) {
-		case "admin":
-			return "/(moderator)";
-		case "employer":
-			return "/(employer)";
-		case "job_seeker":
-			return "/(seeker)";
-		default:
-			return "/onboarding";
+): NativeHomeRoute => (role ? "/(seeker)" : "/onboarding");
+
+// 구직자 하단 탭에서 수다방과 내 정보 사이에 끼우는 역할 탭. 구직자·미가입은 탭이 없다
+// (웹 mobile-tab-bar의 "구인 관리"·"운영자 모드" 탭과 같은 축).
+export const getNativeRoleTab = (
+	role: NativeProfileRole | null | undefined
+): NativeRoleTab | null => {
+	if (role === "employer") {
+		return { href: "/(employer)", title: "구인자 관리" };
 	}
+	if (role === "admin") {
+		return { href: "/(moderator)", title: "운영자 페이지" };
+	}
+	return null;
 };
+
+// 구직자 화면도 전환 대상이지만 새 라우트 문자열을 만들지 않는다 — 홈 라우트가 이미
+// 같은 경로를 갖고 있어 그걸 좁혀 쓴다(경로가 바뀌면 한 곳만 고치면 된다).
+const SEEKER_AREA_ROUTE = "/(seeker)" satisfies NativeHomeRoute;
+
+export type NativeAreaRoute = NativeRoleAreaRoute | typeof SEEKER_AREA_ROUTE;
+
+export interface NativeAreaOption {
+	href: NativeAreaRoute;
+	title: string;
+}
+
+// 역할 영역 헤더의 화면 전환 메뉴가 그릴 목록. 역할 영역은 루트 스택에 push된 별도 탭
+// 셸이라 자체 탭바·헤더 어디에도 구직자로 돌아갈 길이 없다 — 그 출구를 여기서 만든다.
+// 구직자·미가입은 오갈 곳이 없어 빈 배열이고, 호출부는 메뉴 자체를 그리지 않는다.
+export const getNativeAreaOptions = (
+	role: NativeProfileRole | null | undefined
+): NativeAreaOption[] => {
+	// 역할 영역 항목은 하단 역할 탭을 그대로 재사용한다 — 같은 대상을 탭과 메뉴가 다른
+	// 이름으로 부르면 안 되므로 문구를 복제하지 않고 한 벌만 둔다.
+	const roleTab = getNativeRoleTab(role);
+
+	return roleTab
+		? [{ href: SEEKER_AREA_ROUTE, title: "메인 공고 화면으로 이동" }, roleTab]
+		: [];
+};
+
+export type NativeAreaSwitchAction = "back" | "replace";
+
+// 역할 영역에서 구직자 화면으로 나갈 때 스택을 되감을지 새로 이동할지. 역할 탭으로 push해
+// 들어온 경우엔 되감아야 구직자 탭의 선택 상태·스크롤이 그대로 살아 있다. 반대로 딥링크로
+// 역할 영역이 곧장 열렸으면 되돌아갈 화면이 아예 없어(back은 앱을 닫는다) 이동해야 한다.
+export const getNativeAreaSwitchAction = (
+	canGoBack: boolean
+): NativeAreaSwitchAction => (canGoBack ? "back" : "replace");
 
 export const validateNativeJobForm = (
 	form: NativeJobForm,
@@ -145,8 +236,8 @@ export const validateNativeJobForm = (
 	const title = trim(form.title);
 	const industryCategory = trim(form.industryCategory);
 	const regionCode = trim(form.regionCode);
+	const districtCode = trim(form.districtCode);
 	const payAmountText = trim(form.payAmount);
-	const payAmount = Number(payAmountText);
 	const payUnit = trim(form.payUnit);
 	const workSchedule = trim(form.workSchedule);
 	const description = trim(form.description);
@@ -178,12 +269,20 @@ export const validateNativeJobForm = (
 		errors.regionCode = "지역을 선택해 주세요.";
 	}
 
-	if (!(Number.isInteger(payAmount) && payAmount > 0)) {
-		errors.payAmount = "급여 금액은 1 이상의 정수로 입력해 주세요.";
-	}
+	// 세부지역은 선택 항목이라 비어 있으면 오류가 아니다. 값이 있으면 regionCode와 같은
+	// 10자리(법정동코드)만 서버가 받으므로 그 길이만 확인한다. 검증 함수의 인지 복잡도가
+	// 이미 상한이라 분기를 늘리지 않으려고 헬퍼 결과를 합쳐 넣는다.
+	Object.assign(errors, districtCodeErrors(districtCode));
+
+	const isNegotiable = payUnit === NEGOTIABLE_PAY_UNIT;
+	const payAmount = isNegotiable ? null : Number(payAmountText);
 
 	if (!(payUnit.length > 0 && payUnit.length <= PAY_UNIT_MAX_LENGTH)) {
 		errors.payUnit = "급여 단위를 선택해 주세요.";
+	}
+
+	if (!isValidPayAmount(payAmount, isNegotiable)) {
+		errors.payAmount = "급여 금액은 1 이상의 정수로 입력해 주세요.";
 	}
 
 	if (
@@ -221,6 +320,9 @@ export const validateNativeJobForm = (
 	return {
 		input: {
 			description,
+			// 미선택이면 키 자체를 뺀다(undefined를 넣으면 키가 남아 서버가 "시/도 전체"로
+			// 처리하지 못한다). 웹 폼과 같은 취급이다.
+			...(districtCode ? { districtCode } : {}),
 			// 위 검증이 industryOptions 소속을 보장한 뒤에만 이 분기에 온다.
 			industryCategory: industryCategory as NativeIndustryOption,
 			interviewNotes: interviewNotes || undefined,
@@ -376,6 +478,24 @@ export const jobSectionTitles = {
 } as const;
 
 export type NativeJobSectionKey = keyof typeof jobSectionTitles;
+
+// 선택한 노출 상품의 프리뷰 템플릿 → 목록 미리보기가 그릴 섹션. 리스팅 계열만 자기 섹션으로
+// 올라가고, 프리미엄·사이드 배너 상품과 무료 공고는 전체 공고(organic)로 미리 보여 준다
+// — 배너 상품은 목록 카드가 아니라 상단·레일에 별도로 노출되므로 목록에서는 일반 카드다.
+export const adPreviewTemplateToSectionKey = (
+	template: AdPreviewTemplateValue | null | undefined
+): NativeJobSectionKey => {
+	switch (template) {
+		case "special-list":
+			return "special";
+		case "urgent-list":
+			return "urgent";
+		case "recommended-list":
+			return "recommended";
+		default:
+			return "organic";
+	}
+};
 
 // 웹의 세로 액센트 바 색 언어를 그대로 옮긴다(스페셜=coral, 급구=amber, 추천=blue).
 const jobSectionAccentClassNames = {
@@ -620,6 +740,28 @@ const PROFILE_ROLE_LABELS: Record<string, string> = {
 
 export const profileRoleLabel = (role: null | string | undefined): string =>
 	PROFILE_ROLE_LABELS[role ?? ""] ?? "구직자";
+
+export interface NativeAccountStatusBadge {
+	label: string;
+	tone: "danger" | "neutral" | "success" | "warning";
+}
+
+// 계정 상태 enum 원값 노출 금지 — 웹 employer/me의 accountStatusLabels와
+// getAccountStatusTone을 라벨·톤 한 쌍으로 합쳐 옮긴다(Pill tone에 그대로 꽂힌다).
+const ACCOUNT_STATUS_BADGES: Record<string, NativeAccountStatusBadge> = {
+	active: { label: "정상", tone: "success" },
+	suspended: { label: "정지", tone: "danger" },
+	warned: { label: "주의", tone: "warning" },
+};
+
+// 웹은 미등록 상태를 원값 그대로 흘리지만 native는 중립 문구로 떨어뜨린다.
+export const accountStatusBadge = (
+	status: null | string | undefined
+): NativeAccountStatusBadge =>
+	ACCOUNT_STATUS_BADGES[status ?? ""] ?? {
+		label: "확인 필요",
+		tone: "neutral",
+	};
 
 // 웹 MyPointsSummaryCard의 "다음 등급까지" 문구와 같은 규칙.
 export const pointsToNextLabel = (

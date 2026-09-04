@@ -48,6 +48,14 @@
 			--default: #f3f4f6;
 			--default-foreground: #111827;
 
+			/* 오버레이 뒤 배경 딤. heroui 라이트 기본은 "페이지 연회색(0.9702) + 떠 있는
+			 * 표면 흰색"으로 밝기 차를 내는데, 위에서 --background 를 웹 --surface-page(#fff)로
+			 * 덮으면서 페이지와 시트가 둘 다 순백이 됐다. --overlay-shadow 는 rgba 0.02~0.03 이라
+			 * 안드로이드에서 사실상 안 보이므로, 남은 구분 단서인 백드롭을 기본 20% → 40%로
+			 * 올려 바텀시트·팝오버·다이얼로그가 페이지에서 떠 보이게 한다.
+			 * 다크는 배경 12% / 시트 21%로 이미 갈라져 heroui 기본(20%)을 그대로 둔다. */
+			--backdrop: oklch(0% 0 0 / 40%);
+
 			/* 브랜드 코랄 — 웹 --color-primary(= --coral-500), --color-on-primary(= --white) */
 			--accent: #f94b63;
 			--accent-foreground: #ffffff;

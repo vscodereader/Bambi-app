@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	accountStatusBadge,
 	adPeriodTier,
+	adPreviewTemplateToSectionKey,
 	buildJobCardBadges,
 	buildSeekerJobSections,
 	describeJobForScreenReader,
 	emptyNativeJobForm,
 	formatAdPeriod,
+	getNativeAreaOptions,
+	getNativeAreaSwitchAction,
 	getNativeHomeRoute,
+	getNativeRoleTab,
 	groupDetailImageSlices,
 	isEmailLoginId,
 	NATIVE_AD_PERIOD_TIERS,
@@ -66,9 +71,51 @@ const jobPage = (
 describe("bambi native helpers", () => {
 	it("routes users by Bambi profile role", () => {
 		expect(getNativeHomeRoute("job_seeker")).toBe("/(seeker)");
-		expect(getNativeHomeRoute("employer")).toBe("/(employer)");
-		expect(getNativeHomeRoute("admin")).toBe("/(moderator)");
+		expect(getNativeHomeRoute("employer")).toBe("/(seeker)");
+		expect(getNativeHomeRoute("admin")).toBe("/(seeker)");
 		expect(getNativeHomeRoute(null)).toBe("/onboarding");
+		expect(getNativeHomeRoute(undefined)).toBe("/onboarding");
+	});
+
+	it("exposes a role tab only for employer and admin", () => {
+		expect(getNativeRoleTab("employer")).toEqual({
+			href: "/(employer)",
+			title: "구인자 관리",
+		});
+		expect(getNativeRoleTab("admin")).toEqual({
+			href: "/(moderator)",
+			title: "운영자 페이지",
+		});
+		expect(getNativeRoleTab("job_seeker")).toBeNull();
+		expect(getNativeRoleTab(null)).toBeNull();
+		expect(getNativeRoleTab(undefined)).toBeNull();
+	});
+
+	it("offers a way back to the seeker area only when a role area exists", () => {
+		expect(getNativeAreaOptions("employer")).toEqual([
+			{ href: "/(seeker)", title: "메인 공고 화면으로 이동" },
+			{ href: "/(employer)", title: "구인자 관리" },
+		]);
+		expect(getNativeAreaOptions("admin")).toEqual([
+			{ href: "/(seeker)", title: "메인 공고 화면으로 이동" },
+			{ href: "/(moderator)", title: "운영자 페이지" },
+		]);
+		expect(getNativeAreaOptions("job_seeker")).toEqual([]);
+		expect(getNativeAreaOptions(null)).toEqual([]);
+		expect(getNativeAreaOptions(undefined)).toEqual([]);
+	});
+
+	// 탭과 메뉴가 같은 대상을 다른 이름으로 부르면 안 된다.
+	it("labels the role area the same in the tab and the switch menu", () => {
+		const roleTab = getNativeRoleTab("employer");
+
+		expect(getNativeAreaOptions("employer").at(-1)).toEqual(roleTab);
+	});
+
+	it("rewinds to the seeker area when there is somewhere to go back to", () => {
+		expect(getNativeAreaSwitchAction(true)).toBe("back");
+		// 딥링크로 역할 영역이 곧장 열린 경우 — 되감을 화면이 없어 이동해야 한다.
+		expect(getNativeAreaSwitchAction(false)).toBe("replace");
 	});
 
 	it("validates job forms using web-compatible requirements", () => {
@@ -97,6 +144,89 @@ describe("bambi native helpers", () => {
 			},
 			ok: true,
 		});
+	});
+
+	it("급여 단위가 협의면 금액 없이 통과하고 payAmount는 null이다", () => {
+		const result = validateNativeJobForm(
+			{
+				...emptyNativeJobForm,
+				description: "충분히 긴 상세 설명입니다.",
+				industryCategory: "BAR",
+				organizationId: "org1",
+				payAmount: "",
+				payUnit: "협의",
+				regionCode: "1111000000",
+				title: "협의 공고",
+				workSchedule: "주 5일",
+			},
+			{}
+		);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.input.payAmount).toBeNull();
+			expect(result.input.payUnit).toBe("협의");
+		}
+	});
+
+	it("세부지역 미선택이면 통과하고 payload에 districtCode 키가 없다", () => {
+		const result = validateNativeJobForm({
+			...emptyNativeJobForm,
+			description: "상세 설명은 10자 이상 입력해야 합니다.",
+			districtCode: "",
+			industryCategory: "룸싸롱",
+			organizationId: "org-1",
+			payAmount: "180000",
+			payUnit: "일급",
+			regionCode: "1168000000",
+			title: "강남 라운지 스태프",
+			workSchedule: "20:00-02:00",
+		});
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect("districtCode" in result.input).toBe(false);
+		}
+	});
+
+	it("세부지역 10자리면 통과하고 payload에 districtCode를 싣는다", () => {
+		const result = validateNativeJobForm({
+			...emptyNativeJobForm,
+			description: "상세 설명은 10자 이상 입력해야 합니다.",
+			districtCode: "1168010100",
+			industryCategory: "룸싸롱",
+			organizationId: "org-1",
+			payAmount: "180000",
+			payUnit: "일급",
+			regionCode: "1168000000",
+			title: "강남 라운지 스태프",
+			workSchedule: "20:00-02:00",
+		});
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.input.districtCode).toBe("1168010100");
+		}
+	});
+
+	it("세부지역 길이가 10자리가 아니면 districtCode 오류를 준다", () => {
+		const result = validateNativeJobForm({
+			...emptyNativeJobForm,
+			description: "상세 설명은 10자 이상 입력해야 합니다.",
+			districtCode: "116801",
+			industryCategory: "룸싸롱",
+			organizationId: "org-1",
+			payAmount: "180000",
+			payUnit: "일급",
+			regionCode: "1168000000",
+			title: "강남 라운지 스태프",
+			workSchedule: "20:00-02:00",
+		});
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.errors.districtCode).toBe("세부지역을 다시 선택해 주세요.");
+		}
 	});
 
 	it("splits login ids by @ like the web form", () => {
@@ -373,6 +503,24 @@ describe("bambi native helpers", () => {
 	});
 });
 
+describe("adPreviewTemplateToSectionKey", () => {
+	it("리스팅 계열은 자기 섹션으로 올린다", () => {
+		expect(adPreviewTemplateToSectionKey("special-list")).toBe("special");
+		expect(adPreviewTemplateToSectionKey("urgent-list")).toBe("urgent");
+		expect(adPreviewTemplateToSectionKey("recommended-list")).toBe(
+			"recommended"
+		);
+	});
+
+	it("배너 상품·미선택·무료는 전체 공고(organic)로 미리 보여 준다", () => {
+		expect(adPreviewTemplateToSectionKey("premium-top")).toBe("organic");
+		expect(adPreviewTemplateToSectionKey("side-horizontal")).toBe("organic");
+		expect(adPreviewTemplateToSectionKey("none")).toBe("organic");
+		expect(adPreviewTemplateToSectionKey(null)).toBe("organic");
+		expect(adPreviewTemplateToSectionKey(undefined)).toBe("organic");
+	});
+});
+
 describe("profileRoleLabel", () => {
 	it("등록된 역할은 한글 라벨로 바꾼다", () => {
 		expect(profileRoleLabel("job_seeker")).toBe("구직자");
@@ -385,6 +533,32 @@ describe("profileRoleLabel", () => {
 		expect(profileRoleLabel(null)).toBe("구직자");
 		expect(profileRoleLabel(undefined)).toBe("구직자");
 		expect(profileRoleLabel("unknown_role")).toBe("구직자");
+	});
+});
+
+describe("accountStatusBadge", () => {
+	it("계정 상태를 한글 라벨과 Pill 톤으로 바꾼다", () => {
+		expect(accountStatusBadge("active")).toEqual({
+			label: "정상",
+			tone: "success",
+		});
+		expect(accountStatusBadge("warned")).toEqual({
+			label: "주의",
+			tone: "warning",
+		});
+		expect(accountStatusBadge("suspended")).toEqual({
+			label: "정지",
+			tone: "danger",
+		});
+	});
+
+	it("미등록·빈 상태는 enum 원값 대신 중립 문구로 떨어뜨린다", () => {
+		expect(accountStatusBadge(null)).toEqual({
+			label: "확인 필요",
+			tone: "neutral",
+		});
+		expect(accountStatusBadge(undefined).label).toBe("확인 필요");
+		expect(accountStatusBadge("deleted").label).toBe("확인 필요");
 	});
 });
 

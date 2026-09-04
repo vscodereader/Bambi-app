@@ -9,6 +9,8 @@ export default defineConfig({
 	},
 	root: import.meta.dirname,
 	test: {
-		include: ["test/**/*.test.ts"],
+		// 콜로케이션(src/lib/*.test.ts)과 미러 구조(test/**) 둘 다 실행한다 — include가
+		// test/**뿐이면 src 옆에 둔 스위트가 조용히 빠져 통과 착시가 생긴다.
+		include: ["{src,test}/**/*.test.ts"],
 	},
 });
