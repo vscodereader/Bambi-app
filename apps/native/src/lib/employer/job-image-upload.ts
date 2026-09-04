@@ -1,12 +1,16 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import { generateChatMessageId } from "@bambi-app/api/services/bambi-chat-message-id";
 import {
+	type ImagePickerAsset,
 	type ImagePickerResult,
 	launchImageLibraryAsync,
 } from "expo-image-picker";
 
 import { localErrorMessage } from "@/src/lib/chat/chat-errors";
+import { sliceDetailImage } from "@/src/lib/employer/detail-image-slicing";
 import {
 	type JobMediaUploadItem,
+	type PickedJobImage,
 	resolveJobImagePick,
 	toJobMediaItem,
 } from "@/src/lib/employer/job-media";
@@ -18,21 +22,27 @@ type CreateMediaUpload = AppRouterClient["bambi"]["jobs"]["createMediaUpload"];
 export type JobImageUploadInput = Parameters<CreateMediaUpload>[0];
 type JobImageUploadIntent = Awaited<ReturnType<CreateMediaUpload>>;
 
+type CreateUpload = (
+	input: JobImageUploadInput
+) => Promise<JobImageUploadIntent>;
+type JobMediaUsage = "ad_horizontal" | "ad_vertical" | "cover" | "detail";
+
 // 픽·업로드 한 번의 결과. Alert는 호출부가 띄우도록 사유(error)만 돌려준다.
 export type JobImageUploadResult =
 	| { cancelled: true }
 	| { error: string }
 	| { item: JobMediaUploadItem; previewUri: string };
 
-// 사진 선택 → blob 실측 → 규격 확인 → 업로드 인텐트 발급 → PUT 업로드까지의 공통 로직.
-// picker·banner가 함께 쓰므로 화면 의존(Alert 등)을 걷어내고 결과만 돌려준다.
-export const pickAndUploadJobImage = async (args: {
-	createUpload: (input: JobImageUploadInput) => Promise<JobImageUploadIntent>;
-	organizationId: string;
-	teamId: null | string;
-	usage: "ad_horizontal" | "ad_vertical" | "cover" | "detail";
-}): Promise<JobImageUploadResult> => {
-	const { createUpload, organizationId, teamId, usage } = args;
+// 상세 픽 하나가 만드는 결과. 조각이 여러 장이면 items가 조각 수만큼, 아니면 한 장.
+// previews는 storageKey→화면 미리보기 uri.
+export type JobDetailUploadResult =
+	| { cancelled: true }
+	| { error: string }
+	| { items: JobMediaUploadItem[]; previews: Record<string, string> };
+
+const pickImageAsset = async (): Promise<
+	{ asset: ImagePickerAsset } | { cancelled: true } | { error: string }
+> => {
 	let picked: ImagePickerResult;
 
 	try {
@@ -50,18 +60,29 @@ export const pickAndUploadJobImage = async (args: {
 		return { cancelled: true };
 	}
 
-	// 서명 content-length에 blob.size가 묶인다 — asset.fileSize가 아니라 실측 바이트.
-	const blob = await (await fetch(asset.uri)).blob();
-	const resolved = resolveJobImagePick(
-		{
-			fileName: asset.fileName,
-			height: asset.height,
-			mimeType: asset.mimeType,
-			uri: asset.uri,
-			width: asset.width,
-		},
-		blob.size
-	);
+	return { asset };
+};
+
+// blob 실측 → 규격 확인 → 업로드 인텐트 발급 → PUT 업로드. 단일 이미지와 조각 각각이
+// 공유한다(픽·조각내기 로직은 호출부).
+const uploadResolvedSource = async (params: {
+	blob: Blob;
+	createUpload: CreateUpload;
+	organizationId: string;
+	source: {
+		fileName?: null | string;
+		height?: number;
+		mimeType?: string;
+		uri: string;
+		width?: number;
+	};
+	teamId: null | string;
+	usage: JobMediaUsage;
+}): Promise<
+	{ error: string } | { picked: PickedJobImage; storageKey: string }
+> => {
+	const { blob, createUpload, organizationId, source, teamId, usage } = params;
+	const resolved = resolveJobImagePick(source, blob.size);
 
 	if ("error" in resolved) {
 		return { error: resolved.error };
@@ -113,8 +134,148 @@ export const pickAndUploadJobImage = async (args: {
 		};
 	}
 
+	return { picked: resolved, storageKey: intent.storageKey };
+};
+
+// 사진 선택 → 업로드까지의 공통 로직. cover·banner가 함께 쓰므로 화면 의존(Alert 등)을
+// 걷어내고 결과만 돌려준다. 상세 이미지 슬라이싱은 pickAndUploadDetailImages가 담당한다.
+export const pickAndUploadJobImage = async (args: {
+	createUpload: CreateUpload;
+	organizationId: string;
+	teamId: null | string;
+	usage: JobMediaUsage;
+}): Promise<JobImageUploadResult> => {
+	const { createUpload, organizationId, teamId, usage } = args;
+	const asset = await pickImageAsset();
+
+	if ("cancelled" in asset || "error" in asset) {
+		return asset;
+	}
+
+	// 서명 content-length에 blob.size가 묶인다 — asset.fileSize가 아니라 실측 바이트.
+	const blob = await (await fetch(asset.asset.uri)).blob();
+	const result = await uploadResolvedSource({
+		blob,
+		createUpload,
+		organizationId,
+		source: {
+			fileName: asset.asset.fileName,
+			height: asset.asset.height,
+			mimeType: asset.asset.mimeType,
+			uri: asset.asset.uri,
+			width: asset.asset.width,
+		},
+		teamId,
+		usage,
+	});
+
+	if ("error" in result) {
+		return { error: result.error };
+	}
+
 	return {
-		item: toJobMediaItem(resolved, intent.storageKey),
-		previewUri: asset.uri,
+		item: toJobMediaItem(result.picked, result.storageKey),
+		previewUri: asset.asset.uri,
+	};
+};
+
+const detailSliceFileName = (
+	original: null | string | undefined,
+	index: number
+): string => {
+	const base = (original ?? "").trim();
+	const dot = base.lastIndexOf(".");
+	const stem = dot > 0 ? base.slice(0, dot) : base;
+
+	return `${stem || "detail"}-${index + 1}.jpg`;
+};
+
+// 상세 이미지 픽: 세로가 길면 조각내 각 조각을 개별 업로드하고 같은 sliceGroupId·0부터의
+// sliceIndex를 실어 돌려준다. 조각내기가 필요 없거나 실패하면(sliceDetailImage가 null) 원본
+// 한 장을 그대로 올린다 — 슬라이싱 실패가 업로드 자체를 막지 않는다. 진행 표시는 픽 하나가
+// 한 단위(호출부가 이 함수 한 번을 감싼다).
+export const pickAndUploadDetailImages = async (args: {
+	createUpload: CreateUpload;
+	organizationId: string;
+	teamId: null | string;
+}): Promise<JobDetailUploadResult> => {
+	const { createUpload, organizationId, teamId } = args;
+	const asset = await pickImageAsset();
+
+	if ("cancelled" in asset || "error" in asset) {
+		return asset;
+	}
+
+	const source = asset.asset;
+	const sliced =
+		typeof source.width === "number" && typeof source.height === "number"
+			? await sliceDetailImage({
+					height: source.height,
+					uri: source.uri,
+					width: source.width,
+				})
+			: null;
+
+	if (sliced) {
+		const sliceGroupId = generateChatMessageId();
+		const items: JobMediaUploadItem[] = [];
+		const previews: Record<string, string> = {};
+
+		for (const slice of sliced) {
+			const blob = await (await fetch(slice.uri)).blob();
+			const result = await uploadResolvedSource({
+				blob,
+				createUpload,
+				organizationId,
+				source: {
+					fileName: detailSliceFileName(source.fileName, slice.sliceIndex),
+					height: slice.height,
+					mimeType: "image/jpeg",
+					uri: slice.uri,
+					width: slice.width,
+				},
+				teamId,
+				usage: "detail",
+			});
+
+			if ("error" in result) {
+				return { error: result.error };
+			}
+
+			items.push(
+				toJobMediaItem(
+					{ ...result.picked, sliceGroupId, sliceIndex: slice.sliceIndex },
+					result.storageKey
+				)
+			);
+			previews[result.storageKey] = slice.uri;
+		}
+
+		return { items, previews };
+	}
+
+	const blob = await (await fetch(source.uri)).blob();
+	const result = await uploadResolvedSource({
+		blob,
+		createUpload,
+		organizationId,
+		source: {
+			fileName: source.fileName,
+			height: source.height,
+			mimeType: source.mimeType,
+			uri: source.uri,
+			width: source.width,
+		},
+		teamId,
+		usage: "detail",
+	});
+
+	if ("error" in result) {
+		return { error: result.error };
+	}
+
+	return {
+		items: [toJobMediaItem(result.picked, result.storageKey)],
+		previews: { [result.storageKey]: source.uri },
 	};
 };

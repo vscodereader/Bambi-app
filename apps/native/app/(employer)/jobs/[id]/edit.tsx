@@ -1,7 +1,9 @@
 import { env } from "@bambi-app/env/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Href, router, useLocalSearchParams } from "expo-router";
-import { Alert } from "react-native";
+import { Label, Switch } from "heroui-native";
+import { useState } from "react";
+import { Alert, Text, View } from "react-native";
 
 import {
 	BambiScreen,
@@ -12,6 +14,7 @@ import {
 import { NativeJobFormScreen } from "@/src/components/native-job-form";
 import type { NativeJobForm, NativeJobPostInput } from "@/src/lib/bambi-native";
 import { localErrorMessage } from "@/src/lib/chat/chat-errors";
+import { formatAdPrice } from "@/src/lib/employer/ad-exposure";
 import {
 	buildJobUpdateData,
 	type EditableAdSource,
@@ -57,6 +60,15 @@ export default function EditEmployerJobScreen() {
 	const jobQuery = useQuery(
 		orpc.bambi.jobs.getEditableById.queryOptions({ input: { id } })
 	);
+	// 상세 디자인 옵션가는 공고가 아니라 광고 상품에 붙는다 — 카탈로그에서 이 공고의 상품을 찾는다.
+	const catalogQuery = useQuery(
+		orpc.bambi.adProducts.getCatalog.queryOptions()
+	);
+	// 서버 detailDesignStatus: null(미신청) · requested(신청) · completed(제작 완료).
+	const savedDetailDesignStatus = jobQuery.data?.detailDesignStatus ?? null;
+	const [detailDesignRequested, setDetailDesignRequested] = useState<
+		boolean | null
+	>(null);
 	const updateMutation = useMutation(
 		orpc.bambi.jobs.update.mutationOptions({
 			onError: (error) => {
@@ -116,9 +128,24 @@ export default function EditEmployerJobScreen() {
 		paymentMethod: editable.paymentMethod ?? null,
 	};
 
+	const detailDesignPrice =
+		(catalogQuery.data ?? [])
+			.flatMap((placement) => placement.products)
+			.find((product) => product.id === editable.adProductId)
+			?.detailDesignPrice ?? null;
+	// 제작이 끝난 건은 서버가 상품가 변동과 무관하게 동결한다 — 화면에서도 끄지 못하게 한다.
+	const isDetailDesignLocked = savedDetailDesignStatus === "completed";
+	const savedDetailDesignRequested = savedDetailDesignStatus !== null;
+	const nextDetailDesignRequested =
+		detailDesignRequested ?? savedDetailDesignRequested;
+
 	const handleSubmit = (input: NativeJobPostInput) => {
 		updateMutation.mutate({
-			data: buildJobUpdateData(input, adSource, banners),
+			data: buildJobUpdateData(input, adSource, banners, {
+				detailDesignPrice,
+				nextRequested: nextDetailDesignRequested,
+				previousRequested: savedDetailDesignRequested,
+			}),
 			id,
 		});
 	};
@@ -126,6 +153,25 @@ export default function EditEmployerJobScreen() {
 	// 제목은 네이티브 헤더가 단다(new.tsx와 같은 규칙). 재검수 안내만 폼 위에 남긴다.
 	return (
 		<NativeJobFormScreen
+			extraSections={
+				detailDesignPrice === null ? null : (
+					<View className="gap-2 rounded-lg border border-border bg-surface p-3">
+						<View className="flex-row items-center justify-between gap-3">
+							<Label>{`상세이미지 디자인 제작 (+${formatAdPrice(detailDesignPrice)})`}</Label>
+							<Switch
+								isDisabled={isDetailDesignLocked}
+								isSelected={nextDetailDesignRequested}
+								onSelectedChange={setDetailDesignRequested}
+							/>
+						</View>
+						<Text className="text-muted text-xs" selectable>
+							{isDetailDesignLocked
+								? "제작이 끝난 상세이미지라 신청을 해제할 수 없어요."
+								: "디자이너가 공고 상세페이지 이미지를 제작해 드립니다. 신청을 바꾸면 결제 금액이 다시 계산돼요."}
+						</Text>
+					</View>
+				)
+			}
 			initialBeginnerFriendly={editable.beginnerFriendly ?? false}
 			initialBlocks={editable.descriptionBlocks ?? []}
 			initialCover={initialCover}

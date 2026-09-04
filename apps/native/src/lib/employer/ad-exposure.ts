@@ -1,6 +1,9 @@
 // 할인가는 서버 스냅샷과 같은 순수 함수로 계산한다 — 화면에 보여 준 금액과 저장 금액이
 // 어긋나면 입금액 분쟁이 된다(web ad-catalog가 쓰는 함수와 동일).
+import type { AdBannerLayoutInput } from "@bambi-app/api/services/bambi-ad-banner-layout";
 import { discountedAdAmount } from "@bambi-app/api/services/bambi-ad-pricing";
+
+import { isBannerImageRequired } from "@/src/lib/employer/ad-banner-layout";
 
 // 광고 상품의 노출 영역. 서버 bambi-ad-exposure의 AdPreviewTemplate과 값이 1:1이다.
 export type AdPreviewTemplateValue =
@@ -55,15 +58,26 @@ export interface JobAdBannerMedia {
 	adVertical?: unknown;
 }
 
-// 필수 슬롯 중 이미지가 비어 있는 것. web은 배너 레이아웃(단색 배경 슬롯)까지 보지만
-// native는 레이아웃 편집기가 없어 항상 이미지가 필요하다.
+// 필수 슬롯 중 이미지가 비어 있는 것. 단색 배경을 고른 슬롯은 렌더러가 색으로 덮어 이미지가
+// 안 보이므로 필수에서 뺀다(웹 isAdBannerImageRequired와 같은 규칙). layout을 안 넘기면
+// (또는 null이면) 종전대로 두 슬롯 모두 이미지를 요구한다.
 export const getMissingBannerUsages = (
 	media: JobAdBannerMedia,
-	requiredUsages: readonly JobAdBannerUsage[]
+	requiredUsages: readonly JobAdBannerUsage[],
+	layout?: AdBannerLayoutInput | null
 ): JobAdBannerUsage[] =>
-	requiredUsages.filter((usage) =>
-		usage === "ad_horizontal" ? !media.adHorizontal : !media.adVertical
-	);
+	requiredUsages.filter((usage) => {
+		const hasImage =
+			usage === "ad_horizontal"
+				? Boolean(media.adHorizontal)
+				: Boolean(media.adVertical);
+
+		if (hasImage) {
+			return false;
+		}
+
+		return isBannerImageRequired(layout ?? null, usage);
+	});
 
 export const REQUIRED_BANNER_ERROR =
 	"프리미엄 광고는 가로형·세로형 광고 배너 이미지를 모두 등록해야 합니다.";
@@ -114,10 +128,27 @@ export interface NativeAdSelection {
 // 예전엔 job-exposure-section.tsx에 있었지만, 이제 초안 스토어·노출 화면이 함께 참조하므로
 // NativeAdSelection과 같은 도메인 lib으로 옮겼다(컴포넌트→lib 역참조를 없앤다).
 export interface NativeExposureState {
+	// 신청 시 화면에 보여 준 옵션 가격(서버 재확인 값). 미신청이면 null.
+	detailDesignAmount: null | number;
+	// 상세이미지 디자인 제작 애드온 신청 여부. 상품이 옵션을 안 팔면 항상 false다.
+	detailDesignRequested: boolean;
 	paymentMethod: "bank_transfer";
 	pointsToUse: number;
 	selection: null | NativeAdSelection; // null = 일반 구인(무료)
 }
+
+// 상세 디자인 신청 상태를 상품 가격에 맞춘다. 옵션을 안 파는 상품(price null)으로 바꾸면
+// 남아 있던 신청을 해제한다 — 서버도 상품 전환 시 스냅샷을 정리한다(keepOrClearJobDetailDesign).
+export const resolveDetailDesignSelection = ({
+	detailDesignPrice,
+	requested,
+}: {
+	detailDesignPrice: null | number;
+	requested: boolean;
+}): { amount: null | number; requested: boolean } =>
+	detailDesignPrice !== null && requested
+		? { amount: detailDesignPrice, requested: true }
+		: { amount: null, requested: false };
 
 export const FREE_EXPOSURE_LABEL = "일반 구인 (무료)";
 

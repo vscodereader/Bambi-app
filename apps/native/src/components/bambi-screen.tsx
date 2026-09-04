@@ -19,6 +19,9 @@ interface ScreenProps {
 	hasTopInset?: boolean;
 	isCentered?: boolean;
 	scrollViewProps?: Omit<ScrollViewProps, "contentContainerStyle">;
+	// 스크롤 핸들. ref는 스프레드로 KeyboardAwareScrollView에 닿지 않아 Container가 전용
+	// prop으로 받는다(긴 폼에서 첫 오류로 스크롤하는 용도).
+	scrollViewRef?: ComponentProps<typeof Container>["scrollViewRef"];
 	// footer와 다르다: footer는 스크롤 콘텐츠 끝에 붙고, stickyFooter는 스크롤 밖 화면
 	// 하단에 고정된다(긴 폼의 제출 CTA용). 둘 다 넘겨도 서로 간섭하지 않는다.
 	stickyFooter?: ReactNode;
@@ -48,12 +51,14 @@ export function BambiScreen({
 	hasTopInset,
 	isCentered = false,
 	scrollViewProps,
+	scrollViewRef,
 	stickyFooter,
 }: ScreenProps) {
 	return (
 		<Container
 			hasTopInset={hasTopInset}
 			scrollViewProps={scrollViewProps}
+			scrollViewRef={scrollViewRef}
 			stickyFooter={stickyFooter}
 		>
 			{/* flex-1이 아니라 grow인 것이 핵심이다 — flex-1은 flexBasis:0%+flexShrink:1까지

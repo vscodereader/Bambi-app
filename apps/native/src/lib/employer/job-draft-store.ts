@@ -1,3 +1,4 @@
+import type { AdBannerLayoutInput } from "@bambi-app/api/services/bambi-ad-banner-layout";
 import { useSyncExternalStore } from "react";
 
 import type { NativeJobPostInput } from "@/src/lib/bambi-native";
@@ -19,6 +20,8 @@ export interface JobBannerMedia {
 }
 
 export interface EmployerJobDraft {
+	// 배너 배경(단색 등). null이면 미편집(두 슬롯 이미지 배경 기본) — 유료 등록 시에만 싣는다.
+	bannerLayout: AdBannerLayoutInput | null;
 	banners: JobBannerMedia;
 	// 1단계에서 검증돼 조립된 서버 입력(초보환영·즉시면접·설명블록·미디어까지 병합). null이면
 	// 아직 작성 단계를 통과하지 않은 빈 초안 — 노출 화면에 직접 들어오면 이 값으로 되돌린다.
@@ -26,11 +29,14 @@ export interface EmployerJobDraft {
 	exposure: NativeExposureState;
 }
 
-// 초안 초기값. 무료(selection null)·무통장입금·포인트 0이 기본이다.
+// 초안 초기값. 무료(selection null)·무통장입금·포인트 0·상세 디자인 미신청이 기본이다.
 export const emptyJobDraft = (): EmployerJobDraft => ({
 	base: null,
 	banners: {},
+	bannerLayout: null,
 	exposure: {
+		detailDesignAmount: null,
+		detailDesignRequested: false,
 		paymentMethod: "bank_transfer",
 		pointsToUse: 0,
 		selection: null,
@@ -43,7 +49,8 @@ export const emptyJobDraft = (): EmployerJobDraft => ({
 export const buildDraftSubmission = (
 	base: NativeJobPostInput,
 	exposure: NativeExposureState,
-	banners: JobBannerMedia
+	banners: JobBannerMedia,
+	bannerLayout: AdBannerLayoutInput | null
 ): NativeJobPostInput => {
 	const { selection } = exposure;
 
@@ -54,6 +61,13 @@ export const buildDraftSubmission = (
 	return {
 		...base,
 		adProductId: selection.adProductId,
+		// 단색 배경 등을 골라 레이아웃을 만졌을 때만 싣는다. null이면 키를 생략해 서버 기본
+		// (두 슬롯 이미지 배경)을 따른다.
+		...(bannerLayout ? { adBannerLayout: bannerLayout } : {}),
+		// 상세 디자인 신청은 유료 분기에서만 싣는다(옵션은 광고 상품에만 붙는다). 미신청이면
+		// requested=false·amount=null이라 서버가 스냅샷을 만들지 않는다.
+		detailDesignAmount: exposure.detailDesignAmount,
+		detailDesignRequested: exposure.detailDesignRequested,
 		exposureAmount: selection.amount,
 		exposureDurationDays: selection.durationDays,
 		media: {
@@ -72,10 +86,11 @@ export const buildDraftSubmission = (
 export const hasMissingRequiredBanners = (
 	exposure: NativeExposureState,
 	banners: JobBannerMedia,
-	requiredUsages: readonly JobAdBannerUsage[]
+	requiredUsages: readonly JobAdBannerUsage[],
+	bannerLayout: AdBannerLayoutInput | null
 ): boolean =>
 	Boolean(exposure.selection) &&
-	getMissingBannerUsages(banners, requiredUsages).length > 0;
+	getMissingBannerUsages(banners, requiredUsages, bannerLayout).length > 0;
 
 let draft: EmployerJobDraft = emptyJobDraft();
 const listeners = new Set<() => void>();
