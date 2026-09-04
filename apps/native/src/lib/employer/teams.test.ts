@@ -104,8 +104,13 @@ describe("getMemberActionPermissions", () => {
 		[staff, true, false, []],
 		// 소유자 행은 역할 변경·내보내기 모두 서버가 거부한다.
 		[owner, true, true, []],
-		[staff, true, true, ["canChangeRole", "canRemove", "canSetTeams"]],
-		// 비활성 멤버의 팀 소속은 서버가 거부한다.
+		[
+			staff,
+			true,
+			true,
+			["canChangeRole", "canRemove", "canSetTeams", "canTransferOwnership"],
+		],
+		// 비활성 멤버의 팀 소속·소유권 이전은 서버가 거부한다.
 		[pendingStaff, true, true, ["canChangeRole", "canRemove"]],
 		[rejectedInvite, true, true, ["canDeleteInvitation", "canResubmit"]],
 		// 승인 대기 초대는 재제출·삭제 모두 CONFLICT다.

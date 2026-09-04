@@ -45,7 +45,7 @@ export const memberStatusTone = (status: string): MemberStatusTone => {
 };
 
 // 초대·역할 변경으로 지정할 수 있는 역할. owner는 여기 없다 — 서버가 setMemberRole로의
-// 소유자 승격을 막고, 소유권 이전은 앱에서 제공하지 않는다.
+// 소유자 승격을 막는다(소유자 지정은 transferOwnership 전용).
 export const ASSIGNABLE_ROLE_OPTIONS = [
 	{ label: "스태프", value: "staff" },
 	{ label: "매니저", value: "manager" },
@@ -163,6 +163,7 @@ export interface MemberActionPermissions {
 	canRemove: boolean;
 	canResubmit: boolean;
 	canSetTeams: boolean;
+	canTransferOwnership: boolean;
 }
 
 const NO_MEMBER_ACTIONS: MemberActionPermissions = {
@@ -171,7 +172,12 @@ const NO_MEMBER_ACTIONS: MemberActionPermissions = {
 	canRemove: false,
 	canResubmit: false,
 	canSetTeams: false,
+	canTransferOwnership: false,
 };
+
+// 서버가 setMemberTeams·transferOwnership을 활성 멤버로만 제한한다. 메뉴에서 항목을
+// 숨기지 않고 비활성으로 두고 이 사유를 함께 보여준다.
+export const MEMBER_NOT_ACTIVE_REASON = "활성 멤버만 할 수 있어요.";
 
 // 웹 MemberRowActions의 노출 규칙 + 서버 가드를 합친 판정. 소유자 행에는 아무 액션도 열지
 // 않는다(서버가 setMemberRole·removeMember에서 소유자를 거부한다). 미승인 조직은
@@ -201,6 +207,8 @@ export const getMemberActionPermissions = ({
 			canResubmit: false,
 			// setMemberTeams는 활성 멤버만 허용한다.
 			canSetTeams: row.status === "active",
+			// transferOwnership도 같은 축이다 — 초대 수락 전 멤버는 서버가 거부한다.
+			canTransferOwnership: row.status === "active",
 		};
 	}
 
@@ -215,6 +223,7 @@ export const getMemberActionPermissions = ({
 		canRemove: false,
 		canResubmit: true,
 		canSetTeams: false,
+		canTransferOwnership: false,
 	};
 };
 
