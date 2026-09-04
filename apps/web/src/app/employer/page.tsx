@@ -55,6 +55,7 @@ import {
 	isPubliclyViewable,
 } from "@/components/bambi/employer-jobs-columns";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { JobMetadataBadges } from "@/components/bambi/job-metadata-badges";
 import { RoleCoachmarkRunner } from "@/components/bambi/onboarding/role-coachmark-runner";
 import { PageControls } from "@/components/bambi/page-controls";
 import { PageShell } from "@/components/bambi/page-shell";
@@ -368,7 +369,11 @@ function MobileOwnedJobs({
 									<span className="text-muted-foreground text-xs">
 										직종·지역
 									</span>
-									<span>{`${job.industryCategory} · ${job.region}`}</span>
+									<JobMetadataBadges
+										district={job.district}
+										industryCategory={job.industryCategory}
+										region={job.region}
+									/>
 								</div>
 								<div className="flex flex-col gap-1">
 									<span className="text-muted-foreground text-xs">급여</span>

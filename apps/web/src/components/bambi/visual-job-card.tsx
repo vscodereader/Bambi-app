@@ -28,8 +28,8 @@ import { usePromotionImpression } from "@/lib/bambi/use-promotion-impression";
 import { AdPeriodTierIcon } from "./ad-period-tier-icon";
 import { Badge } from "./ds";
 import { HitRibbon } from "./hit-ribbon";
-import { MapPinIcon } from "./icons";
 import { JobCoverImage } from "./job-cover-image";
+import { JobMetadataBadges } from "./job-metadata-badges";
 import { PointJobSticker, usePointJobReward } from "./point-job-sticker";
 
 interface VisualJobCardProps {
@@ -294,17 +294,13 @@ export function VisualJobCard({
 						>
 							{truncateJobCardText(job.company)}
 						</span>
-						<span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
-							<span className="inline-flex size-3 shrink-0">
-								<MapPinIcon />
-							</span>
-							<span className="truncate">
-								{job.location}
-								{job.type ? ` · ${job.type}` : ""}
-							</span>
-						</span>
 					</div>
 				</div>
+				<JobMetadataBadges
+					district={job.district}
+					industryCategory={job.type}
+					region={job.region}
+				/>
 				{/* mt-auto: 버튼이 flex-1로 카드 세로를 채우므로 급여 행이 항상 카드 하단에
 				    붙는다. 급여 행을 button 안에 두어 카드 세로 전체가 클릭 영역이 되게 한다.
 				    광고 배지는 새 행을 만들지 않고 이 행 오른쪽 끝(ml-auto)에 얹어 카드

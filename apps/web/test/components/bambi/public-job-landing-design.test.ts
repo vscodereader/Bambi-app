@@ -66,11 +66,11 @@ describe("public jobs index design", () => {
 		const cardIndex = landingSource.indexOf("function LandingJobCard");
 		const coverIndex = landingSource.indexOf("<JobCoverImage", cardIndex);
 		const titleIndex = landingSource.indexOf("{job.title}", coverIndex);
-		const companyIndex = landingSource.indexOf(
-			"{job.company} · {job.location}",
-			titleIndex
+		const companyIndex = landingSource.indexOf("{job.company}", titleIndex);
+		const badgeIndex = landingSource.indexOf(
+			"<JobMetadataBadges",
+			companyIndex
 		);
-		const badgeIndex = landingSource.indexOf("{job.type}", companyIndex);
 		const payIndex = landingSource.indexOf("{job.pay}", badgeIndex);
 		const beginnerIndex = landingSource.indexOf(
 			"job.beginnerFriendly",

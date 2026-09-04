@@ -49,6 +49,7 @@ import {
 import type { Job } from "@/lib/bambi/types";
 import { publicClient } from "@/utils/orpc-public";
 import { JobCoverImage } from "./job-cover-image";
+import { JobMetadataBadges } from "./job-metadata-badges";
 import { JsonLd } from "./json-ld";
 import {
 	PublicJobHitProvider,
@@ -266,12 +267,15 @@ function LandingJobCard({ job }: { job: Job }) {
 					<h3 className="m-0 truncate font-extrabold text-foreground text-sm">
 						{job.title}
 					</h3>
-					{/* 시/도·시군구(세부지역). 상세 주소(동·번지)는 싣지 않는다. */}
 					<p className="m-0 truncate text-muted-foreground text-xs">
-						{job.company} · {job.location}
+						{job.company}
 					</p>
 					<div className="flex flex-wrap items-center gap-1">
-						<Badge variant="secondary">{job.type}</Badge>
+						<JobMetadataBadges
+							district={job.district}
+							industryCategory={job.type}
+							region={job.region}
+						/>
 						{job.verified ? <Badge variant="success">인증 완료</Badge> : null}
 					</div>
 				</div>
