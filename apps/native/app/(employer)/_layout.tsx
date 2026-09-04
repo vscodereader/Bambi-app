@@ -57,6 +57,12 @@ export default function EmployerLayout() {
 			<Stack.Screen name="me/teams" options={{ title: "팀 관리" }} />
 			<Stack.Screen name="promotions" options={{ title: "광고 관리" }} />
 			<Stack.Screen name="analytics" options={{ title: "성과 분석" }} />
+			<Stack.Screen
+				name="boost-options"
+				options={{ title: "끌어올리기 옵션" }}
+			/>
+			{/* 채팅방은 자체 ChatRoomHeader를 그린다(seeker와 같은 규칙). */}
+			<Stack.Screen name="chats/[id]" options={{ headerShown: false }} />
 		</Stack>
 	);
 }
