@@ -110,6 +110,15 @@ export interface NativeAdSelection {
 	productName: string;
 }
 
+// 노출 상품·결제 화면이 들고 있는 선택 상태. 결제수단은 무통장입금만 가능하다(카드는 준비 중).
+// 예전엔 job-exposure-section.tsx에 있었지만, 이제 초안 스토어·노출 화면이 함께 참조하므로
+// NativeAdSelection과 같은 도메인 lib으로 옮겼다(컴포넌트→lib 역참조를 없앤다).
+export interface NativeExposureState {
+	paymentMethod: "bank_transfer";
+	pointsToUse: number;
+	selection: null | NativeAdSelection; // null = 일반 구인(무료)
+}
+
 export const FREE_EXPOSURE_LABEL = "일반 구인 (무료)";
 
 export const describeAdSelection = (

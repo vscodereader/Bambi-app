@@ -47,6 +47,7 @@ export default function EmployerLayout() {
 		>
 			<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 			<Stack.Screen name="new" options={{ title: "새 공고" }} />
+			<Stack.Screen name="new-exposure" options={{ title: "노출 상품·결제" }} />
 			<Stack.Screen name="jobs/[id]/edit" options={{ title: "공고 편집" }} />
 			<Stack.Screen
 				name="me/organization"
