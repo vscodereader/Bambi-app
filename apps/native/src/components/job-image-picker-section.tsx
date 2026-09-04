@@ -3,7 +3,10 @@ import { Button } from "heroui-native";
 import { useState } from "react";
 import { Alert, Image, Pressable, Text, View } from "react-native";
 
-import { pickAndUploadJobImage } from "@/src/lib/employer/job-image-upload";
+import {
+	pickAndUploadDetailImages,
+	pickAndUploadJobImage,
+} from "@/src/lib/employer/job-image-upload";
 import {
 	JOB_DETAIL_LIMIT,
 	type JobMediaUploadItem,
@@ -98,11 +101,10 @@ export function JobImagePickerSection({
 		}
 
 		setIsBusy(true);
-		const result = await pickAndUploadJobImage({
+		const result = await pickAndUploadDetailImages({
 			createUpload: uploadMutation.mutateAsync,
 			organizationId,
 			teamId,
-			usage: "detail",
 		});
 		setIsBusy(false);
 
@@ -115,11 +117,9 @@ export function JobImagePickerSection({
 			return;
 		}
 
-		setPreviews((prev) => ({
-			...prev,
-			[result.item.storageKey]: result.previewUri,
-		}));
-		onChange({ cover, detail: [...detail, result.item] });
+		// 조각 그룹은 items가 여러 장이어도 원본 1장(sliceIndex 0)만 한도에 세므로 통째로 더한다.
+		setPreviews((prev) => ({ ...prev, ...result.previews }));
+		onChange({ cover, detail: [...detail, ...result.items] });
 	};
 
 	const previewFor = (item: JobMediaUploadItem): string =>

@@ -5,6 +5,7 @@ import {
 	JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH,
 	JOB_POST_IMAGE_MAX_BYTES,
 	type JobPostMediaPolicyInput,
+	planDetailSlices,
 	validateJobPostImageUpload,
 	validateJobPostMediaSet,
 } from "@/services/bambi-job-media-policy";
@@ -335,5 +336,27 @@ describe("bambi job media policy", () => {
 			],
 			ok: false,
 		});
+	});
+});
+
+describe("planDetailSlices", () => {
+	it("임계값 이하면 자르지 않는다", () => {
+		expect(planDetailSlices(3000, 3500)).toEqual([]);
+	});
+
+	it("균등 분할하고 합이 원본 높이와 같다", () => {
+		const plans = planDetailSlices(8000, 3500);
+
+		expect(plans).toHaveLength(3);
+		expect(plans.reduce((sum, plan) => sum + plan.height, 0)).toBe(8000);
+		expect(plans[0].offsetY).toBe(0);
+		expect(plans[1].offsetY).toBe(plans[0].height);
+		for (const plan of plans) {
+			expect(plan.height).toBeLessThanOrEqual(3500);
+		}
+	});
+
+	it("유한하지 않은 높이는 자르지 않는다", () => {
+		expect(planDetailSlices(Number.NaN, 3500)).toEqual([]);
 	});
 });
