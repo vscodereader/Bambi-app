@@ -16,13 +16,16 @@ import {
 	FREE_EXPOSURE_LABEL,
 	formatAdPrice,
 	formatAdPriceLabel,
-	type NativeAdSelection,
+	type NativeExposureState,
 	resolveAdAmount,
 	resolvePayableAmount,
 	resolveUsablePoints,
 	validatePointsToUse,
 } from "@/src/lib/employer/ad-exposure";
 import { orpc } from "@/src/lib/orpc";
+
+// 타입 홈은 ad-exposure.ts로 옮겼다 — 기존 소비자(native-job-form 등)가 이 경로로 계속 쓰도록 재노출한다.
+export type { NativeExposureState } from "@/src/lib/employer/ad-exposure";
 
 // oRPC 반환 타입에서 카탈로그·계좌 타입을 파생한다(web ad-catalog와 같은 단일 소스 방식) —
 // 서버 응답 필드가 바뀌면 여기 타입도 함께 따라온다.
@@ -34,13 +37,6 @@ type AdPriceOption = AdCatalogProduct["priceOptions"][number];
 type PaymentAccount = Awaited<
 	ReturnType<AppRouterClient["bambi"]["siteSettings"]["getPaymentAccounts"]>
 >[number];
-
-// 결제수단. 지금은 무통장입금만 가능하다(카드는 준비 중).
-export interface NativeExposureState {
-	paymentMethod: "bank_transfer";
-	pointsToUse: number;
-	selection: null | NativeAdSelection; // null = 일반 구인(무료)
-}
 
 // 프리미엄 배너 풀로 통합된 미리보기 템플릿. 이 상품을 고르면 전체 정원·대기열 안내를 붙인다.
 // 레거시 side-* 도 서버에서 프리미엄 풀로 흡수되므로 같은 정원을 쓴다(web BANNER_PREVIEW_TEMPLATES와 동일).
