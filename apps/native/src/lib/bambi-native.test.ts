@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	adPeriodTier,
+	adPreviewTemplateToSectionKey,
 	buildJobCardBadges,
 	buildSeekerJobSections,
 	describeJobForScreenReader,
@@ -438,6 +439,24 @@ describe("bambi native helpers", () => {
 		).toBe(
 			"강남 라운지 스태프, 밤비알바 구인자, 강남, 일정 협의, 급여 협의, 인증 완료"
 		);
+	});
+});
+
+describe("adPreviewTemplateToSectionKey", () => {
+	it("리스팅 계열은 자기 섹션으로 올린다", () => {
+		expect(adPreviewTemplateToSectionKey("special-list")).toBe("special");
+		expect(adPreviewTemplateToSectionKey("urgent-list")).toBe("urgent");
+		expect(adPreviewTemplateToSectionKey("recommended-list")).toBe(
+			"recommended"
+		);
+	});
+
+	it("배너 상품·미선택·무료는 전체 공고(organic)로 미리 보여 준다", () => {
+		expect(adPreviewTemplateToSectionKey("premium-top")).toBe("organic");
+		expect(adPreviewTemplateToSectionKey("side-horizontal")).toBe("organic");
+		expect(adPreviewTemplateToSectionKey("none")).toBe("organic");
+		expect(adPreviewTemplateToSectionKey(null)).toBe("organic");
+		expect(adPreviewTemplateToSectionKey(undefined)).toBe("organic");
 	});
 });
 

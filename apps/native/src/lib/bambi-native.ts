@@ -1,6 +1,7 @@
 import type { JobDescriptionBlock } from "@bambi-app/api/services/bambi-job-description-blocks";
 import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
 
+import type { AdPreviewTemplateValue } from "@/src/lib/employer/ad-exposure";
 import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
 
 const TITLE_MIN_LENGTH = 2;
@@ -65,6 +66,8 @@ export interface NativeJobPostInput {
 	payAmount: null | number;
 	paymentMethod?: "bank_transfer" | "card" | null;
 	payUnit: string;
+	// 이번 결제에 쓸 포인트(1P=1원). 서버 jobPostInput이 min(0).default(0)로 받으므로 무료면 0.
+	pointsToUse?: number;
 	regionCode: string;
 	teamId?: string;
 	title: string;
@@ -448,6 +451,24 @@ export const jobSectionTitles = {
 } as const;
 
 export type NativeJobSectionKey = keyof typeof jobSectionTitles;
+
+// 선택한 노출 상품의 프리뷰 템플릿 → 목록 미리보기가 그릴 섹션. 리스팅 계열만 자기 섹션으로
+// 올라가고, 프리미엄·사이드 배너 상품과 무료 공고는 전체 공고(organic)로 미리 보여 준다
+// — 배너 상품은 목록 카드가 아니라 상단·레일에 별도로 노출되므로 목록에서는 일반 카드다.
+export const adPreviewTemplateToSectionKey = (
+	template: AdPreviewTemplateValue | null | undefined
+): NativeJobSectionKey => {
+	switch (template) {
+		case "special-list":
+			return "special";
+		case "urgent-list":
+			return "urgent";
+		case "recommended-list":
+			return "recommended";
+		default:
+			return "organic";
+	}
+};
 
 // 웹의 세로 액센트 바 색 언어를 그대로 옮긴다(스페셜=coral, 급구=amber, 추천=blue).
 const jobSectionAccentClassNames = {

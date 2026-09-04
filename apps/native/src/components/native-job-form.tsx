@@ -14,15 +14,27 @@ import {
 	Switch,
 	TextField,
 } from "heroui-native";
-import { useEffect, useMemo, useState } from "react";
+import {
+	type Dispatch,
+	type SetStateAction,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 import { Text, View } from "react-native";
 
 import { BambiScreen } from "@/src/components/bambi-screen";
 import { FieldSelect } from "@/src/components/field-select";
+import { JobBannerPickerSection } from "@/src/components/job-banner-picker-section";
 import { JobDescriptionBlockEditor } from "@/src/components/job-description-block-editor";
+import {
+	JobExposureSection,
+	type NativeExposureState,
+} from "@/src/components/job-exposure-section";
 import { JobImagePickerSection } from "@/src/components/job-image-picker-section";
 import { JobListCard } from "@/src/components/job-list-card";
 import {
+	adPreviewTemplateToSectionKey,
 	describeJobForScreenReader,
 	emptyNativeJobForm,
 	industryOptions,
@@ -34,6 +46,12 @@ import {
 	payUnitOptions,
 	validateNativeJobForm,
 } from "@/src/lib/bambi-native";
+import {
+	getMissingBannerUsages,
+	getRequiredBannerUsages,
+	type JobAdBannerUsage,
+	REQUIRED_BANNER_ERROR,
+} from "@/src/lib/employer/ad-exposure";
 import { jobDescriptionBlocksError } from "@/src/lib/employer/job-description-blocks";
 import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
 import { orpc } from "@/src/lib/orpc";
@@ -47,6 +65,9 @@ interface PostingScope {
 }
 
 interface NativeJobFormProps {
+	// 노출 상품·결제·필수 배너 게이트를 그릴지. 새 공고(등록) 화면만 켠다 — 수정 화면은 서버가
+	// 광고 변경을 다루지 않아 기존 배너를 그대로 패스스루하므로 노출 섹션을 띄우지 않는다.
+	exposureEnabled?: boolean;
 	initialBeginnerFriendly?: boolean;
 	initialBlocks?: JobDescriptionBlock[];
 	initialCover?: JobMediaUploadItem | null;
@@ -93,7 +114,104 @@ const toInitialForm = (value?: NativeJobForm): NativeJobForm => ({
 	...value,
 });
 
+// 노출 선택에 따른 제출 조각(미디어 배너 + 결제·노출 필드)을 만든다. 유료면 배너를 media에
+// 병합하고 결제 필드를 싣고, 무료면 미디어만 그대로 둔다. 본문 handleSubmit의 분기를 줄인다.
+const buildExposureSubmission = (
+	exposure: NativeExposureState,
+	banners: JobBannerMedia,
+	baseMedia: { cover?: JobMediaUploadItem; detail: JobMediaUploadItem[] }
+): Partial<NativeJobPostInput> => {
+	const { selection } = exposure;
+
+	if (!selection) {
+		return { media: baseMedia };
+	}
+
+	return {
+		adProductId: selection.adProductId,
+		exposureAmount: selection.amount,
+		exposureDurationDays: selection.durationDays,
+		// media는 서버에서 전량 교체다 — 배너를 함께 실어야 서버가 배너 행을 지우지 않는다.
+		media: {
+			...baseMedia,
+			adHorizontal: banners.adHorizontal,
+			adVertical: banners.adVertical,
+		},
+		paymentMethod: "bank_transfer",
+		pointsToUse: exposure.pointsToUse,
+	};
+};
+
+// 유료 상품을 골랐는데 필수 배너가 비어 있는지. 무료·리스팅 상품은 requiredUsages가 비어
+// 언제나 false다 — 제출 게이트가 이 값으로 배너 미충족 등록을 막는다.
+const hasMissingRequiredBanners = (
+	exposure: NativeExposureState,
+	banners: JobBannerMedia,
+	requiredUsages: readonly JobAdBannerUsage[]
+): boolean =>
+	Boolean(exposure.selection) &&
+	getMissingBannerUsages(banners, requiredUsages).length > 0;
+
+interface JobBannerMedia {
+	adHorizontal?: JobMediaUploadItem;
+	adVertical?: JobMediaUploadItem;
+}
+
+// 노출 상품·결제 섹션. 본체 폼에서 떼어 내 렌더 분기를 폼 본문 밖으로 옮겼다(본체 인지
+// 복잡도 상한). 배너 픽커는 노출 섹션 안(bannerSlot)에 끼워, 상품을 고른 뒤 그 상품이
+// 요구하는 배너만 이어서 올리게 한다. 이미지 섹션과 같은 규칙으로 organizationId가 있어야만
+// 배너 슬롯을 넘긴다(업로드 키가 조직 단위라서다).
+function ExposureFields({
+	bannerError,
+	banners,
+	exposure,
+	organizationId,
+	requiredUsages,
+	setBannerError,
+	setBanners,
+	setExposure,
+	teamId,
+}: {
+	bannerError: null | string;
+	banners: JobBannerMedia;
+	exposure: NativeExposureState;
+	organizationId: string;
+	requiredUsages: readonly JobAdBannerUsage[];
+	setBannerError: Dispatch<SetStateAction<null | string>>;
+	setBanners: Dispatch<SetStateAction<JobBannerMedia>>;
+	setExposure: Dispatch<SetStateAction<NativeExposureState>>;
+	teamId: null | string;
+}) {
+	return (
+		<JobExposureSection
+			bannerSlot={
+				organizationId ? (
+					<JobBannerPickerSection
+						key={organizationId}
+						media={banners}
+						onChange={(next) => {
+							setBanners(next);
+							setBannerError(null);
+						}}
+						organizationId={organizationId}
+						requiredUsages={requiredUsages}
+						teamId={teamId}
+					/>
+				) : undefined
+			}
+			errorMessage={bannerError ?? undefined}
+			onChange={(next) => {
+				setExposure(next);
+				// 상품을 바꾸면 이전 게이트 메시지는 더 이상 유효하지 않다.
+				setBannerError(null);
+			}}
+			value={exposure}
+		/>
+	);
+}
+
 export function NativeJobFormScreen({
+	exposureEnabled = false,
 	initialBeginnerFriendly,
 	initialBlocks,
 	initialCover,
@@ -135,6 +253,21 @@ export function NativeJobFormScreen({
 	);
 	const [detail, setDetail] = useState<JobMediaUploadItem[]>(
 		initialDetail ?? []
+	);
+	// 노출 상품·결제 선택. 무료(selection null)가 기본이고 결제는 무통장입금만 가능하다.
+	const [exposure, setExposure] = useState<NativeExposureState>({
+		paymentMethod: "bank_transfer",
+		pointsToUse: 0,
+		selection: null,
+	});
+	// 프리미엄·사이드 상품이 요구하는 광고 배너 이미지. 새 픽만 담기므로 조직 변경 시 비운다.
+	const [banners, setBanners] = useState<JobBannerMedia>({});
+	// 필수 배너 미충족 게이트 메시지. 노출 섹션과 폼 하단 고정 바에 함께 띄운다.
+	const [bannerError, setBannerError] = useState<null | string>(null);
+	// 선택 상품이 요구하는 배너 슬롯. 리스팅·무료면 빈 배열이라 배너 픽커가 스스로 숨는다.
+	const requiredBannerUsages = useMemo(
+		() => getRequiredBannerUsages(exposure.selection?.previewTemplate),
+		[exposure.selection?.previewTemplate]
 	);
 	// 지역은 서버 마스터가 유일한 출처다 — 코드를 그대로 제출해야 저장 직전 정합 검사를 통과한다.
 	const regionsQuery = useQuery(orpc.bambi.regions.list.queryOptions());
@@ -249,6 +382,9 @@ export function NativeJobFormScreen({
 		if (selected.scope.organizationId !== form.organizationId) {
 			setCover(null);
 			setDetail([]);
+			// 배너도 이전 조직 키라 그대로 보내면 서버 FORBIDDEN이다 — 함께 비운다.
+			setBanners({});
+			setBannerError(null);
 		}
 
 		updateForm({
@@ -286,15 +422,28 @@ export function NativeJobFormScreen({
 			return;
 		}
 
+		// 유료 상품을 골랐는데 필수 배너가 비어 있으면 제출을 막는다 — 산 슬롯을 못 채운 채
+		// 등록되면 광고 영역이 빈 자리로 나간다. 무료·리스팅 상품은 requiredUsages가 비어 통과.
+		if (hasMissingRequiredBanners(exposure, banners, requiredBannerUsages)) {
+			setBannerError(REQUIRED_BANNER_ERROR);
+			setFormMessage(REQUIRED_BANNER_ERROR);
+			return;
+		}
+
 		setErrors({});
 		setBlocksError(null);
 		setFormMessage(null);
+		setBannerError(null);
 		onSubmit({
 			...validation.input,
 			beginnerFriendly,
 			descriptionBlocks: normalizeJobDescriptionBlocks(blocks),
 			instantInterview,
-			media: { cover: cover ?? undefined, detail },
+			// 노출 선택에 따라 미디어·결제 필드를 조립한다(무료면 미디어만).
+			...buildExposureSubmission(exposure, banners, {
+				cover: cover ?? undefined,
+				detail,
+			}),
 		});
 	};
 
@@ -474,6 +623,20 @@ export function NativeJobFormScreen({
 					</Text>
 				)}
 
+				{exposureEnabled ? (
+					<ExposureFields
+						bannerError={bannerError}
+						banners={banners}
+						exposure={exposure}
+						organizationId={form.organizationId}
+						requiredUsages={requiredBannerUsages}
+						setBannerError={setBannerError}
+						setBanners={setBanners}
+						setExposure={setExposure}
+						teamId={form.teamId || null}
+					/>
+				) : null}
+
 				<View className="flex-row items-center justify-between gap-3">
 					<Label>초보 환영</Label>
 					<Switch
@@ -500,9 +663,12 @@ export function NativeJobFormScreen({
 					<FieldError>{errors.interviewNotes}</FieldError>
 				</TextField>
 
-				<Text className="text-muted text-xs leading-5" selectable>
-					광고 노출 상품·결제는 밤비알바 웹사이트에서 진행할 수 있어요.
-				</Text>
+				{/* 노출 섹션을 앱에서 그리면 이 안내는 모순이라 뺀다 — 꺼진 화면(수정)에서만 남긴다. */}
+				{exposureEnabled ? null : (
+					<Text className="text-muted text-xs leading-5" selectable>
+						광고 노출 상품·결제는 밤비알바 웹사이트에서 진행할 수 있어요.
+					</Text>
+				)}
 			</Surface>
 
 			{/* 구직자 목록에 실제로 나가는 카드를 그대로 그린다 — 폼 값이 바뀔 때마다 갱신되니
@@ -518,7 +684,12 @@ export function NativeJobFormScreen({
 					구직자 공고 목록에서 이렇게 보여요. 썸네일은 가로로 잘리니 중요한
 					내용은 가운데에 두세요.
 				</Text>
-				<JobListCard job={previewJob} sectionKey="organic" />
+				<JobListCard
+					job={previewJob}
+					sectionKey={adPreviewTemplateToSectionKey(
+						exposure.selection?.previewTemplate
+					)}
+				/>
 			</View>
 		</BambiScreen>
 	);
