@@ -1,9 +1,10 @@
 import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Button, cn, Dialog, Surface } from "heroui-native";
+import { Button, Dialog, Surface, Tabs, useThemeColor } from "heroui-native";
 import type { PropsWithChildren } from "react";
 import { useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 
 import {
 	BambiScreen,
@@ -32,8 +33,8 @@ import {
 import { getJobDisplayStatus } from "@/src/lib/employer/job-status";
 import { orpc, queryClient } from "@/src/lib/orpc";
 
-// 상태 탭. web은 Tabs 트랙이었지만 좁은 폭(360dp)에서 네 개가 한 줄에 안 들어가
-// 가로 스크롤이 생긴다 — 접히는 칩 행으로 바꾼다.
+// 상태 탭. 목록은 필터링된 하나뿐이라 Tabs.Content로 네 벌 복제하지 않고 Tabs는
+// 선택 UI로만 쓴다. 좁은 폭(360dp)에서 네 개가 한 줄에 안 들어가 ScrollView로 감싼다.
 function StatusTabs({
 	onChange,
 	selectedId,
@@ -41,36 +42,37 @@ function StatusTabs({
 	onChange: (id: AdStatusGroupId) => void;
 	selectedId: AdStatusGroupId;
 }) {
-	return (
-		<View className="flex-row flex-wrap gap-2">
-			{AD_STATUS_GROUPS.map((group) => {
-				const isSelected = group.id === selectedId;
+	const [segmentForeground, muted] = useThemeColor([
+		"segment-foreground",
+		"muted",
+	]);
 
-				return (
-					<Pressable
-						accessibilityRole="button"
-						accessibilityState={{ selected: isSelected }}
-						className={cn(
-							"rounded-full border px-4 py-2 active:opacity-75",
-							isSelected
-								? "border-accent bg-accent/15"
-								: "border-border bg-surface"
-						)}
-						key={group.id}
-						onPress={() => onChange(group.id)}
-					>
-						<Text
-							className={cn(
-								"font-semibold text-sm",
-								isSelected ? "text-accent" : "text-muted"
+	return (
+		<Tabs
+			onValueChange={(value) => onChange(value as AdStatusGroupId)}
+			value={selectedId}
+		>
+			{/* 트랙이 화면을 넘으면 밖으로 삐져나가지 않고 스크롤되도록 폭을 묶는다. */}
+			<Tabs.List className="max-w-full">
+				<Tabs.ScrollView scrollAlign="center">
+					<Tabs.Indicator />
+					{AD_STATUS_GROUPS.map((group) => (
+						<Tabs.Trigger key={group.id} value={group.id}>
+							{({ isSelected }) => (
+								<>
+									<Ionicons
+										color={isSelected ? segmentForeground : muted}
+										name={group.icon}
+										size={16}
+									/>
+									<Tabs.Label>{group.label}</Tabs.Label>
+								</>
 							)}
-						>
-							{group.label}
-						</Text>
-					</Pressable>
-				);
-			})}
-		</View>
+						</Tabs.Trigger>
+					))}
+				</Tabs.ScrollView>
+			</Tabs.List>
+		</Tabs>
 	);
 }
 
@@ -114,6 +116,8 @@ function AdCard({
 	const display = getJobDisplayStatus(ad);
 	const { canBoost, disabledReason } = getBoostState(ad, now);
 	const queueBadge = premiumQueueBadge(ad.premiumQueue);
+	// secondary Button의 라벨 색과 아이콘 색을 맞춘다.
+	const boostLabelColor = useThemeColor("accent-soft-foreground");
 
 	return (
 		<Surface className="gap-3 rounded-lg p-4" variant="secondary">
@@ -157,19 +161,13 @@ function AdCard({
 				</AdRow>
 			</View>
 
+			{/* 잠금 사유는 바로 아래 오른쪽 버튼을 가리키므로 같은 축으로 오른쪽 정렬한다. */}
 			{disabledReason ? (
-				<Text className="text-muted text-xs">{disabledReason}</Text>
+				<Text className="text-right text-muted text-xs">{disabledReason}</Text>
 			) : null}
 
-			<View className="flex-row flex-wrap gap-2">
-				<Button
-					isDisabled={!canBoost || isBoostPending}
-					onPress={() => onBoost(ad.jobPostId)}
-					size="sm"
-					variant="secondary"
-				>
-					<Button.Label>끌어올리기</Button.Label>
-				</Button>
+			{/* 끌어올리기가 오른쪽 끝에 오도록 입금 안내를 먼저 그린다. */}
+			<View className="flex-row flex-wrap items-center justify-end gap-2">
 				{/* 미결제 건만 입금 안내를 연다(web Popover 자리 — native에는 Popover가 없다). */}
 				{ad.paymentStatus === "unpaid" ? (
 					<Button
@@ -180,6 +178,19 @@ function AdCard({
 						<Button.Label>입금 안내</Button.Label>
 					</Button>
 				) : null}
+				<Button
+					isDisabled={!canBoost || isBoostPending}
+					onPress={() => onBoost(ad.jobPostId)}
+					size="sm"
+					variant="secondary"
+				>
+					<Ionicons
+						color={boostLabelColor}
+						name="arrow-up-circle-outline"
+						size={16}
+					/>
+					<Button.Label>끌어올리기</Button.Label>
+				</Button>
 			</View>
 		</Surface>
 	);

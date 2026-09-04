@@ -1,15 +1,17 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
 	Button,
 	Checkbox,
 	Input,
 	Label,
+	Menu,
 	RadioGroup,
-	Separator,
 	Surface,
 	TextArea,
 	TextField,
+	useThemeColor,
 } from "heroui-native";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
@@ -23,6 +25,8 @@ import {
 	getMemberActionPermissions,
 	getMemberLabel,
 	type InviteSubmitInput,
+	MEMBER_NOT_ACTIVE_REASON,
+	type MemberActionPermissions,
 	memberStatusLabel,
 	memberStatusTone,
 	organizationRoleLabel,
@@ -50,6 +54,9 @@ const ALL_ORGANIZATION_TEAM = { label: "전체 조직", value: "" };
 
 // 검색어가 짧으면 서버를 두드리지 않는다 — 한 글자마다 전체 구인자 후보가 흔들린다.
 const MIN_SEARCH_LENGTH = 2;
+
+// 공고관리 카드의 액션 메뉴와 같은 폭.
+const MENU_WIDTH = 180;
 
 const alertError = (title: string, error: unknown, fallback: string) =>
 	Alert.alert(title, localErrorMessage(error, fallback));
@@ -263,114 +270,171 @@ function InviteForm({
 	);
 }
 
-// 멤버 한 명의 권한·소속 팀을 한 자리에서 다룬다. 대상 멤버 단위로 key remount 되므로 초기
-// 선택은 마운트 시 props로 세팅된다(웹 TeamAssignmentDialog와 같은 이유).
-function MemberManagePanel({
-	canSetTeams,
+// 권한 축만 다루는 패널. 대상 멤버 단위로 key remount 되므로 초기 선택은 마운트 시 props로
+// 세팅된다(웹 TeamAssignmentDialog와 같은 이유).
+function MemberRolePanel({
 	initialRole,
-	initialTeamIds,
-	isRolePending,
-	isTeamsPending,
-	onSaveRole,
-	onSaveTeams,
-	teams,
+	isPending,
+	onSave,
 }: {
-	canSetTeams: boolean;
 	initialRole: AssignableRole;
-	initialTeamIds: string[];
-	isRolePending: boolean;
-	isTeamsPending: boolean;
-	onSaveRole: (role: AssignableRole) => void;
-	onSaveTeams: (teamIds: string[]) => void;
-	teams: SectionTeam[];
+	isPending: boolean;
+	onSave: (role: AssignableRole) => void;
 }) {
 	const [role, setRole] = useState<AssignableRole>(initialRole);
+
+	return (
+		<View className="gap-2">
+			<Label>권한</Label>
+			<RadioGroup
+				onValueChange={(value) => setRole(toAssignableRole(value))}
+				value={role}
+			>
+				{ASSIGNABLE_ROLE_OPTIONS.map((option) => (
+					<RadioGroup.Item key={option.value} value={option.value}>
+						{option.label}
+					</RadioGroup.Item>
+				))}
+			</RadioGroup>
+			<Button
+				isDisabled={role === initialRole || isPending}
+				onPress={() => onSave(role)}
+				size="sm"
+				variant="secondary"
+			>
+				<Button.Label>{isPending ? "변경 중" : "권한 저장"}</Button.Label>
+			</Button>
+		</View>
+	);
+}
+
+// 소속 팀 축만 다루는 패널. 위와 같은 이유로 key remount 전제다.
+function MemberTeamsPanel({
+	initialTeamIds,
+	isPending,
+	onSave,
+	teams,
+}: {
+	initialTeamIds: string[];
+	isPending: boolean;
+	onSave: (teamIds: string[]) => void;
+	teams: SectionTeam[];
+}) {
 	const [teamIds, setTeamIds] = useState<string[]>(initialTeamIds);
-	const isTeamsChanged =
+	const isChanged =
 		teamIds.length !== initialTeamIds.length ||
 		teamIds.some((id) => !initialTeamIds.includes(id));
 
 	return (
-		<View className="gap-4">
-			<View className="gap-2">
-				<Label>권한</Label>
-				<RadioGroup
-					onValueChange={(value) => setRole(toAssignableRole(value))}
-					value={role}
+		<View className="gap-2">
+			<Label>소속 팀</Label>
+			{teams.length === 0 ? (
+				<Text className="text-muted text-xs">
+					먼저 팀을 만들어야 소속을 지정할 수 있어요.
+				</Text>
+			) : null}
+			{teams.map((team) => (
+				<Pressable
+					accessibilityRole="checkbox"
+					accessibilityState={{ checked: teamIds.includes(team.teamId) }}
+					className="flex-row items-center gap-3 py-2 active:opacity-75"
+					key={team.teamId}
+					onPress={() =>
+						setTeamIds((prev) =>
+							prev.includes(team.teamId)
+								? prev.filter((id) => id !== team.teamId)
+								: [...prev, team.teamId]
+						)
+					}
 				>
-					{ASSIGNABLE_ROLE_OPTIONS.map((option) => (
-						<RadioGroup.Item key={option.value} value={option.value}>
-							{option.label}
-						</RadioGroup.Item>
-					))}
-				</RadioGroup>
-				<Button
-					isDisabled={role === initialRole || isRolePending}
-					onPress={() => onSaveRole(role)}
-					size="sm"
-					variant="secondary"
-				>
-					<Button.Label>{isRolePending ? "변경 중" : "권한 저장"}</Button.Label>
-				</Button>
-			</View>
-
-			<Separator />
-
-			<View className="gap-2">
-				<Label>소속 팀</Label>
-				{canSetTeams ? null : (
-					<Text className="text-muted text-xs">
-						활성 멤버의 팀 소속만 변경할 수 있어요.
+					<Checkbox isSelected={teamIds.includes(team.teamId)} />
+					<Text className="flex-1 text-foreground text-sm">
+						{team.displayName}
 					</Text>
-				)}
-				{teams.length === 0 ? (
-					<Text className="text-muted text-xs">
-						먼저 팀을 만들어야 소속을 지정할 수 있어요.
-					</Text>
-				) : null}
-				{teams.map((team) => (
-					<Pressable
-						accessibilityRole="checkbox"
-						accessibilityState={{ checked: teamIds.includes(team.teamId) }}
-						className="flex-row items-center gap-3 py-2 active:opacity-75"
-						key={team.teamId}
-						onPress={() =>
-							setTeamIds((prev) =>
-								prev.includes(team.teamId)
-									? prev.filter((id) => id !== team.teamId)
-									: [...prev, team.teamId]
-							)
-						}
-					>
-						<Checkbox
-							isDisabled={!canSetTeams}
-							isSelected={teamIds.includes(team.teamId)}
-						/>
-						<Text className="flex-1 text-foreground text-sm">
-							{team.displayName}
-						</Text>
-					</Pressable>
-				))}
-				<Button
-					isDisabled={!(canSetTeams && isTeamsChanged) || isTeamsPending}
-					onPress={() => onSaveTeams(teamIds)}
-					size="sm"
-					variant="secondary"
-				>
-					<Button.Label>
-						{isTeamsPending ? "변경 중" : "팀 소속 저장"}
-					</Button.Label>
-				</Button>
-			</View>
+				</Pressable>
+			))}
+			<Button
+				isDisabled={!isChanged || isPending}
+				onPress={() => onSave(teamIds)}
+				size="sm"
+				variant="secondary"
+			>
+				<Button.Label>{isPending ? "변경 중" : "팀 소속 저장"}</Button.Label>
+			</Button>
 		</View>
 	);
 }
 
 interface MemberCardHandlers {
+	onChangeRole: (row: OrganizationMember) => void;
+	onChangeTeams: (row: OrganizationMember) => void;
 	onDeleteInvitation: (row: OrganizationMember) => void;
-	onManage: (row: OrganizationMember) => void;
 	onRemove: (row: OrganizationMember) => void;
 	onResubmit: (row: OrganizationMember) => void;
+	onTransferOwnership: (row: OrganizationMember) => void;
+}
+
+// 카드 우측 상단의 액션 메뉴. 공고관리 카드(JobActionsMenu)와 같은 트리거·정렬·폭이다.
+// 서버가 거부할 항목은 숨기지 않고 비활성으로 두고 사유를 함께 보여준다.
+function MemberActionsMenu({
+	handlers,
+	permissions,
+	row,
+}: {
+	handlers: MemberCardHandlers;
+	permissions: MemberActionPermissions;
+	row: OrganizationMember;
+}) {
+	const foreground = useThemeColor("foreground");
+
+	return (
+		<Menu>
+			<Menu.Trigger asChild>
+				{/* 아이콘만 담되 터치 타깃은 44dp를 지킨다. */}
+				<Pressable
+					accessibilityLabel="멤버 관리 메뉴"
+					accessibilityRole="button"
+					className="h-11 w-11 shrink-0 items-center justify-center rounded-2xl active:opacity-75"
+				>
+					<Ionicons color={foreground} name="ellipsis-horizontal" size={20} />
+				</Pressable>
+			</Menu.Trigger>
+			<Menu.Portal>
+				<Menu.Overlay />
+				{/* 트리거가 카드 오른쪽 끝이라 end 정렬이 아니면 화면 밖으로 밀린다. */}
+				<Menu.Content align="end" presentation="popover" width={MENU_WIDTH}>
+					<Menu.Item onPress={() => handlers.onChangeRole(row)}>
+						<Menu.ItemTitle>권한 변경</Menu.ItemTitle>
+					</Menu.Item>
+					<Menu.Item
+						isDisabled={!permissions.canSetTeams}
+						onPress={() => handlers.onChangeTeams(row)}
+					>
+						<Menu.ItemTitle>팀 소속 변경</Menu.ItemTitle>
+						{permissions.canSetTeams ? null : (
+							<Menu.ItemDescription>
+								{MEMBER_NOT_ACTIVE_REASON}
+							</Menu.ItemDescription>
+						)}
+					</Menu.Item>
+					<Menu.Item
+						isDisabled={!permissions.canTransferOwnership}
+						onPress={() => handlers.onTransferOwnership(row)}
+					>
+						<Menu.ItemTitle>소유권 이전</Menu.ItemTitle>
+						{permissions.canTransferOwnership ? null : (
+							<Menu.ItemDescription>
+								{MEMBER_NOT_ACTIVE_REASON}
+							</Menu.ItemDescription>
+						)}
+					</Menu.Item>
+					<Menu.Item onPress={() => handlers.onRemove(row)} variant="danger">
+						<Menu.ItemTitle>내보내기</Menu.ItemTitle>
+					</Menu.Item>
+				</Menu.Content>
+			</Menu.Portal>
+		</Menu>
+	);
 }
 
 function MemberCard({
@@ -392,13 +456,23 @@ function MemberCard({
 
 	return (
 		<Surface className="gap-3 rounded-lg p-4" variant="secondary">
-			<View className="gap-1">
-				<Text className="font-semibold text-base text-foreground" selectable>
-					{getMemberLabel(row)}
-				</Text>
-				<Text className="text-muted text-sm" selectable>
-					{row.email}
-				</Text>
+			<View className="flex-row items-start gap-2">
+				{/* min-w-0이 없으면 긴 이름이 아이콘 버튼을 카드 밖으로 밀어낸다. */}
+				<View className="min-w-0 flex-1 gap-1">
+					<Text className="font-semibold text-base text-foreground" selectable>
+						{getMemberLabel(row)}
+					</Text>
+					<Text className="text-muted text-sm" selectable>
+						{row.email}
+					</Text>
+				</View>
+				{permissions.canChangeRole ? (
+					<MemberActionsMenu
+						handlers={handlers}
+						permissions={permissions}
+						row={row}
+					/>
+				) : null}
 			</View>
 			{/* 배지는 좁은 폭에서 넘치면 접는다(가로 스크롤 금지). */}
 			<View className="flex-row flex-wrap items-center gap-2">
@@ -420,44 +494,30 @@ function MemberCard({
 					반려 사유: {row.rejectionReason}
 				</Text>
 			) : null}
-			<View className="flex-row flex-wrap gap-2">
-				{permissions.canChangeRole ? (
-					<Button
-						onPress={() => handlers.onManage(row)}
-						size="sm"
-						variant="secondary"
-					>
-						<Button.Label>권한·팀 관리</Button.Label>
-					</Button>
-				) : null}
-				{permissions.canRemove ? (
-					<Button
-						onPress={() => handlers.onRemove(row)}
-						size="sm"
-						variant="danger"
-					>
-						<Button.Label>내보내기</Button.Label>
-					</Button>
-				) : null}
-				{permissions.canResubmit ? (
-					<Button
-						onPress={() => handlers.onResubmit(row)}
-						size="sm"
-						variant="secondary"
-					>
-						<Button.Label>재제출</Button.Label>
-					</Button>
-				) : null}
-				{permissions.canDeleteInvitation ? (
-					<Button
-						onPress={() => handlers.onDeleteInvitation(row)}
-						size="sm"
-						variant="danger"
-					>
-						<Button.Label>초대 삭제</Button.Label>
-					</Button>
-				) : null}
-			</View>
+			{/* 초대 행은 액션이 둘뿐이라 메뉴 없이 카드에 그대로 둔다. 활성 멤버 카드에서는
+			    빈 View가 gap만 벌리므로 아예 그리지 않는다. */}
+			{permissions.canResubmit || permissions.canDeleteInvitation ? (
+				<View className="flex-row flex-wrap gap-2">
+					{permissions.canResubmit ? (
+						<Button
+							onPress={() => handlers.onResubmit(row)}
+							size="sm"
+							variant="secondary"
+						>
+							<Button.Label>재제출</Button.Label>
+						</Button>
+					) : null}
+					{permissions.canDeleteInvitation ? (
+						<Button
+							onPress={() => handlers.onDeleteInvitation(row)}
+							size="sm"
+							variant="danger"
+						>
+							<Button.Label>초대 삭제</Button.Label>
+						</Button>
+					) : null}
+				</View>
+			) : null}
 		</Surface>
 	);
 }
@@ -519,8 +579,7 @@ function MemberList({
 	);
 }
 
-// 웹 team-member-list.tsx의 native 이식. 소유권 이전은 되돌릴 수 없어 앱에서는 제공하지
-// 않고 안내로만 대체한다.
+// 웹 team-member-list.tsx의 native 이식.
 export function TeamMemberSection({
 	canManageOrganization,
 	isVerified,
@@ -530,9 +589,11 @@ export function TeamMemberSection({
 	const [serverError, setServerError] = useState<null | string>(null);
 	const [resubmitTarget, setResubmitTarget] =
 		useState<null | OrganizationMember>(null);
-	const [manageTarget, setManageTarget] = useState<null | OrganizationMember>(
-		null
-	);
+	// 권한·팀 소속은 메뉴에서 각각 독립 항목으로 열리므로 어느 축을 여는지까지 들고 있는다.
+	const [manageTarget, setManageTarget] = useState<null | {
+		mode: "role" | "teams";
+		row: OrganizationMember;
+	}>(null);
 
 	const membersQuery = useQuery(
 		orpc.bambi.organizations.listMembers.queryOptions({
@@ -614,6 +675,24 @@ export function TeamMemberSection({
 			},
 		})
 	);
+	const transferOwnershipMutation = useMutation(
+		orpc.bambi.teams.transferOwnership.mutationOptions({
+			onError: (error) =>
+				alertError("이전하지 못했어요", error, "소유권을 이전하지 못했어요."),
+			onSuccess: async () => {
+				setManageTarget(null);
+				Alert.alert("이전했어요", "이제 회원님은 매니저예요.");
+				// 소유권이 넘어가면 요청자의 canManageOrganization도 바뀌므로 조직 정보까지
+				// 무효화해 화면 권한 상태를 즉시 갱신한다(웹과 같은 이유).
+				await Promise.all([
+					invalidateMembers(),
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.organizations.getMine.queryKey(),
+					}),
+				]);
+			},
+		})
+	);
 	const removeMemberMutation = useMutation(
 		orpc.bambi.teams.removeMember.mutationOptions({
 			onError: (error) =>
@@ -627,6 +706,8 @@ export function TeamMemberSection({
 	);
 
 	const handlers: MemberCardHandlers = {
+		onChangeRole: (row) => setManageTarget({ mode: "role", row }),
+		onChangeTeams: (row) => setManageTarget({ mode: "teams", row }),
 		onDeleteInvitation: (row) =>
 			Alert.alert(
 				"초대를 삭제할까요?",
@@ -644,7 +725,6 @@ export function TeamMemberSection({
 					},
 				]
 			),
-		onManage: (row) => setManageTarget(row),
 		onRemove: (row) =>
 			Alert.alert(
 				`${getMemberLabel(row)} 님을 내보낼까요?`,
@@ -666,6 +746,24 @@ export function TeamMemberSection({
 			setServerError(null);
 			setResubmitTarget(row);
 		},
+		// 되돌릴 수 없는 액션이라 확인에서 결과를 명시하고 파괴적 버튼으로 받는다.
+		onTransferOwnership: (row) =>
+			Alert.alert(
+				`${getMemberLabel(row)} 님에게 소유권을 이전할까요?`,
+				"이전하면 회원님의 소유자 권한이 사라지고 매니저로 바뀌어요. 되돌릴 수 없어요.",
+				[
+					{ style: "cancel", text: "취소" },
+					{
+						onPress: () =>
+							transferOwnershipMutation.mutate({
+								memberId: row.id,
+								organizationId,
+							}),
+						style: "destructive",
+						text: "이전",
+					},
+				]
+			),
 	};
 
 	let status: "error" | "loading" | "ready" = "ready";
@@ -681,8 +779,7 @@ export function TeamMemberSection({
 			<View className="gap-1">
 				<Text className="font-bold text-foreground text-xl">멤버와 초대</Text>
 				<Text className="text-muted text-sm">
-					멤버 권한과 팀 초대를 관리해요. 소유권 이전은 앱에서 지원하지 않아요 —
-					웹에서 진행해 주세요.
+					멤버 권한과 팀 초대를 관리해요.
 				</Text>
 			</View>
 
@@ -723,7 +820,8 @@ export function TeamMemberSection({
 				<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 					<View className="flex-row items-center justify-between gap-3">
 						<Text className="flex-1 font-semibold text-base text-foreground">
-							{getMemberLabel(manageTarget)} 님 관리
+							{getMemberLabel(manageTarget.row)} 님{" "}
+							{manageTarget.mode === "role" ? "권한 변경" : "팀 소속 변경"}
 						</Text>
 						<Button
 							onPress={() => setManageTarget(null)}
@@ -733,35 +831,34 @@ export function TeamMemberSection({
 							<Button.Label>닫기</Button.Label>
 						</Button>
 					</View>
-					<MemberManagePanel
-						canSetTeams={
-							getMemberActionPermissions({
-								canManageOrganization,
-								isVerified,
-								row: manageTarget,
-							}).canSetTeams
-						}
-						initialRole={toAssignableRole(manageTarget.role)}
-						initialTeamIds={manageTarget.teams.map((team) => team.id)}
-						isRolePending={setRoleMutation.isPending}
-						isTeamsPending={setMemberTeamsMutation.isPending}
-						key={manageTarget.id}
-						onSaveRole={(nextRole) =>
-							setRoleMutation.mutate({
-								memberId: manageTarget.id,
-								organizationId,
-								role: nextRole,
-							})
-						}
-						onSaveTeams={(teamIds) =>
-							setMemberTeamsMutation.mutate({
-								memberId: manageTarget.id,
-								organizationId,
-								teamIds,
-							})
-						}
-						teams={teams}
-					/>
+					{manageTarget.mode === "role" ? (
+						<MemberRolePanel
+							initialRole={toAssignableRole(manageTarget.row.role)}
+							isPending={setRoleMutation.isPending}
+							key={manageTarget.row.id}
+							onSave={(nextRole) =>
+								setRoleMutation.mutate({
+									memberId: manageTarget.row.id,
+									organizationId,
+									role: nextRole,
+								})
+							}
+						/>
+					) : (
+						<MemberTeamsPanel
+							initialTeamIds={manageTarget.row.teams.map((team) => team.id)}
+							isPending={setMemberTeamsMutation.isPending}
+							key={manageTarget.row.id}
+							onSave={(teamIds) =>
+								setMemberTeamsMutation.mutate({
+									memberId: manageTarget.row.id,
+									organizationId,
+									teamIds,
+								})
+							}
+							teams={teams}
+						/>
+					)}
 				</Surface>
 			) : null}
 		</View>

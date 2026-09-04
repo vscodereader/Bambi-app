@@ -17,7 +17,6 @@ import {
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { FieldSelect } from "@/src/components/field-select";
-import { verificationStatusLabels } from "@/src/lib/bambi-native";
 import { localErrorMessage } from "@/src/lib/chat/chat-errors";
 import { getEmployerGateNotice } from "@/src/lib/employer/business";
 import {
@@ -345,8 +344,9 @@ export default function EmployerJobsScreen() {
 		);
 	}
 
-	const organizationProfile = mineQuery.data?.employerOrganizationProfiles[0];
-	const verificationStatus = organizationProfile?.verificationStatus ?? "none";
+	const verificationStatus =
+		mineQuery.data?.employerOrganizationProfiles[0]?.verificationStatus ??
+		"none";
 	const gate = getEmployerGateNotice(verificationStatus, "공고를 등록");
 	const jobs = jobsQuery.data ?? [];
 	const counts = countJobStatuses(jobs);
@@ -382,26 +382,6 @@ export default function EmployerJobsScreen() {
 				/>
 			) : null}
 
-			{organizationProfile ? (
-				<Surface
-					className="flex-row items-center justify-between gap-2 rounded-lg p-4"
-					variant="secondary"
-				>
-					<Text className="font-semibold text-foreground" selectable>
-						{organizationProfile.displayName}
-					</Text>
-					<Pill
-						tone={verificationStatus === "verified" ? "success" : "neutral"}
-					>
-						{verificationStatusLabels[
-							verificationStatus as keyof typeof verificationStatusLabels
-						] ?? verificationStatus}
-					</Pill>
-				</Surface>
-			) : null}
-
-			<QuickLinks />
-
 			{jobs.length > 0 ? (
 				<Surface className="flex-row gap-3 rounded-lg p-4" variant="secondary">
 					<StatTile label="게시" value={counts.published} />
@@ -409,6 +389,8 @@ export default function EmployerJobsScreen() {
 					<StatTile label="반려" value={counts.rejected} />
 				</Surface>
 			) : null}
+
+			<QuickLinks />
 
 			{jobs.length === 0 ? (
 				<StateCard

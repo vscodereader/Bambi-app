@@ -34,11 +34,13 @@ export type AdGroupFields = Pick<
 	"exposureEndsAt" | "paymentStatus" | "status"
 >;
 
+// 아이콘은 web adStatusGroups(lucide)와 의미 축을 맞춘 Ionicons 이름이다 —
+// 전체=목록, 진행 중=재생, 결제 대기=시계, 만료=경고.
 export const AD_STATUS_GROUPS = [
-	{ id: "all", label: "전체" },
-	{ id: "active", label: "진행 중" },
-	{ id: "pending_payment", label: "결제 대기" },
-	{ id: "expired", label: "만료" },
+	{ icon: "list-outline", id: "all", label: "전체" },
+	{ icon: "play-circle-outline", id: "active", label: "진행 중" },
+	{ icon: "time-outline", id: "pending_payment", label: "결제 대기" },
+	{ icon: "alert-circle-outline", id: "expired", label: "만료" },
 ] as const;
 
 export type AdStatusGroupId = (typeof AD_STATUS_GROUPS)[number]["id"];
