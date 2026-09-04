@@ -21,12 +21,15 @@ import { BambiScreen } from "@/src/components/bambi-screen";
 import { FieldSelect } from "@/src/components/field-select";
 import { JobDescriptionBlockEditor } from "@/src/components/job-description-block-editor";
 import { JobImagePickerSection } from "@/src/components/job-image-picker-section";
+import { JobListCard } from "@/src/components/job-list-card";
 import {
+	describeJobForScreenReader,
 	emptyNativeJobForm,
 	industryOptions,
 	type NativeJobForm,
 	type NativeJobFormErrors,
 	type NativeJobPostInput,
+	type NativeSeekerJob,
 	NEGOTIABLE_PAY_UNIT,
 	payUnitOptions,
 	validateNativeJobForm,
@@ -123,6 +126,13 @@ export function NativeJobFormScreen({
 	const [cover, setCover] = useState<JobMediaUploadItem | null>(
 		initialCover ?? null
 	);
+	// 표시 전용 대표 이미지 uri. 수정 화면은 원격 프리필 맵에서, 새 픽은 picker가 넘겨준다.
+	const [coverPreviewUri, setCoverPreviewUri] = useState<null | string>(
+		() =>
+			(initialCover?.storageKey
+				? initialPreviews?.[initialCover.storageKey]
+				: null) ?? null
+	);
 	const [detail, setDetail] = useState<JobMediaUploadItem[]>(
 		initialDetail ?? []
 	);
@@ -162,6 +172,52 @@ export function NativeJobFormScreen({
 	);
 	// 협의는 서버가 금액을 저장하지 않는다(validateNativeJobForm이 payAmount를 null로 만든다).
 	const isPayNegotiable = form.payUnit === NEGOTIABLE_PAY_UNIT;
+
+	// 목록 노출 미리보기용 가짜 공고 한 줄. 구직자 목록이 쓰는 JobListCard를 그대로 먹여야
+	// "실제로 이렇게 보인다"가 성립하므로, 아직 없는 값만 자리표시 문구로 채운다. 커버는
+	// 아직 업로드 전이라 storageKey가 없다 — 고른 파일의 로컬 uri를 coverImageUrl 자리에
+	// 넣으면 카드가 그대로 그린다(수집 공고와 같은 경로).
+	const previewJob = useMemo<NativeSeekerJob>(() => {
+		const payAmount = Number.parseInt(
+			form.payAmount.replace(/[^0-9]/gu, ""),
+			10
+		);
+
+		return {
+			adPeriod: null,
+			coverImageUrl: coverPreviewUri,
+			employerDisplayName:
+				postingScopes.find(
+					(scope) => scope.organizationId === form.organizationId
+				)?.organizationDisplayName ?? "내 업소",
+			employerVerificationStatus: null,
+			id: "preview",
+			industryCategory: form.industryCategory,
+			instantInterview,
+			payAmount: isPayNegotiable || Number.isNaN(payAmount) ? null : payAmount,
+			payUnit: isPayNegotiable ? null : form.payUnit || null,
+			promotionLabel: null,
+			region:
+				regionChoices.find((choice) => choice.value === form.regionCode)
+					?.label ?? "지역",
+			source: "original",
+			title: form.title.trim() || "공고 제목",
+			workSchedule: form.workSchedule.trim() || null,
+		};
+	}, [
+		coverPreviewUri,
+		form.industryCategory,
+		form.organizationId,
+		form.payAmount,
+		form.payUnit,
+		form.regionCode,
+		form.title,
+		form.workSchedule,
+		instantInterview,
+		isPayNegotiable,
+		postingScopes,
+		regionChoices,
+	]);
 
 	// 범위가 하나면 마운트 직후 자동 선택한다. 이미 값이 있거나 수정 화면(scopeLocked)이면 건드리지 않는다.
 	useEffect(() => {
@@ -408,6 +464,7 @@ export function NativeJobFormScreen({
 							setCover(next.cover);
 							setDetail(next.detail);
 						}}
+						onCoverPreviewChange={setCoverPreviewUri}
 						organizationId={form.organizationId}
 						teamId={form.teamId || null}
 					/>
@@ -447,6 +504,22 @@ export function NativeJobFormScreen({
 					광고 노출 상품·결제는 밤비알바 웹사이트에서 진행할 수 있어요.
 				</Text>
 			</Surface>
+
+			{/* 구직자 목록에 실제로 나가는 카드를 그대로 그린다 — 폼 값이 바뀔 때마다 갱신되니
+			    제목 길이·썸네일 잘림·급여 표기를 등록 전에 확인할 수 있다. 카드 안의 Text는
+			    접근성 트리에서 숨겨져 있어(JobListCard) 낭독은 이 그룹 라벨이 대신한다. */}
+			<View
+				accessibilityLabel={`목록 노출 미리보기: ${describeJobForScreenReader(previewJob, [])}`}
+				accessible
+				className="gap-2"
+			>
+				<Label>목록 노출 미리보기</Label>
+				<Text className="text-muted text-xs leading-5">
+					구직자 공고 목록에서 이렇게 보여요. 썸네일은 가로로 잘리니 중요한
+					내용은 가운데에 두세요.
+				</Text>
+				<JobListCard job={previewJob} sectionKey="organic" />
+			</View>
 		</BambiScreen>
 	);
 }

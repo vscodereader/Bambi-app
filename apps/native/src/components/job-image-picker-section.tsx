@@ -24,6 +24,10 @@ interface Props {
 		cover: JobMediaUploadItem | null;
 		detail: JobMediaUploadItem[];
 	}) => void;
+	// 대표 이미지의 화면용 uri(로컬 픽 또는 원격 프리필). 폼의 목록 노출 미리보기가 아직
+	// 공개 URL이 없는 방금 고른 이미지를 그리려면 이 값이 필요하다 — payload에는 담기지
+	// 않는 표시용 값이라 onChange와 분리해 둔다.
+	onCoverPreviewChange?: (uri: null | string) => void;
 	organizationId: string;
 	teamId: null | string;
 }
@@ -50,6 +54,7 @@ export function JobImagePickerSection({
 	detail,
 	initialPreviews,
 	onChange,
+	onCoverPreviewChange,
 	organizationId,
 	teamId,
 }: Props) {
@@ -144,6 +149,7 @@ export function JobImagePickerSection({
 					...prev,
 					[result.item.storageKey]: result.previewUri,
 				}));
+				onCoverPreviewChange?.(result.previewUri);
 				onChange({ cover: result.item, detail });
 			}
 		} catch {
@@ -213,7 +219,10 @@ export function JobImagePickerSection({
 						)}
 						<Pressable
 							className="self-start rounded-lg border border-border bg-background px-3 py-2 active:opacity-75"
-							onPress={() => onChange({ cover: null, detail })}
+							onPress={() => {
+								onCoverPreviewChange?.(null);
+								onChange({ cover: null, detail });
+							}}
 						>
 							<Text className="text-danger-soft-foreground text-sm dark:text-danger">
 								대표 이미지 제거
