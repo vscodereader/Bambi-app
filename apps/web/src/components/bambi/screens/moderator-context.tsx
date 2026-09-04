@@ -3,6 +3,7 @@
 // 밤비 — 운영자 콘솔 라우트 간 공유 상태(검수 큐/신고/사용자/선택/토스트).
 // 레이아웃에 ModProvider를 두면 /moderator/* 라우트 전환에도 상태가 유지된다.
 
+import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { toFullJobDescription } from "@bambi-app/api/services/bambi-job-description-blocks";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -44,6 +45,7 @@ export const QUEUE_VERDICT_TOAST: Record<QueueVerdict, string> = {
 };
 
 export type ModerationBulkScope = "queue" | "reports" | "users";
+export const MODERATION_USERS_QUERY_INPUT = { limit: 1000 } as const;
 export type ModerationBulkAction =
 	| "approve"
 	| "dismiss"
@@ -402,6 +404,49 @@ const deriveReportCommunity = (input: {
 	};
 };
 
+type RawManagedUser = Awaited<
+	ReturnType<AppRouterClient["bambi"]["moderation"]["listUsers"]>
+>[number];
+
+const toManagedUser = ({ item }: { item: RawManagedUser }): ManagedUser => {
+	const deletedAt = item.deletedAt ? new Date(item.deletedAt) : null;
+	const lastActivityAt = item.lastActivityAt
+		? new Date(item.lastActivityAt)
+		: null;
+	const presenceDisconnectedAt = item.presenceDisconnectedAt
+		? new Date(item.presenceDisconnectedAt)
+		: null;
+	return {
+		birthDate: item.birthDate ?? null,
+		blockedByCount: item.blockedByCount,
+		deletedAt,
+		email: item.email,
+		grade: item.grade,
+		id: item.userId,
+		isOnline: item.isOnline,
+		isPhoneVerified: item.isPhoneVerified,
+		joined: formatDate(item.createdAt),
+		joinedAt: new Date(item.createdAt),
+		lastActivityAt,
+		loginId: item.loginId,
+		name: item.name,
+		note: item.isPhoneVerified
+			? "휴대폰 인증 완료"
+			: "휴대폰 인증이 필요합니다.",
+		organizationNames: item.organizationNames,
+		offlineAfterMinutes: item.offlineAfterMinutes,
+		phoneNumber: item.phoneNumber ?? null,
+		pointBalance: item.pointBalance,
+		presenceDisconnectedAt,
+		purgedAt: item.purgedAt ? new Date(item.purgedAt) : null,
+		reports: item.reportsCount,
+		role: userRoleLabel(item.role),
+		roleKey: item.role,
+		status: item.status,
+		warnings: item.warningsCount,
+	};
+};
+
 export function ModProvider({ children }: { children: ReactNode }) {
 	const queryClient = useQueryClient();
 	const [selected, setSelected] = useState<string[]>([]);
@@ -421,7 +466,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		// 운영자 콘솔은 전체 계정을 관리해야 하므로 넉넉한 상한으로 조회한다(목록은
 		// DataTable에서 클라이언트 페이징). 계정이 이 상한을 넘어서면 서버 페이징 필요.
 		orpc.bambi.moderation.listUsers.queryOptions({
-			input: { limit: 1000 },
+			input: MODERATION_USERS_QUERY_INPUT,
 		})
 	);
 	const setJobPostStatusMutation = useMutation(
@@ -558,32 +603,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				time: formatDate(item.createdAt),
 			};
 		});
-		const apiUsers = moderationUsersQuery.data?.map<ManagedUser>((item) => ({
-			blockedByCount: item.blockedByCount,
-			deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
-			email: item.email,
-			grade: item.grade,
-			id: item.userId,
-			isPhoneVerified: item.isPhoneVerified,
-			joined: formatDate(item.createdAt),
-			// 정렬용 원값. 포맷 문자열(joined)로 정렬하면 "24. 1. 5." 같은 표기가 사전순으로 섞인다.
-			joinedAt: new Date(item.createdAt),
-			loginId: item.loginId,
-			name: item.name,
-			phoneNumber: item.phoneNumber ?? null,
-			birthDate: item.birthDate ?? null,
-			note: item.isPhoneVerified
-				? "휴대폰 인증 완료"
-				: "휴대폰 인증이 필요합니다.",
-			organizationNames: item.organizationNames,
-			pointBalance: item.pointBalance,
-			purgedAt: item.purgedAt ? new Date(item.purgedAt) : null,
-			reports: item.reportsCount,
-			role: userRoleLabel(item.role),
-			roleKey: item.role,
-			status: item.status,
-			warnings: item.warningsCount,
-		}));
+		const apiUsers = moderationUsersQuery.data?.map((item) =>
+			toManagedUser({ item })
+		);
 		const visibleQueue = apiQueue ?? [];
 		const visibleReports = apiReports ?? [];
 		const visibleUsers = apiUsers ?? [];
@@ -643,7 +665,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			const invalidations = [
 				queryClient.invalidateQueries({
 					queryKey: orpc.bambi.moderation.listUsers.queryKey({
-						input: { limit: 1000 },
+						input: MODERATION_USERS_QUERY_INPUT,
 					}),
 				}),
 			];

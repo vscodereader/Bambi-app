@@ -4,11 +4,16 @@ import {
 	readSupportChatTokenFromCookieString,
 	SUPPORT_CHAT_HEADER,
 } from "@bambi-app/api/services/bambi-support-chat-token";
+import {
+	USER_ACTIVITY_HEADER,
+	USER_ACTIVITY_HEADER_VALUE,
+} from "@bambi-app/api/services/bambi-user-presence";
 import { env } from "@bambi-app/env/web";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryClient } from "@tanstack/react-query";
+import { consumeUserActivityHeader } from "@/lib/bambi/user-activity-intent";
 
 export const queryClient = new QueryClient({
 	defaultOptions: {
@@ -36,6 +41,7 @@ export const link = new RPCLink({
 				document.cookie
 			);
 			return {
+				...consumeUserActivityHeader(),
 				...(token ? { "x-bambi-guest": token } : {}),
 				...(supportToken ? { [SUPPORT_CHAT_HEADER]: supportToken } : {}),
 			};
@@ -44,7 +50,16 @@ export const link = new RPCLink({
 		// SSR 경유 호출은 들어온 요청 헤더를 통째로 전달하므로 Cookie 헤더에 게스트
 		// 쿠키가 그대로 실린다 — 서버 context가 그쪽도 폴백으로 읽는다.
 		const { headers } = await import("next/headers");
-		return Object.fromEntries(await headers());
+		const requestHeaders = await headers();
+		const isPrefetch =
+			requestHeaders.has("next-router-prefetch") ||
+			requestHeaders.get("purpose") === "prefetch";
+		return {
+			...Object.fromEntries(requestHeaders),
+			...(isPrefetch
+				? {}
+				: { [USER_ACTIVITY_HEADER]: USER_ACTIVITY_HEADER_VALUE }),
+		};
 	},
 });
 

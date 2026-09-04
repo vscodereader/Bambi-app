@@ -5,7 +5,7 @@ import { Alert } from "react-native";
 
 import { authClient } from "@/lib/auth-client";
 import { clearGuestToken } from "@/src/lib/guest-store";
-import { queryClient } from "@/src/lib/orpc";
+import { client, queryClient } from "@/src/lib/orpc";
 
 export function LogoutButton() {
 	const [isPending, setIsPending] = useState(false);
@@ -15,6 +15,7 @@ export function LogoutButton() {
 
 		// @better-auth/expo는 요청을 보내는 시점에 SecureStore 쿠키와 세션 캐시를 비운다.
 		// 서버 응답이 실패해도 로컬 세션은 이미 해제되므로 실패 알림은 띄우지 않는다.
+		await client.bambi.presence.disconnectSession().catch(() => undefined);
 		await authClient.signOut().catch(() => undefined);
 		// 게스트로 둘러보다 회원 로그인했다면 남은 게스트 토큰까지 지워야 완전 로그아웃이다(실패 무시).
 		await clearGuestToken().catch(() => undefined);
