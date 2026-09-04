@@ -121,6 +121,8 @@ function JobCard({
 					<View className="flex-row flex-wrap items-center gap-2">
 						<Pill tone={display.tone}>{display.label}</Pill>
 						<Pill>{job.region}</Pill>
+						{/* 세부지역은 선택 항목이라 값이 있을 때만 — 크롤 공고 상세와 같은 축. */}
+						{job.district ? <Pill>{job.district}</Pill> : null}
 					</View>
 					<Text className="font-bold text-foreground text-lg" selectable>
 						{job.title}
