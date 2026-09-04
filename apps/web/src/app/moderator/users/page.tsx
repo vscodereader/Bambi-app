@@ -4,6 +4,7 @@
 // 이 화면은 상태·역할·인증·누적 신고/경고 필터와 이름·이메일·아이디 검색을 클라이언트에서
 // 적용한다. 레이아웃·필터·빈 상태 패턴은 공고 관리(/moderator/jobs)와 동일하다.
 
+import { POSTGRES_INTEGER_MAX } from "@bambi-app/api/services/bambi-user-presence";
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
@@ -16,9 +17,11 @@ import {
 } from "@bambi-app/ui/components/select";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { ModeratorUsersTable } from "@/components/bambi/moderator-users-table";
 import {
@@ -30,6 +33,7 @@ import { useMod } from "@/components/bambi/screens/moderator-context";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { MODERATOR_ACCOUNT_CREATE_PATH } from "@/lib/bambi/moderator-navigation";
 import type { ManagedUser } from "@/lib/bambi/types";
+import { orpc } from "@/utils/orpc";
 
 // 탈퇴는 계정 상태 enum이 아니라 deletedAt 유무지만, 운영자 눈에는 같은 축이라 함께 둔다.
 type StatusFilter = "all" | "active" | "warned" | "suspended" | "deleted";
@@ -97,6 +101,30 @@ export default function ModeratorUsersPage() {
 	const searchParams = useSearchParams();
 	const pathname = usePathname();
 	const router = useRouter();
+	const queryClient = useQueryClient();
+	const presencePolicyQuery = useQuery(
+		orpc.bambi.siteSettings.getPresencePolicy.queryOptions()
+	);
+	const [offlineAfterMinutes, setOfflineAfterMinutes] = useState("");
+	useEffect(() => {
+		if (presencePolicyQuery.data) {
+			setOfflineAfterMinutes(
+				String(presencePolicyQuery.data.offlineAfterMinutes)
+			);
+		}
+	}, [presencePolicyQuery.data]);
+	const updatePresencePolicy = useMutation(
+		orpc.bambi.siteSettings.updatePresencePolicy.mutationOptions({
+			onError: (error) =>
+				toast.error(error.message || "오프라인 기준을 저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("오프라인 기준을 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getPresencePolicy.queryKey(),
+				});
+			},
+		})
+	);
 	const {
 		clearSelection,
 		isLoading,
@@ -160,6 +188,18 @@ export default function ModeratorUsersPage() {
 		user: ManagedUser;
 	} | null>(null);
 	const [isApplyingRole, setIsApplyingRole] = useState(false);
+	const savePresencePolicy = () => {
+		const value = Number(offlineAfterMinutes);
+		if (
+			!Number.isSafeInteger(value) ||
+			value < 1 ||
+			value > POSTGRES_INTEGER_MAX
+		) {
+			toast.error("오프라인 기준은 1 이상의 분 단위 정수로 입력해 주세요.");
+			return;
+		}
+		updatePresencePolicy.mutate({ offlineAfterMinutes: value });
+	};
 
 	const filteredUsers = useMemo(() => {
 		const keyword = search.trim().toLowerCase();
@@ -261,6 +301,26 @@ export default function ModeratorUsersPage() {
 					placeholder="이름·이메일·로그인 아이디 검색"
 					value={search}
 				/>
+				<div className="ml-auto flex items-center gap-2 whitespace-nowrap text-sm">
+					<span>오프라인 기준 : 마지막 활동기준</span>
+					<Input
+						aria-label="오프라인 기준 시간"
+						className="w-14"
+						inputMode="numeric"
+						onChange={(event) => setOfflineAfterMinutes(event.target.value)}
+						value={offlineAfterMinutes}
+					/>
+					<span>분 후,</span>
+					<Button
+						disabled={updatePresencePolicy.isPending}
+						onClick={savePresencePolicy}
+						size="sm"
+						type="button"
+						variant="outline"
+					>
+						저장
+					</Button>
+				</div>
 			</div>
 
 			<div className="flex flex-wrap items-end gap-4">

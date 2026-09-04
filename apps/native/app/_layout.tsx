@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
+import { UserPresenceLifecycle } from "@/src/components/user-presence-lifecycle";
 import { queryClient } from "@/src/lib/orpc";
 
 export const unstable_settings = {
@@ -35,6 +36,7 @@ function StackLayout() {
 export default function Layout() {
 	return (
 		<QueryClientProvider client={queryClient}>
+			<UserPresenceLifecycle />
 			<GestureHandlerRootView style={{ flex: 1 }}>
 				<KeyboardProvider>
 					<AppThemeProvider>

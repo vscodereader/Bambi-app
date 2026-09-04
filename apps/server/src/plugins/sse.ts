@@ -8,12 +8,19 @@ import {
 	serializeBambiNotificationEvent,
 	unregisterBambiNotificationSubscriber,
 } from "@bambi-app/api/services/bambi-notification-stream";
+import { USER_PRESENCE_CONNECTION_RENEW_MS } from "@bambi-app/api/services/bambi-user-presence";
+import {
+	disconnectUserPresenceConnection,
+	registerUserPresenceConnection,
+	renewUserPresenceConnections,
+} from "@bambi-app/api/services/bambi-user-presence-db";
 import {
 	resolveRealtimeConnectRateLimit,
 	takeRateLimit,
 } from "@bambi-app/api/services/rate-limit";
 import { env } from "@bambi-app/env/server";
 import type { FastifyPluginCallback } from "fastify";
+import { z } from "zod";
 
 // 프록시·로드밸런서의 유휴 연결 타임아웃(보통 60초)보다 짧게 잡아야 스트림이 끊기지 않는다.
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -37,6 +44,13 @@ const buildRetryHint = (): number =>
 // reply.header()로 쌓아 둔 헤더는 hijack한 raw 응답에는 실리지 않는다.
 export const ssePlugin: FastifyPluginCallback = (app, _opts, done) => {
 	const openStreams = new Set<() => void>();
+	const presenceConnectionIds = new Set<string>();
+	const presenceConnectionIdSchema = z.uuid();
+	const renewPresenceTimer = setInterval(() => {
+		renewUserPresenceConnections(Array.from(presenceConnectionIds)).catch(
+			(error) => app.log.error({ err: error }, "presence lease renewal failed")
+		);
+	}, USER_PRESENCE_CONNECTION_RENEW_MS);
 
 	configureBambiNotificationStream({
 		error(error, message) {
@@ -69,13 +83,38 @@ export const ssePlugin: FastifyPluginCallback = (app, _opts, done) => {
 
 		const context = await createContext(request.headers);
 		const userId = context.session?.user.id;
+		const sessionId = context.session?.session.id;
 
-		if (!userId) {
+		if (!(userId && sessionId)) {
 			reply.status(401).send({
 				code: "UNAUTHORIZED",
 				error: "로그인 후 다시 시도해 주세요.",
 			});
 			return;
+		}
+		const requestedConnectionId = (request.query as { connectionId?: unknown })
+			.connectionId;
+		const parsedConnectionId = presenceConnectionIdSchema.safeParse(
+			requestedConnectionId
+		);
+		const connectionId = parsedConnectionId.success
+			? parsedConnectionId.data
+			: null;
+		if (connectionId) {
+			try {
+				await registerUserPresenceConnection({
+					connectionId,
+					platform: "web",
+					sessionId,
+					userId,
+				});
+				presenceConnectionIds.add(connectionId);
+			} catch (error) {
+				app.log.error(
+					{ err: error },
+					"presence connection registration failed"
+				);
+			}
 		}
 
 		const raw = reply.raw;
@@ -97,6 +136,16 @@ export const ssePlugin: FastifyPluginCallback = (app, _opts, done) => {
 
 			openStreams.delete(closeStream);
 			unregisterBambiNotificationSubscriber({ subscriberId, userId });
+			if (connectionId) {
+				presenceConnectionIds.delete(connectionId);
+				disconnectUserPresenceConnection({
+					connectionId,
+					sessionId,
+					userId,
+				}).catch((error) =>
+					app.log.error({ err: error }, "presence disconnect failed")
+				);
+			}
 			raw.end();
 		};
 
@@ -181,7 +230,28 @@ export const ssePlugin: FastifyPluginCallback = (app, _opts, done) => {
 		}
 	});
 
+	app.post("/presence/disconnect", async (request, reply) => {
+		const context = await createContext(request.headers);
+		const userId = context.session?.user.id;
+		const sessionId = context.session?.session.id;
+		const parsedConnectionId = presenceConnectionIdSchema.safeParse(
+			(request.query as { connectionId?: unknown }).connectionId
+		);
+		if (!(userId && sessionId && parsedConnectionId.success)) {
+			reply.status(204).send();
+			return;
+		}
+		presenceConnectionIds.delete(parsedConnectionId.data);
+		await disconnectUserPresenceConnection({
+			connectionId: parsedConnectionId.data,
+			sessionId,
+			userId,
+		});
+		reply.status(204).send();
+	});
+
 	app.addHook("onClose", (_instance, hookDone) => {
+		clearInterval(renewPresenceTimer);
 		for (const closeStream of Array.from(openStreams)) {
 			closeStream();
 		}

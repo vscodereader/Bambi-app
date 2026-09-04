@@ -5,6 +5,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { StatusBadge } from "@/components/bambi/status-badge";
+import { UserPresenceIndicator } from "@/components/bambi/user-presence-indicator";
 import type { ManagedUser, UserStatus } from "@/lib/bambi/types";
 
 type Tone = React.ComponentProps<typeof StatusBadge>["tone"];
@@ -24,18 +25,6 @@ const statusConf = (user: ManagedUser): { label: string; tone: Tone } =>
 	user.deletedAt
 		? { label: "탈퇴", tone: "default" }
 		: STATUS_CONF[user.status];
-
-const truncateEmail = (email: string): string => {
-	const characters = Array.from(email);
-	return characters.length > 20
-		? `${characters.slice(0, 20).join("")}...`
-		: email;
-};
-
-const truncateName = (name: string): string => {
-	const characters = Array.from(name);
-	return characters.length > 7 ? `${characters.slice(0, 7).join("")}...` : name;
-};
 
 interface ModeratorUsersTableProps {
 	listHref: string;
@@ -84,6 +73,19 @@ function getColumns({
 			),
 		},
 		{
+			id: "presence",
+			header: "접속",
+			headerClassName: "w-12 text-center [&>button]:mx-auto",
+			cellClassName: "h-14 w-12 text-center align-middle",
+			sortValue: (user) =>
+				`${user.isOnline ? "1" : "0"}:${String(user.lastActivityAt?.getTime() ?? 0).padStart(15, "0")}`,
+			cell: (user) => (
+				<span className="flex justify-center">
+					<UserPresenceIndicator isOnline={user.isOnline} />
+				</span>
+			),
+		},
+		{
 			id: "name",
 			header: "이름",
 			headerClassName: CENTER_HEADER,
@@ -91,13 +93,13 @@ function getColumns({
 			sortValue: (user) => user.name,
 			cell: (user) => (
 				<Link
-					className="whitespace-nowrap font-medium text-foreground underline-offset-4 hover:underline"
+					className="mx-auto block max-w-28 truncate whitespace-nowrap font-medium text-foreground underline-offset-4 hover:underline"
 					href={
 						`/moderator/users/${user.id}?returnTo=${encodeURIComponent(listHref)}` as Route
 					}
 					title={user.name}
 				>
-					{truncateName(user.name)}
+					{user.name}
 				</Link>
 			),
 		},
@@ -108,7 +110,10 @@ function getColumns({
 			cellClassName: CENTER_CELL,
 			sortValue: (user) => user.organizationNames.join(", "),
 			cell: (user) => (
-				<span className="mx-auto block max-w-36 truncate text-muted-foreground">
+				<span
+					className="mx-auto block max-w-36 truncate text-muted-foreground"
+					title={user.organizationNames.join(", ") || undefined}
+				>
 					{user.organizationNames.length > 0
 						? user.organizationNames.join(", ")
 						: "-"}
@@ -126,7 +131,7 @@ function getColumns({
 					className="mx-auto block max-w-44 truncate text-muted-foreground"
 					title={user.email}
 				>
-					{truncateEmail(user.email)}
+					{user.email}
 				</span>
 			),
 		},
@@ -137,7 +142,10 @@ function getColumns({
 			cellClassName: CENTER_CELL,
 			sortValue: (user) => user.loginId ?? "",
 			cell: (user) => (
-				<span className="mx-auto block max-w-32 truncate text-muted-foreground">
+				<span
+					className="mx-auto block max-w-32 truncate text-muted-foreground"
+					title={user.loginId ?? undefined}
+				>
 					{user.loginId ?? "-"}
 				</span>
 			),
@@ -225,6 +233,7 @@ export function ModeratorUsersTable({
 				data={users}
 				emptyMessage="사용자가 없습니다"
 				getRowKey={(user) => user.id}
+				initialSort={{ dir: "desc", id: "presence" }}
 				onPageChange={onPageChange}
 				page={page}
 				pageSize={10}

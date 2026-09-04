@@ -61,6 +61,7 @@ import { JobDetailImage } from "@/components/bambi/job-detail-image";
 import { PageControls } from "@/components/bambi/page-controls";
 import { SecretAuthorMark } from "@/components/bambi/secret-author-mark";
 import { StatusBadge } from "@/components/bambi/status-badge";
+import { UserPresenceIndicator } from "@/components/bambi/user-presence-indicator";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
 	COMMUNITY_BOARDS,
@@ -3052,6 +3053,7 @@ export function UserDetail({
 							</div>
 						</div>
 						<div className="flex items-center gap-2">
+							<UserPresenceIndicator isOnline={item.isOnline} withLabel />
 							<Badge dot tone={c.tone}>
 								{c.label}
 							</Badge>
@@ -3076,6 +3078,14 @@ export function UserDetail({
 					</div>
 					<Separator className="hidden md:block" />
 					<ContextSection title="계정 정보">
+						<ContextField
+							label="마지막 활동"
+							value={
+								item.lastActivityAt
+									? formatDateTime(item.lastActivityAt)
+									: "마지막 활동 기록 없음"
+							}
+						/>
 						<ContextField
 							label="인증 번호"
 							value={item.phoneNumber ?? "미인증"}

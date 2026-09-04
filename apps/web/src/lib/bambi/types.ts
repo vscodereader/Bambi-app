@@ -245,10 +245,12 @@ export interface ManagedUser {
 		iconUrl?: string | null;
 	} | null;
 	id: string;
+	isOnline: boolean;
 	isPhoneVerified: boolean;
 	// 표시용 가입일(포맷 완료 문자열). 정렬은 joinedAt으로 한다.
 	joined: string;
 	joinedAt: Date;
+	lastActivityAt: Date | null;
 	// better-auth username 플러그인 로그인 아이디. 미설정 계정은 null.
 	loginId: null | string;
 	name: string;
@@ -259,6 +261,7 @@ export interface ManagedUser {
 	phoneNumber: string | null;
 	// 포인트 잔액(원장 순합계). moderation.listUsers가 내려준다.
 	pointBalance: number;
+	presenceDisconnectedAt: Date | null;
 	// 개인정보 파기 완료 시각. 값이 있으면 탈퇴 복구가 불가능하다(로그인 수단이 이미 파기됨).
 	purgedAt: Date | null;
 	reports: number;

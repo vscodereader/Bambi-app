@@ -3,12 +3,18 @@
 // 밤비 — 운영자 콘솔 라우트 간 공유 상태(검수 큐/신고/사용자/선택/토스트).
 // 레이아웃에 ModProvider를 두면 /moderator/* 라우트 전환에도 상태가 유지된다.
 
+import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { toFullJobDescription } from "@bambi-app/api/services/bambi-job-description-blocks";
+import {
+	DEFAULT_USER_OFFLINE_AFTER_MINUTES,
+	isUserOnline,
+} from "@bambi-app/api/services/bambi-user-presence";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	createContext,
 	type ReactNode,
 	useContext,
+	useEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -31,6 +37,10 @@ import type {
 	ReportTargetType,
 	UserStatus,
 } from "@/lib/bambi/types";
+import {
+	resolveLivePresenceSnapshot,
+	useModeratorPresenceStream,
+} from "@/lib/bambi/use-moderator-presence-stream";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
@@ -402,6 +412,59 @@ const deriveReportCommunity = (input: {
 	};
 };
 
+type RawManagedUser = Awaited<
+	ReturnType<AppRouterClient["bambi"]["moderation"]["listUsers"]>
+>[number];
+
+const toManagedUser = ({
+	event,
+	item,
+	now,
+	offlineAfterMinutes,
+}: {
+	event: Parameters<typeof resolveLivePresenceSnapshot>[0];
+	item: RawManagedUser;
+	now: number;
+	offlineAfterMinutes: number;
+}): ManagedUser => {
+	const { deletedAt, lastActivityAt, presenceDisconnectedAt } =
+		resolveLivePresenceSnapshot(event, item);
+	return {
+		birthDate: item.birthDate ?? null,
+		blockedByCount: item.blockedByCount,
+		deletedAt,
+		email: item.email,
+		grade: item.grade,
+		id: item.userId,
+		isOnline: isUserOnline({
+			deletedAt,
+			lastActivityAt,
+			now: new Date(now),
+			offlineAfterMinutes,
+			presenceDisconnectedAt,
+		}),
+		isPhoneVerified: item.isPhoneVerified,
+		joined: formatDate(item.createdAt),
+		joinedAt: new Date(item.createdAt),
+		lastActivityAt,
+		loginId: item.loginId,
+		name: item.name,
+		note: item.isPhoneVerified
+			? "휴대폰 인증 완료"
+			: "휴대폰 인증이 필요합니다.",
+		organizationNames: item.organizationNames,
+		phoneNumber: item.phoneNumber ?? null,
+		pointBalance: item.pointBalance,
+		presenceDisconnectedAt,
+		purgedAt: item.purgedAt ? new Date(item.purgedAt) : null,
+		reports: item.reportsCount,
+		role: userRoleLabel(item.role),
+		roleKey: item.role,
+		status: item.status,
+		warnings: item.warningsCount,
+	};
+};
+
 export function ModProvider({ children }: { children: ReactNode }) {
 	const queryClient = useQueryClient();
 	const [selected, setSelected] = useState<string[]>([]);
@@ -424,6 +487,27 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			input: { limit: 1000 },
 		})
 	);
+	const presencePolicyQuery = useQuery(
+		orpc.bambi.siteSettings.getPresencePolicy.queryOptions()
+	);
+	const livePresence = useModeratorPresenceStream();
+	useEffect(() => {
+		if (livePresence.reconnectRevision <= 1) {
+			return;
+		}
+		queryClient
+			.invalidateQueries({
+				queryKey: orpc.bambi.moderation.listUsers.queryKey({
+					input: { limit: 1000 },
+				}),
+			})
+			.catch(() => undefined);
+		queryClient
+			.invalidateQueries({
+				queryKey: orpc.bambi.siteSettings.getPresencePolicy.queryKey(),
+			})
+			.catch(() => undefined);
+	}, [livePresence.reconnectRevision, queryClient]);
 	const setJobPostStatusMutation = useMutation(
 		orpc.bambi.moderation.setJobPostStatus.mutationOptions()
 	);
@@ -558,32 +642,18 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				time: formatDate(item.createdAt),
 			};
 		});
-		const apiUsers = moderationUsersQuery.data?.map<ManagedUser>((item) => ({
-			blockedByCount: item.blockedByCount,
-			deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
-			email: item.email,
-			grade: item.grade,
-			id: item.userId,
-			isPhoneVerified: item.isPhoneVerified,
-			joined: formatDate(item.createdAt),
-			// 정렬용 원값. 포맷 문자열(joined)로 정렬하면 "24. 1. 5." 같은 표기가 사전순으로 섞인다.
-			joinedAt: new Date(item.createdAt),
-			loginId: item.loginId,
-			name: item.name,
-			phoneNumber: item.phoneNumber ?? null,
-			birthDate: item.birthDate ?? null,
-			note: item.isPhoneVerified
-				? "휴대폰 인증 완료"
-				: "휴대폰 인증이 필요합니다.",
-			organizationNames: item.organizationNames,
-			pointBalance: item.pointBalance,
-			purgedAt: item.purgedAt ? new Date(item.purgedAt) : null,
-			reports: item.reportsCount,
-			role: userRoleLabel(item.role),
-			roleKey: item.role,
-			status: item.status,
-			warnings: item.warningsCount,
-		}));
+		const offlineAfterMinutes =
+			livePresence.policyMinutes ??
+			presencePolicyQuery.data?.offlineAfterMinutes ??
+			DEFAULT_USER_OFFLINE_AFTER_MINUTES;
+		const apiUsers = moderationUsersQuery.data?.map((item) =>
+			toManagedUser({
+				event: livePresence.users.get(item.userId),
+				item,
+				now: livePresence.now,
+				offlineAfterMinutes,
+			})
+		);
 		const visibleQueue = apiQueue ?? [];
 		const visibleReports = apiReports ?? [];
 		const visibleUsers = apiUsers ?? [];
@@ -1007,6 +1077,8 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		moderationUsersQuery.data,
 		moderationUsersQuery.isError,
 		moderationUsersQuery.isPending,
+		livePresence,
+		presencePolicyQuery.data?.offlineAfterMinutes,
 		queryClient,
 		restoreWithdrawnAccountMutation,
 		revertLatestWarningMutation,

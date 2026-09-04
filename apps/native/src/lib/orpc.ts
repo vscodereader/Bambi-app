@@ -1,16 +1,32 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import {
+	USER_ACTIVITY_HEADER,
+	USER_ACTIVITY_HEADER_VALUE,
+} from "@bambi-app/api/services/bambi-user-presence";
 import { env } from "@bambi-app/env/native";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryClient } from "@tanstack/react-query";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
 import { authClient } from "@/lib/auth-client";
 
 import { readGuestToken } from "./guest-store";
 
 export const queryClient = new QueryClient();
+let automaticRequestDepth = 0;
+
+export const runWithoutNativeActivity = async <T>(
+	request: () => Promise<T>
+): Promise<T> => {
+	automaticRequestDepth += 1;
+	try {
+		return await request();
+	} finally {
+		automaticRequestDepth -= 1;
+	}
+};
 
 export const link = new RPCLink({
 	url: `${env.EXPO_PUBLIC_SERVER_URL}/rpc`,
@@ -26,6 +42,9 @@ export const link = new RPCLink({
 		}
 
 		const headers = new Map<string, string>();
+		if (AppState.currentState === "active" && automaticRequestDepth === 0) {
+			headers.set(USER_ACTIVITY_HEADER, USER_ACTIVITY_HEADER_VALUE);
+		}
 		const cookies = authClient.getCookie();
 
 		if (cookies) {

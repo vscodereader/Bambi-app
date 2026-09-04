@@ -51,6 +51,8 @@ import {
 import { SITE_SETTINGS_ROW_ID } from "../../services/bambi-point-settings";
 import { acquirePointShopUserLock } from "../../services/bambi-point-shop";
 import { resolveGradeIconUrl } from "../../services/bambi-storage";
+import { isUserOnline } from "../../services/bambi-user-presence";
+import { getUserOfflineAfterMinutes } from "../../services/bambi-user-presence-db";
 
 // 출석 대상 역할. 운영자·법률자문·게스트는 출석 대상이 아니다. 허용 목록으로 고정해
 // bambi_user_role에 값이 하나 늘어도 기본 판정이 "거부"가 되게 한다(bambi-authz 관례).
@@ -259,6 +261,7 @@ export const attendanceRouter = {
 
 	adminList: adminProcedure.input(adminListInput).handler(async ({ input }) => {
 		const today = getKstDateString();
+		const offlineAfterMinutesPromise = getUserOfflineAfterMinutes();
 		const monthStart = `${today.slice(0, 7)}-01`;
 
 		// 집계는 전부 상관 서브쿼리로 뽑는다 — 조인으로 붙이면 출석일 수만큼 user row가
@@ -325,11 +328,13 @@ export const attendanceRouter = {
 				idleDays: idleDaysSql,
 				lastAttendedOn: lastAttendedOnSql,
 				loginId: user.login_id,
+				lastActivityAt: user.lastActivityAt,
 				monthDays: monthDaysSql,
 				pointBalance: pointBalanceRowSql,
 				role: bambiProfile.role,
 				totalDays: totalDaysSql,
 				userId: user.id,
+				presenceDisconnectedAt: user.presenceDisconnectedAt,
 			})
 			.from(user)
 			// 출석 대상은 프로필 역할로 정해지므로 프로필이 없는(온보딩 전) 계정은 제외한다.
@@ -357,11 +362,21 @@ export const attendanceRouter = {
 			pageRows.map((row) => row.userId)
 		);
 
+		const offlineAfterMinutes = await offlineAfterMinutesPromise;
+		const now = new Date();
 		return {
 			items: pageRows.map((row) => ({
 				...row,
 				grade: gradeBadges.get(row.userId) ?? null,
+				isOnline: isUserOnline({
+					deletedAt: null,
+					lastActivityAt: row.lastActivityAt,
+					now,
+					offlineAfterMinutes,
+					presenceDisconnectedAt: row.presenceDisconnectedAt,
+				}),
 			})),
+			offlineAfterMinutes,
 			nextCursor: hasMore ? input.cursor + input.limit : null,
 			summary: summary ?? { attendedToday: 0, eligibleUsers: 0 },
 			totalCount: summary?.eligibleUsers ?? 0,

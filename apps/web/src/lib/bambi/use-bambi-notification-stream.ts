@@ -13,6 +13,7 @@ import {
 	notificationTitle,
 } from "@/lib/bambi/notification-labels";
 import { showOsNotification } from "@/lib/bambi/os-notification";
+import { getPresenceConnectionId } from "@/lib/bambi/user-activity-intent";
 import { orpc } from "@/utils/orpc";
 
 interface NotificationStreamListener {
@@ -119,8 +120,9 @@ function openStream() {
 		return;
 	}
 
+	const connectionId = getPresenceConnectionId();
 	const source = new EventSource(
-		`${env.NEXT_PUBLIC_SERVER_URL}${NOTIFICATION_STREAM_PATH}`,
+		`${env.NEXT_PUBLIC_SERVER_URL}${NOTIFICATION_STREAM_PATH}?connectionId=${encodeURIComponent(connectionId)}`,
 		{ withCredentials: true }
 	);
 
