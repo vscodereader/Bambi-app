@@ -832,6 +832,7 @@ export const crawledJobPost = pgTable(
 export interface CrawledCommunityCommentRecord {
 	authorName: string | null;
 	body: string;
+	id?: string;
 	sourcePostedAt: string | null;
 }
 
@@ -843,6 +844,18 @@ export const crawledCommunityTopic = pgTable(
 	"crawled_community_topic",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
+		boardKey: text("board_key")
+			.notNull()
+			.references(() => communityBoard.key),
+		editedTitle: text("edited_title"),
+		editedBody: text("edited_body"),
+		editedBodyText: text("edited_body_text"),
+		editedAt: timestamp("edited_at"),
+		editedByUserId: text("edited_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		activityAt: timestamp("activity_at"),
+		editRevision: integer("edit_revision").default(0).notNull(),
 		sourceSite: crawlSourceSite("source_site").notNull(),
 		sourceExternalId: text("source_external_id").notNull(),
 		sourceUrl: text("source_url").notNull(),
@@ -873,13 +886,34 @@ export const crawledCommunityTopic = pgTable(
 	(table) => [
 		uniqueIndex("crawled_community_topic_source_uidx").on(
 			table.sourceSite,
-			table.sourceExternalId
+			table.sourceExternalId,
+			table.boardKey
+		),
+		index("crawled_community_topic_board_idx").on(
+			table.boardKey,
+			table.activityAt
 		),
 		index("crawled_community_topic_seen_idx").on(
 			table.sourceSite,
 			table.lastSeenAt
 		),
 	]
+);
+
+export const crawledCommunityCommentEdit = pgTable(
+	"crawled_community_comment_edit",
+	{
+		topicId: uuid("topic_id")
+			.notNull()
+			.references(() => crawledCommunityTopic.id, { onDelete: "cascade" }),
+		sourceCommentId: text("source_comment_id").notNull(),
+		editedBody: text("edited_body").notNull(),
+		editedAt: timestamp("edited_at").notNull(),
+		editedByUserId: text("edited_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+	},
+	(table) => [primaryKey({ columns: [table.topicId, table.sourceCommentId] })]
 );
 
 // 수집 회차 기록. DOM 크롤링의 운영 비용은 대부분 셀렉터가 소리 없이 깨지는 데서 나오므로,
@@ -892,6 +926,7 @@ export const crawlRun = pgTable(
 		// 이 회차가 무엇을 긁었는지. 사이트만 남기면 "퀸알바 회차"가 공고인지 게시판인지
 		// 구분되지 않아, 회차 목록이 파손 신호를 읽는 창구 역할을 못 한다.
 		contentType: crawlContentType("content_type").default("job_post").notNull(),
+		boardKey: text("board_key"),
 		status: crawlRunStatus("status").default("running").notNull(),
 		startedAt: timestamp("started_at").defaultNow().notNull(),
 		finishedAt: timestamp("finished_at"),
@@ -1569,6 +1604,12 @@ export const bambiSiteSettings = pgTable(
 		// 주기 실행만 통제하고, 운영자의 「즉시 수집」은 꺼져 있어도 항상 돈다 — 수동 실행까지
 		// 막으면 스케줄러를 켜지 않고는 파서를 확인할 방법이 없어진다.
 		crawlEnabled: boolean("crawl_enabled").default(false).notNull(),
+		crawlCommunityBoardKey: text("crawl_community_board_key").references(
+			() => communityBoard.key
+		),
+		crawledCommunityEditorGradeId: uuid(
+			"crawled_community_editor_grade_id"
+		).references((): AnyPgColumn => bambiMemberGrade.id),
 		// 수집 대상 사이트. 현재는 퀸알바만 수집한다(여우알바는 대상에서 내렸다). enum 값과
 		// 과거 회차 기록은 남겨두므로 되살릴 때 마이그레이션이 필요 없다.
 		crawlSourceSite: crawlSourceSite("crawl_source_site")
