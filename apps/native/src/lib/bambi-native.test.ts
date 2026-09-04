@@ -91,11 +91,11 @@ describe("bambi native helpers", () => {
 
 	it("offers a way back to the seeker area only when a role area exists", () => {
 		expect(getNativeAreaOptions("employer")).toEqual([
-			{ href: "/(seeker)", title: "구직자 화면" },
+			{ href: "/(seeker)", title: "메인 공고 화면으로 이동" },
 			{ href: "/(employer)", title: "구인자 관리" },
 		]);
 		expect(getNativeAreaOptions("admin")).toEqual([
-			{ href: "/(seeker)", title: "구직자 화면" },
+			{ href: "/(seeker)", title: "메인 공고 화면으로 이동" },
 			{ href: "/(moderator)", title: "운영자 페이지" },
 		]);
 		expect(getNativeAreaOptions("job_seeker")).toEqual([]);

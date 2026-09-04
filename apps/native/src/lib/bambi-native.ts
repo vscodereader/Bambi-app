@@ -189,7 +189,7 @@ export const getNativeAreaOptions = (
 	const roleTab = getNativeRoleTab(role);
 
 	return roleTab
-		? [{ href: SEEKER_AREA_ROUTE, title: "구직자 화면" }, roleTab]
+		? [{ href: SEEKER_AREA_ROUTE, title: "메인 공고 화면으로 이동" }, roleTab]
 		: [];
 };
 
