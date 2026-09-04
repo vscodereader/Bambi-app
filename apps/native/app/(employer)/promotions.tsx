@@ -34,7 +34,12 @@ import { getJobDisplayStatus } from "@/src/lib/employer/job-status";
 import { orpc, queryClient } from "@/src/lib/orpc";
 
 // 상태 탭. 목록은 필터링된 하나뿐이라 Tabs.Content로 네 벌 복제하지 않고 Tabs는
-// 선택 UI로만 쓴다. 좁은 폭(360dp)에서 네 개가 한 줄에 안 들어가 ScrollView로 감싼다.
+// 선택 UI로만 쓴다.
+//
+// ScrollView를 쓰지 않는다: heroui의 Tabs.List는 self-start라 내용 폭에 맞춰 줄어드는데,
+// Tabs.ScrollView를 끼우면 트랙이 화면 전체로 늘어나 마지막 탭 오른쪽에 빈 트랙이 남는다.
+// 대신 트리거의 아이콘을 뺐다 — 아이콘(16 + gap 6)까지 넣으면 네 탭 합이 360dp 화면의
+// 가용 폭(약 328)을 넘어 스크롤이 불가피해지고, 라벨만 두면 약 300으로 들어간다.
 function StatusTabs({
 	onChange,
 	selectedId,
@@ -42,35 +47,19 @@ function StatusTabs({
 	onChange: (id: AdStatusGroupId) => void;
 	selectedId: AdStatusGroupId;
 }) {
-	const [segmentForeground, muted] = useThemeColor([
-		"segment-foreground",
-		"muted",
-	]);
-
 	return (
 		<Tabs
 			onValueChange={(value) => onChange(value as AdStatusGroupId)}
 			value={selectedId}
 		>
-			{/* 트랙이 화면을 넘으면 밖으로 삐져나가지 않고 스크롤되도록 폭을 묶는다. */}
+			{/* 라벨이 길어진 뒤에도 트랙이 화면 밖으로 나가지 않게 상한만 걸어 둔다. */}
 			<Tabs.List className="max-w-full">
-				<Tabs.ScrollView scrollAlign="center">
-					<Tabs.Indicator />
-					{AD_STATUS_GROUPS.map((group) => (
-						<Tabs.Trigger key={group.id} value={group.id}>
-							{({ isSelected }) => (
-								<>
-									<Ionicons
-										color={isSelected ? segmentForeground : muted}
-										name={group.icon}
-										size={16}
-									/>
-									<Tabs.Label>{group.label}</Tabs.Label>
-								</>
-							)}
-						</Tabs.Trigger>
-					))}
-				</Tabs.ScrollView>
+				<Tabs.Indicator />
+				{AD_STATUS_GROUPS.map((group) => (
+					<Tabs.Trigger key={group.id} value={group.id}>
+						<Tabs.Label>{group.label}</Tabs.Label>
+					</Tabs.Trigger>
+				))}
 			</Tabs.List>
 		</Tabs>
 	);
