@@ -1,17 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
-import {
-	type ImagePickerResult,
-	launchImageLibraryAsync,
-} from "expo-image-picker";
 import { Button } from "heroui-native";
 import { useState } from "react";
 import { Alert, Image, Pressable, Text, View } from "react-native";
 
+import { pickAndUploadJobImage } from "@/src/lib/employer/job-image-upload";
 import {
 	JOB_DETAIL_LIMIT,
 	type JobMediaUploadItem,
-	resolveJobImagePick,
-	toJobMediaItem,
 } from "@/src/lib/employer/job-media";
 import { orpc } from "@/src/lib/orpc";
 
@@ -66,97 +61,31 @@ export function JobImagePickerSection({
 	// 조각 그룹은 원본 1장으로 접어서 세고 렌더한다(개수·한도·목록 모두).
 	const originalDetail = detail.filter(isOriginalDetail);
 
-	const pickAndUpload = async (
-		usage: "cover" | "detail"
-	): Promise<null | { item: JobMediaUploadItem; previewUri: string }> => {
-		let picked: ImagePickerResult;
-
-		try {
-			picked = await launchImageLibraryAsync({
-				mediaTypes: ["images"],
-				quality: 0.9,
-			});
-		} catch {
-			Alert.alert("사진을 불러오지 못했어요", "잠시 후 다시 시도해 주세요.");
-			return null;
-		}
-
-		const asset = picked.canceled ? null : picked.assets[0];
-
-		if (!asset) {
-			return null;
-		}
-
-		// 서명 content-length에 blob.size가 묶인다 — asset.fileSize가 아니라 실측 바이트.
-		const blob = await (await fetch(asset.uri)).blob();
-		const resolved = resolveJobImagePick(
-			{
-				fileName: asset.fileName,
-				height: asset.height,
-				mimeType: asset.mimeType,
-				uri: asset.uri,
-				width: asset.width,
-			},
-			blob.size
-		);
-
-		if ("error" in resolved) {
-			Alert.alert("등록할 수 없는 이미지예요", resolved.error);
-			return null;
-		}
-
-		const intent = await uploadMutation.mutateAsync({
-			byteSize: resolved.byteSize,
-			fileName: resolved.fileName,
-			mimeType: resolved.mimeType,
-			organizationId,
-			teamId: teamId ?? undefined,
-			usage,
-		});
-
-		if (!intent.uploadUrl.startsWith("https://")) {
-			Alert.alert(
-				"지금은 이미지를 등록할 수 없어요",
-				"잠시 후 다시 시도해 주세요."
-			);
-			return null;
-		}
-
-		const response = await fetch(intent.uploadUrl, {
-			body: blob,
-			headers: { "Content-Type": intent.mimeType },
-			method: "PUT",
-		});
-
-		if (!response.ok) {
-			throw new Error("upload failed");
-		}
-
-		return {
-			item: toJobMediaItem(resolved, intent.storageKey),
-			previewUri: asset.uri,
-		};
-	};
-
 	const handleCoverPick = async () => {
 		setIsBusy(true);
+		const result = await pickAndUploadJobImage({
+			createUpload: uploadMutation.mutateAsync,
+			organizationId,
+			teamId,
+			usage: "cover",
+		});
+		setIsBusy(false);
 
-		try {
-			const result = await pickAndUpload("cover");
-
-			if (result) {
-				setPreviews((prev) => ({
-					...prev,
-					[result.item.storageKey]: result.previewUri,
-				}));
-				onCoverPreviewChange?.(result.previewUri);
-				onChange({ cover: result.item, detail });
-			}
-		} catch {
-			Alert.alert("이미지 업로드에 실패했어요", "잠시 후 다시 시도해 주세요.");
-		} finally {
-			setIsBusy(false);
+		if ("cancelled" in result) {
+			return;
 		}
+
+		if ("error" in result) {
+			Alert.alert("등록할 수 없는 이미지예요", result.error);
+			return;
+		}
+
+		setPreviews((prev) => ({
+			...prev,
+			[result.item.storageKey]: result.previewUri,
+		}));
+		onCoverPreviewChange?.(result.previewUri);
+		onChange({ cover: result.item, detail });
 	};
 
 	const handleDetailPick = async () => {
@@ -169,22 +98,28 @@ export function JobImagePickerSection({
 		}
 
 		setIsBusy(true);
+		const result = await pickAndUploadJobImage({
+			createUpload: uploadMutation.mutateAsync,
+			organizationId,
+			teamId,
+			usage: "detail",
+		});
+		setIsBusy(false);
 
-		try {
-			const result = await pickAndUpload("detail");
-
-			if (result) {
-				setPreviews((prev) => ({
-					...prev,
-					[result.item.storageKey]: result.previewUri,
-				}));
-				onChange({ cover, detail: [...detail, result.item] });
-			}
-		} catch {
-			Alert.alert("이미지 업로드에 실패했어요", "잠시 후 다시 시도해 주세요.");
-		} finally {
-			setIsBusy(false);
+		if ("cancelled" in result) {
+			return;
 		}
+
+		if ("error" in result) {
+			Alert.alert("등록할 수 없는 이미지예요", result.error);
+			return;
+		}
+
+		setPreviews((prev) => ({
+			...prev,
+			[result.item.storageKey]: result.previewUri,
+		}));
+		onChange({ cover, detail: [...detail, result.item] });
 	};
 
 	const previewFor = (item: JobMediaUploadItem): string =>
