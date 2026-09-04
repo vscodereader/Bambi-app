@@ -1,5 +1,5 @@
 import { ChatRoomScreen } from "@/src/components/chat/chat-room-screen";
 
-export default function SeekerChatRoomScreen() {
+export default function EmployerChatRoomScreen() {
 	return <ChatRoomScreen />;
 }
