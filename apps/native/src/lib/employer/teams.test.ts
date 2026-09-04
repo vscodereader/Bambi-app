@@ -99,25 +99,35 @@ describe("getMemberActionPermissions", () => {
 
 	it.each([
 		// 소유자가 아니면(매니저) 멤버 액션이 하나도 없다 — 서버가 owner 권한을 요구한다.
-		[staff, false, true, []],
+		[staff, false, true, true, []],
 		// 미승인 조직은 assertOrganizationVerified에 걸린다.
-		[staff, true, false, []],
+		[staff, true, false, true, []],
 		// 소유자 행은 역할 변경·내보내기 모두 서버가 거부한다.
-		[owner, true, true, []],
+		[owner, true, true, true, []],
 		[
 			staff,
 			true,
 			true,
+			true,
 			["canChangeRole", "canRemove", "canSetTeams", "canTransferOwnership"],
 		],
+		// 팀이 하나도 없으면 지정할 소속이 없어 팀 소속 변경만 닫힌다.
+		[
+			staff,
+			true,
+			true,
+			false,
+			["canChangeRole", "canRemove", "canTransferOwnership"],
+		],
 		// 비활성 멤버의 팀 소속·소유권 이전은 서버가 거부한다.
-		[pendingStaff, true, true, ["canChangeRole", "canRemove"]],
-		[rejectedInvite, true, true, ["canDeleteInvitation", "canResubmit"]],
+		[pendingStaff, true, true, true, ["canChangeRole", "canRemove"]],
+		[rejectedInvite, true, true, true, ["canDeleteInvitation", "canResubmit"]],
 		// 승인 대기 초대는 재제출·삭제 모두 CONFLICT다.
-		[pendingInvite, true, true, []],
-	])("%j · 소유자 %j · 승인 %j 이면 %j 만 연다", (row, canManageOrganization, isVerified, allowed) => {
+		[pendingInvite, true, true, true, []],
+	])("%j · 소유자 %j · 승인 %j · 팀보유 %j 이면 %j 만 연다", (row, canManageOrganization, isVerified, hasTeams, allowed) => {
 		const permissions = getMemberActionPermissions({
 			canManageOrganization,
+			hasTeams,
 			isVerified,
 			row,
 		});
