@@ -10,14 +10,23 @@ export interface PaymentAccountItem {
 	holder: string;
 }
 
+// 입금이 무엇을 여는지. 공고 결제는 게시를 열지만 끌어올리기 옵션 구매는 이미 게시된 공고에
+// 옵션만 붙이므로, "입금 확인 후 공고가 게시됩니다"는 사실과 다르다(web BankTransferGuide와 같은 축).
+const PURPOSE_NOTES = {
+	boost: "입금 확인 후 끌어올리기 옵션이 적용됩니다.",
+	posting: "입금 확인 후 공고가 게시됩니다.",
+} as const;
+
 export function BankAccounts({
 	accounts,
 	emptyMessage,
 	isLoading = false,
+	purpose = "posting",
 }: {
 	accounts: PaymentAccountItem[];
 	emptyMessage: string;
 	isLoading?: boolean;
+	purpose?: keyof typeof PURPOSE_NOTES;
 }) {
 	const { toast } = useToast();
 
@@ -58,8 +67,7 @@ export function BankAccounts({
 				</View>
 			))}
 			<Text className="text-muted text-xs">
-				입금자명은 업체명(상호)과 동일하게 입금해 주세요. 입금 확인 후 공고가
-				게시됩니다.
+				{`입금자명은 업체명(상호)과 동일하게 입금해 주세요. ${PURPOSE_NOTES[purpose]}`}
 			</Text>
 		</View>
 	);

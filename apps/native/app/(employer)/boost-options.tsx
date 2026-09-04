@@ -289,6 +289,7 @@ export default function BoostOptionsScreen() {
 					accounts={accountsQuery.data ?? []}
 					emptyMessage="입금 계좌가 준비되기 전이에요. 고객센터로 문의해 주세요."
 					isLoading={accountsQuery.isLoading}
+					purpose="boost"
 				/>
 			</View>
 
