@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
 	type AnyPgColumn,
+	bigint,
 	boolean,
 	check,
 	date,
@@ -1768,6 +1769,49 @@ export const chatMessage = pgTable(
 	]
 );
 
+// 배포 후 성공한 사용자 대화 액션만 쌓는 정본. 기존 chat_message를 읽지 않으므로 도입
+// 전 메시지에 대한 첫 답장이 과거 전체 대기시간으로 잘못 집계되지 않는다.
+export const chatResponseActivity = pgTable(
+	"chat_response_activity",
+	{
+		id: bigint("id", { mode: "number" })
+			.primaryKey()
+			.generatedAlwaysAsIdentity(),
+		chatRoomId: uuid("chat_room_id")
+			.notNull()
+			.references(() => chatRoom.id, { onDelete: "cascade" }),
+		actorUserId: text("actor_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		activityKey: text("activity_key").notNull(),
+		occurredAt: timestamp("occurred_at").notNull(),
+		promptStartedAt: timestamp("prompt_started_at"),
+		responseSeconds: integer("response_seconds"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("chat_response_activity_activity_key_uidx").on(
+			table.activityKey
+		),
+		index("chat_response_activity_chat_room_id_id_idx").on(
+			table.chatRoomId,
+			table.id
+		),
+		index("chat_response_activity_actor_occurred_at_idx").on(
+			table.actorUserId,
+			table.occurredAt
+		),
+		check(
+			"chat_response_activity_response_nonnegative_ck",
+			sql`${table.responseSeconds} IS NULL OR ${table.responseSeconds} >= 0`
+		),
+		check(
+			"chat_response_activity_prompt_response_pair_ck",
+			sql`(${table.promptStartedAt} IS NULL) = (${table.responseSeconds} IS NULL)`
+		),
+	]
+);
+
 /**
  * 채팅 메시지 전파(소켓·알림)의 transactional outbox. **채팅 메시지 전용**이며 범용
  * 이벤트 버스가 아니다.
@@ -2950,7 +2994,22 @@ export const chatRoomRelations = relations(chatRoom, ({ many, one }) => ({
 		references: [jobPost.id],
 	}),
 	messages: many(chatMessage),
+	responseActivities: many(chatResponseActivity),
 }));
+
+export const chatResponseActivityRelations = relations(
+	chatResponseActivity,
+	({ one }) => ({
+		actor: one(user, {
+			fields: [chatResponseActivity.actorUserId],
+			references: [user.id],
+		}),
+		room: one(chatRoom, {
+			fields: [chatResponseActivity.chatRoomId],
+			references: [chatRoom.id],
+		}),
+	})
+);
 
 export const chatMessageRelations = relations(chatMessage, ({ many, one }) => ({
 	attachments: many(chatAttachment),

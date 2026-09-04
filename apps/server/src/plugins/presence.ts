@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { clientIpFromHeaders, createContext } from "@bambi-app/api/context";
 import { requireAdminProfile } from "@bambi-app/api/services/bambi-authz";
+import { getChatPresenceAudienceUserIds } from "@bambi-app/api/services/bambi-chat-presence";
+import {
+	emitChatParticipantPresence,
+	emitChatPresenceResync,
+} from "@bambi-app/api/services/bambi-chat-realtime";
 import {
 	parseUserPresenceEvent,
 	USER_PRESENCE_CHANNEL,
@@ -8,6 +13,7 @@ import {
 	USER_PRESENCE_SSE_HEARTBEAT_EVENT,
 	USER_PRESENCE_SSE_PATH,
 } from "@bambi-app/api/services/bambi-user-presence";
+import { getUserPresenceStatesByIds } from "@bambi-app/api/services/bambi-user-presence-db";
 import {
 	resolveRealtimeConnectRateLimit,
 	takeRateLimit,
@@ -32,6 +38,19 @@ export const presencePlugin: FastifyPluginCallback = (app, _opts, done) => {
 	let reconnectTimer: null | ReturnType<typeof setTimeout> = null;
 	let reconnectAttempt = 0;
 	let closing = false;
+
+	const publishChatPresence = async (userId: string): Promise<void> => {
+		const [audience, states] = await Promise.all([
+			getChatPresenceAudienceUserIds(userId),
+			getUserPresenceStatesByIds([userId]),
+		]);
+		const state = states.get(userId);
+		emitChatParticipantPresence(audience, {
+			isOnline: state?.isOnline ?? false,
+			presenceRefreshAt: state?.presenceRefreshAt?.toISOString() ?? null,
+			userId,
+		});
+	};
 
 	const scheduleReconnect = () => {
 		if (closing || reconnectTimer) {
@@ -66,6 +85,16 @@ export const presencePlugin: FastifyPluginCallback = (app, _opts, done) => {
 			for (const subscriber of subscribers.values()) {
 				subscriber.send(payload);
 			}
+			if (event.type === "user") {
+				publishChatPresence(event.userId).catch((error) => {
+					app.log.error(
+						{ err: error, userId: event.userId },
+						"chat participant presence publish failed"
+					);
+				});
+			} else if (event.type === "policy") {
+				emitChatPresenceResync({ reason: "policy_changed" });
+			}
 		});
 		client.on("error", (error) => {
 			app.log.error({ err: error }, "presence LISTEN connection failed");
@@ -95,6 +124,7 @@ export const presencePlugin: FastifyPluginCallback = (app, _opts, done) => {
 				for (const subscriber of subscribers.values()) {
 					subscriber.send(payload);
 				}
+				emitChatPresenceResync({ reason: "listener_reconnected" });
 			}
 		} catch (error) {
 			await client.end().catch(() => undefined);
