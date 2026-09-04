@@ -741,6 +741,28 @@ const PROFILE_ROLE_LABELS: Record<string, string> = {
 export const profileRoleLabel = (role: null | string | undefined): string =>
 	PROFILE_ROLE_LABELS[role ?? ""] ?? "구직자";
 
+export interface NativeAccountStatusBadge {
+	label: string;
+	tone: "danger" | "neutral" | "success" | "warning";
+}
+
+// 계정 상태 enum 원값 노출 금지 — 웹 employer/me의 accountStatusLabels와
+// getAccountStatusTone을 라벨·톤 한 쌍으로 합쳐 옮긴다(Pill tone에 그대로 꽂힌다).
+const ACCOUNT_STATUS_BADGES: Record<string, NativeAccountStatusBadge> = {
+	active: { label: "정상", tone: "success" },
+	suspended: { label: "정지", tone: "danger" },
+	warned: { label: "주의", tone: "warning" },
+};
+
+// 웹은 미등록 상태를 원값 그대로 흘리지만 native는 중립 문구로 떨어뜨린다.
+export const accountStatusBadge = (
+	status: null | string | undefined
+): NativeAccountStatusBadge =>
+	ACCOUNT_STATUS_BADGES[status ?? ""] ?? {
+		label: "확인 필요",
+		tone: "neutral",
+	};
+
 // 웹 MyPointsSummaryCard의 "다음 등급까지" 문구와 같은 규칙.
 export const pointsToNextLabel = (
 	nextGrade: { minPoints: number; name: string } | null,

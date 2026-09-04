@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	accountStatusBadge,
 	adPeriodTier,
 	adPreviewTemplateToSectionKey,
 	buildJobCardBadges,
@@ -532,6 +533,32 @@ describe("profileRoleLabel", () => {
 		expect(profileRoleLabel(null)).toBe("구직자");
 		expect(profileRoleLabel(undefined)).toBe("구직자");
 		expect(profileRoleLabel("unknown_role")).toBe("구직자");
+	});
+});
+
+describe("accountStatusBadge", () => {
+	it("계정 상태를 한글 라벨과 Pill 톤으로 바꾼다", () => {
+		expect(accountStatusBadge("active")).toEqual({
+			label: "정상",
+			tone: "success",
+		});
+		expect(accountStatusBadge("warned")).toEqual({
+			label: "주의",
+			tone: "warning",
+		});
+		expect(accountStatusBadge("suspended")).toEqual({
+			label: "정지",
+			tone: "danger",
+		});
+	});
+
+	it("미등록·빈 상태는 enum 원값 대신 중립 문구로 떨어뜨린다", () => {
+		expect(accountStatusBadge(null)).toEqual({
+			label: "확인 필요",
+			tone: "neutral",
+		});
+		expect(accountStatusBadge(undefined).label).toBe("확인 필요");
+		expect(accountStatusBadge("deleted").label).toBe("확인 필요");
 	});
 });
 

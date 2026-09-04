@@ -69,8 +69,8 @@ export default function EmployerTabsLayout() {
 			<Tabs.Screen
 				name="me"
 				options={{
-					tabBarIcon: tabIcon("person", "person-outline"),
-					title: "내 정보",
+					tabBarIcon: tabIcon("business", "business-outline"),
+					title: "업체관리",
 				}}
 			/>
 		</Tabs>
