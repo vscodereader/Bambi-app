@@ -162,6 +162,7 @@ function OwnedJobsSection({
 				<Text className="text-muted text-sm">총 {sortedJobs.length}건</Text>
 			</View>
 			<FieldSelect
+				isLabelHidden
 				label="정렬"
 				onChange={(value) => {
 					setSort(value as EmployerJobSort);

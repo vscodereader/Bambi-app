@@ -10,6 +10,9 @@ export interface FieldSelectOption {
 
 export interface FieldSelectProps {
 	errorMessage?: string;
+	// 트리거 위 라벨을 감춘다. 라벨 문자열 자체는 계속 받는다 — 시트 제목과 스크린리더가
+	// 쓴다(폼 밖에서 트리거만 놓고 쓰는 목록 정렬 같은 자리용).
+	isLabelHidden?: boolean;
 	isRequired?: boolean;
 	label: string;
 	onChange: (value: string) => void;
@@ -30,6 +33,7 @@ const DEFAULT_SNAP_POINTS = ["50%"];
 
 export function FieldSelect({
 	errorMessage,
+	isLabelHidden = false,
 	isRequired = false,
 	label,
 	onChange,
@@ -58,7 +62,7 @@ export function FieldSelect({
 	return (
 		<View className="gap-2">
 			{/* 필수 표시는 heroui Label에 맡긴다 — TextField 라벨과 서체·별표가 어긋나지 않는다. */}
-			<Label isRequired={isRequired}>{label}</Label>
+			{isLabelHidden ? null : <Label isRequired={isRequired}>{label}</Label>}
 			<Select
 				onValueChange={handleValueChange}
 				presentation="bottom-sheet"
@@ -68,6 +72,8 @@ export function FieldSelect({
 				    코럴 덩어리가 되어 하단 등록 CTA와 색 위계가 뒤집힌다. 두께는 기본(1)을 그대로
 				    둬서 아직 안 고른 필드와 높이가 어긋나지 않는다. */}
 				<Select.Trigger
+					// 라벨을 감추면 트리거만 남아 스크린리더가 무엇을 고르는지 모른다.
+					accessibilityLabel={isLabelHidden ? label : undefined}
 					className={selectedOption ? "border-accent" : undefined}
 				>
 					<Select.Value placeholder={placeholder} />
