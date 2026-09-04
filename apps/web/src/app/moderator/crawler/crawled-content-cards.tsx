@@ -53,10 +53,12 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageControls } from "@/components/bambi/page-controls";
-import { communityCrawledPath } from "@/lib/bambi/community";
+import {
+	communityCrawledPath,
+	crawledCommunityEditPath,
+} from "@/lib/bambi/community";
 import {
 	CRAWLED_JOB_PAGE_SIZE,
 	type CrawledJobStatusFilter,
@@ -608,6 +610,7 @@ export function CrawledJobPostsCard() {
 }
 
 export function CrawledCommunityTopicsCard() {
+	const boardsQuery = useQuery(orpc.bambi.communityBoards.list.queryOptions());
 	const invalidate = useInvalidateCrawled();
 	const [topicFilter, setTopicFilter] = useState<TopicFilter>("all");
 	const [page, setPage] = useState(1);
@@ -725,7 +728,9 @@ export function CrawledCommunityTopicsCard() {
 											</TableCell>
 											{/* 게시판명은 상대 사이트가 적어둔 원문 문구다(우리 게시판 enum이 아님). */}
 											<TableCell className="whitespace-nowrap">
-												{topic.boardName ?? "—"}
+												{boardsQuery.data?.find(
+													(board) => board.key === topic.boardKey
+												)?.label ?? "—"}
 											</TableCell>
 											<TableCell className="whitespace-nowrap">
 												{topic.sourcePostedAt
@@ -763,6 +768,22 @@ export function CrawledCommunityTopicsCard() {
 														}
 													/>
 													<DropdownMenuContent align="end" className="w-36">
+														<DropdownMenuItem
+															render={
+																<Link
+																	href={
+																		crawledCommunityEditPath(
+																			topic.id,
+																			true
+																		) as Route
+																	}
+																	rel="noopener noreferrer"
+																	target="_blank"
+																>
+																	편집
+																</Link>
+															}
+														/>
 														{topic.removedAt ? (
 															<DropdownMenuItem
 																disabled={isPending}
