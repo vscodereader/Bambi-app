@@ -1,5 +1,4 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
-import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import {
 	Alert,
@@ -8,15 +7,12 @@ import {
 	Input,
 	Label,
 	TextField,
-	useThemeColor,
 } from "heroui-native";
-import { type ReactElement, type ReactNode, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { ReactElement, ReactNode } from "react";
+import { Pressable, Text, View } from "react-native";
 
 import {
 	CARD_PAYMENT_NOTICE,
-	describeAdSelection,
 	FREE_EXPOSURE_LABEL,
 	formatAdPrice,
 	formatAdPriceLabel,
@@ -348,13 +344,19 @@ function BankAccounts({
 	);
 }
 
-// 모달 본문. 모든 서버 조회·파생·값 변경 로직이 여기 모인다 — 표시 컴포넌트들에 props로 내려준다.
-function ExposureModalBody({
+// 노출 상품·결제 섹션 본문. 모든 서버 조회·파생·값 변경 로직이 여기 모인다 — 표시
+// 컴포넌트들에 props로 내려준다. 예전엔 요약 행+전체화면 모달이 이 파일에 있었지만, 이제
+// 폼이 2단계(작성 → 노출·결제)를 소유하고 그 2단계 화면이 이 섹션을 그대로 스크롤에 담는다.
+// 그래서 여기는 껍데기 없이 내용만 렌더한다(유일한 소비자는 폼이다).
+export function JobExposureSection({
 	bannerSlot,
+	errorMessage,
 	onChange,
 	value,
 }: {
 	bannerSlot?: ReactNode;
+	// 필수 배너 미충족 게이트 메시지. 배너 슬롯 옆에 붙여 어디를 채워야 하는지 짚어 준다.
+	errorMessage?: string;
 	onChange: (next: NativeExposureState) => void;
 	value: NativeExposureState;
 }): ReactElement {
@@ -505,6 +507,14 @@ function ExposureModalBody({
 			{/* 배너 픽커 — 폼이 선택 상품에 맞춰 넘겨줄 때만 그린다. */}
 			{bannerSlot}
 
+			{/* 필수 배너 미충족 등 게이트 메시지 — 배너 슬롯 바로 아래에 두어 무엇을 채워야
+			    등록되는지 그 자리에서 보이게 한다(등록 CTA 옆 사유와 이중으로 알린다). */}
+			{errorMessage ? (
+				<Text className="text-danger text-xs" selectable>
+					{errorMessage}
+				</Text>
+			) : null}
+
 			{pointsEnabled ? (
 				<PointsField
 					balance={jobPayment?.balance ?? 0}
@@ -527,93 +537,5 @@ function ExposureModalBody({
 
 			{isPaid ? <BankAccounts accounts={accountsQuery.data ?? []} /> : null}
 		</>
-	);
-}
-
-export function JobExposureSection({
-	bannerSlot,
-	errorMessage,
-	onChange,
-	value,
-}: {
-	bannerSlot?: ReactNode;
-	errorMessage?: string;
-	onChange: (next: NativeExposureState) => void;
-	value: NativeExposureState;
-}): ReactElement {
-	// 모달 열림 여부만 로컬 state로 소유한다 — 실제 값은 전부 value/onChange로만 흐른다.
-	const [open, setOpen] = useState(false);
-	const insets = useSafeAreaInsets();
-	const mutedColor = useThemeColor("muted");
-	const foregroundColor = useThemeColor("foreground");
-
-	return (
-		<View className="gap-2">
-			<Label>노출 상품</Label>
-			{/* 요약 행 — 폼 본문에 항상 보인다. 누르면 전체화면 모달이 열린다. */}
-			<Pressable
-				accessibilityHint="노출 상품과 결제 방법을 고르는 화면을 엽니다"
-				accessibilityLabel={`노출 상품: ${describeAdSelection(value.selection)}`}
-				accessibilityRole="button"
-				className="min-h-11 flex-row items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3 active:opacity-75"
-				onPress={() => setOpen(true)}
-			>
-				<Text
-					className="min-w-0 flex-1 text-foreground text-sm"
-					numberOfLines={1}
-				>
-					{describeAdSelection(value.selection)}
-				</Text>
-				<Ionicons color={mutedColor} name="chevron-forward" size={20} />
-			</Pressable>
-			{errorMessage ? (
-				<Text className="text-danger text-xs" selectable>
-					{errorMessage}
-				</Text>
-			) : null}
-
-			<Modal
-				animationType="slide"
-				onRequestClose={() => setOpen(false)}
-				presentationStyle="fullScreen"
-				visible={open}
-			>
-				<View
-					className="flex-1 bg-background"
-					style={{ paddingTop: insets.top }}
-				>
-					{/* 스택 화면처럼 상단 바: 닫기(X) · 제목 · 완료. 값은 이미 실시간 반영되므로 둘 다 닫기만 한다. */}
-					<View className="h-14 flex-row items-center justify-between border-border border-b px-4">
-						<Pressable
-							accessibilityLabel="노출 상품 선택 닫기"
-							accessibilityRole="button"
-							className="h-11 w-11 items-center justify-center rounded-2xl border border-border bg-surface active:opacity-75"
-							hitSlop={8}
-							onPress={() => setOpen(false)}
-						>
-							<Ionicons color={foregroundColor} name="close" size={22} />
-						</Pressable>
-						<Text className="font-bold text-foreground text-lg">
-							노출 상품·결제
-						</Text>
-						<Button onPress={() => setOpen(false)} size="sm" variant="primary">
-							<Button.Label>완료</Button.Label>
-						</Button>
-					</View>
-
-					<ScrollView
-						className="flex-1"
-						contentContainerClassName="gap-5 p-4"
-						contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-					>
-						<ExposureModalBody
-							bannerSlot={bannerSlot}
-							onChange={onChange}
-							value={value}
-						/>
-					</ScrollView>
-				</View>
-			</Modal>
-		</View>
 	);
 }

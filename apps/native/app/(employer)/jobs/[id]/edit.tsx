@@ -23,6 +23,8 @@ const GCS_PUBLIC_BASE_URL = env.EXPO_PUBLIC_GCS_PUBLIC_BASE_URL;
 
 const toNativeJobForm = (job: {
 	description: string;
+	// 세부지역(시군구). 미선택으로 저장된 공고는 null이다.
+	districtCode: null | string;
 	industryCategory: string;
 	interviewNotes: null | string;
 	organizationId: string;
@@ -35,6 +37,7 @@ const toNativeJobForm = (job: {
 	workSchedule: string;
 }): NativeJobForm => ({
 	description: job.description,
+	districtCode: job.districtCode ?? "",
 	industryCategory: job.industryCategory,
 	interviewNotes: job.interviewNotes ?? "",
 	organizationId: job.organizationId,

@@ -37,10 +37,11 @@ const jobPayUnitTones = {
 // 미설정(개발)이면 커버를 못 만들어 카드가 업소명 타일로 폴백한다.
 const GCS_PUBLIC_BASE_URL = env.EXPO_PUBLIC_GCS_PUBLIC_BASE_URL;
 
-// 커버 이미지가 없는 공고는 웹 카드와 동일하게 업소명 앞 두 글자 타일(size-14)로 폴백한다.
+// 커버 이미지가 없는 공고는 업소명 앞 두 글자 타일로 폴백한다. 크기는 커버 썸네일과 같은
+// h-14 w-30 — 정사각형(size-14)이면 커버 있는 카드와 제목 시작 위치가 어긋나 목록이 들쭉날쭉했다.
 function JobCompanyTile({ name }: { name: string }) {
 	return (
-		<View className="size-14 shrink-0 items-center justify-center rounded-md bg-accent/10">
+		<View className="h-14 w-30 shrink-0 items-center justify-center rounded-md bg-accent/10">
 			<Text className="font-bold text-accent-soft-foreground text-sm dark:text-accent">
 				{Array.from(name).slice(0, 2).join("")}
 			</Text>

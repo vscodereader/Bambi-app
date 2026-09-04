@@ -31,6 +31,8 @@ export interface NativeRoleTab {
 
 export interface NativeJobForm {
 	description: string;
+	// 시/도(regionCode) 안의 시군구. 빈 문자열이면 미선택 = "시/도 전체"(서버가 키 없음으로 처리).
+	districtCode: string;
 	industryCategory: string;
 	interviewNotes: string;
 	organizationId: string;
@@ -47,6 +49,8 @@ export interface NativeJobPostInput {
 	beginnerFriendly?: boolean;
 	description: string;
 	descriptionBlocks?: JobDescriptionBlock[];
+	// 세부지역(시군구). 미선택이면 웹 폼과 같이 키 자체를 빼서 보낸다(서버가 "시/도 전체").
+	districtCode?: string;
 	exposureAmount?: null | number;
 	exposureDurationDays?: null | number;
 	// 서버 입력이 업종 enum이라 제출 페이로드는 확정 목록 값으로 좁힌다(폼 상태는 string 유지).
@@ -129,6 +133,8 @@ export const verificationStatusLabels = {
 
 export const emptyNativeJobForm: NativeJobForm = {
 	description: "",
+	// 세부지역은 선택 항목이라 기본은 미선택(빈 문자열).
+	districtCode: "",
 	industryCategory: industryOptions[0] ?? "",
 	interviewNotes: "",
 	organizationId: "",
@@ -148,6 +154,21 @@ const isLengthBetween = (value: string, min: number, max: number): boolean =>
 
 const findFirstError = (errors: NativeJobFormErrors): string | undefined =>
 	Object.values(errors).find((message) => Boolean(message));
+
+// 세부지역(선택 항목) 검증. 값이 없으면 빈 객체라 errors에 키가 남지 않고, 값이 있으면
+// regionCode와 같은 10자리만 허용한다. 오류 없음도 빈 객체로 돌려 호출부가 분기 없이 합친다.
+const districtCodeErrors = (districtCode: string): NativeJobFormErrors =>
+	districtCode && districtCode.length !== REGION_CODE_LENGTH
+		? { districtCode: "세부지역을 다시 선택해 주세요." }
+		: {};
+
+// 협의 단위면 금액을 받지 않고, 그 외 단위만 1 이상 정수를 요구한다. 검증 함수의 인지
+// 복잡도를 낮추려 조건식을 이름 있는 헬퍼로 뺐다(동작은 그대로).
+const isValidPayAmount = (
+	payAmount: null | number,
+	isNegotiable: boolean
+): boolean =>
+	isNegotiable || (Number.isInteger(payAmount) && (payAmount ?? 0) > 0);
 
 // 앱 시작 홈은 역할과 무관하게 구직자 홈이다(웹 redirectToRoleHome과 같은 규칙 —
 // 루트는 항상 /seeker로 보내고, 구인자·운영자는 하단 탭의 역할 탭으로 자기 영역에 들어간다).
@@ -215,6 +236,7 @@ export const validateNativeJobForm = (
 	const title = trim(form.title);
 	const industryCategory = trim(form.industryCategory);
 	const regionCode = trim(form.regionCode);
+	const districtCode = trim(form.districtCode);
 	const payAmountText = trim(form.payAmount);
 	const payUnit = trim(form.payUnit);
 	const workSchedule = trim(form.workSchedule);
@@ -247,6 +269,11 @@ export const validateNativeJobForm = (
 		errors.regionCode = "지역을 선택해 주세요.";
 	}
 
+	// 세부지역은 선택 항목이라 비어 있으면 오류가 아니다. 값이 있으면 regionCode와 같은
+	// 10자리(법정동코드)만 서버가 받으므로 그 길이만 확인한다. 검증 함수의 인지 복잡도가
+	// 이미 상한이라 분기를 늘리지 않으려고 헬퍼 결과를 합쳐 넣는다.
+	Object.assign(errors, districtCodeErrors(districtCode));
+
 	const isNegotiable = payUnit === NEGOTIABLE_PAY_UNIT;
 	const payAmount = isNegotiable ? null : Number(payAmountText);
 
@@ -254,10 +281,7 @@ export const validateNativeJobForm = (
 		errors.payUnit = "급여 단위를 선택해 주세요.";
 	}
 
-	// 협의는 금액을 받지 않는다. 그 외 단위만 1 이상 정수를 요구한다.
-	if (
-		!(isNegotiable || (Number.isInteger(payAmount) && (payAmount ?? 0) > 0))
-	) {
+	if (!isValidPayAmount(payAmount, isNegotiable)) {
 		errors.payAmount = "급여 금액은 1 이상의 정수로 입력해 주세요.";
 	}
 
@@ -296,6 +320,9 @@ export const validateNativeJobForm = (
 	return {
 		input: {
 			description,
+			// 미선택이면 키 자체를 뺀다(undefined를 넣으면 키가 남아 서버가 "시/도 전체"로
+			// 처리하지 못한다). 웹 폼과 같은 취급이다.
+			...(districtCode ? { districtCode } : {}),
 			// 위 검증이 industryOptions 소속을 보장한 뒤에만 이 분기에 온다.
 			industryCategory: industryCategory as NativeIndustryOption,
 			interviewNotes: interviewNotes || undefined,

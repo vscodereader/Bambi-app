@@ -168,6 +168,66 @@ describe("bambi native helpers", () => {
 		}
 	});
 
+	it("세부지역 미선택이면 통과하고 payload에 districtCode 키가 없다", () => {
+		const result = validateNativeJobForm({
+			...emptyNativeJobForm,
+			description: "상세 설명은 10자 이상 입력해야 합니다.",
+			districtCode: "",
+			industryCategory: "룸싸롱",
+			organizationId: "org-1",
+			payAmount: "180000",
+			payUnit: "일급",
+			regionCode: "1168000000",
+			title: "강남 라운지 스태프",
+			workSchedule: "20:00-02:00",
+		});
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect("districtCode" in result.input).toBe(false);
+		}
+	});
+
+	it("세부지역 10자리면 통과하고 payload에 districtCode를 싣는다", () => {
+		const result = validateNativeJobForm({
+			...emptyNativeJobForm,
+			description: "상세 설명은 10자 이상 입력해야 합니다.",
+			districtCode: "1168010100",
+			industryCategory: "룸싸롱",
+			organizationId: "org-1",
+			payAmount: "180000",
+			payUnit: "일급",
+			regionCode: "1168000000",
+			title: "강남 라운지 스태프",
+			workSchedule: "20:00-02:00",
+		});
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.input.districtCode).toBe("1168010100");
+		}
+	});
+
+	it("세부지역 길이가 10자리가 아니면 districtCode 오류를 준다", () => {
+		const result = validateNativeJobForm({
+			...emptyNativeJobForm,
+			description: "상세 설명은 10자 이상 입력해야 합니다.",
+			districtCode: "116801",
+			industryCategory: "룸싸롱",
+			organizationId: "org-1",
+			payAmount: "180000",
+			payUnit: "일급",
+			regionCode: "1168000000",
+			title: "강남 라운지 스태프",
+			workSchedule: "20:00-02:00",
+		});
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.errors.districtCode).toBe("세부지역을 다시 선택해 주세요.");
+		}
+	});
+
 	it("splits login ids by @ like the web form", () => {
 		expect(isEmailLoginId("seeker@bambi.dev")).toBe(true);
 		expect(isEmailLoginId("seeker_01")).toBe(false);
