@@ -5,16 +5,11 @@
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { toFullJobDescription } from "@bambi-app/api/services/bambi-job-description-blocks";
-import {
-	DEFAULT_USER_OFFLINE_AFTER_MINUTES,
-	isUserOnline,
-} from "@bambi-app/api/services/bambi-user-presence";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	createContext,
 	type ReactNode,
 	useContext,
-	useEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -37,10 +32,6 @@ import type {
 	ReportTargetType,
 	UserStatus,
 } from "@/lib/bambi/types";
-import {
-	resolveLivePresenceSnapshot,
-	useModeratorPresenceStream,
-} from "@/lib/bambi/use-moderator-presence-stream";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
@@ -54,6 +45,7 @@ export const QUEUE_VERDICT_TOAST: Record<QueueVerdict, string> = {
 };
 
 export type ModerationBulkScope = "queue" | "reports" | "users";
+export const MODERATION_USERS_QUERY_INPUT = { limit: 1000 } as const;
 export type ModerationBulkAction =
 	| "approve"
 	| "dismiss"
@@ -416,19 +408,14 @@ type RawManagedUser = Awaited<
 	ReturnType<AppRouterClient["bambi"]["moderation"]["listUsers"]>
 >[number];
 
-const toManagedUser = ({
-	event,
-	item,
-	now,
-	offlineAfterMinutes,
-}: {
-	event: Parameters<typeof resolveLivePresenceSnapshot>[0];
-	item: RawManagedUser;
-	now: number;
-	offlineAfterMinutes: number;
-}): ManagedUser => {
-	const { deletedAt, lastActivityAt, presenceDisconnectedAt } =
-		resolveLivePresenceSnapshot(event, item);
+const toManagedUser = ({ item }: { item: RawManagedUser }): ManagedUser => {
+	const deletedAt = item.deletedAt ? new Date(item.deletedAt) : null;
+	const lastActivityAt = item.lastActivityAt
+		? new Date(item.lastActivityAt)
+		: null;
+	const presenceDisconnectedAt = item.presenceDisconnectedAt
+		? new Date(item.presenceDisconnectedAt)
+		: null;
 	return {
 		birthDate: item.birthDate ?? null,
 		blockedByCount: item.blockedByCount,
@@ -436,13 +423,7 @@ const toManagedUser = ({
 		email: item.email,
 		grade: item.grade,
 		id: item.userId,
-		isOnline: isUserOnline({
-			deletedAt,
-			lastActivityAt,
-			now: new Date(now),
-			offlineAfterMinutes,
-			presenceDisconnectedAt,
-		}),
+		isOnline: item.isOnline,
 		isPhoneVerified: item.isPhoneVerified,
 		joined: formatDate(item.createdAt),
 		joinedAt: new Date(item.createdAt),
@@ -453,6 +434,7 @@ const toManagedUser = ({
 			? "휴대폰 인증 완료"
 			: "휴대폰 인증이 필요합니다.",
 		organizationNames: item.organizationNames,
+		offlineAfterMinutes: item.offlineAfterMinutes,
 		phoneNumber: item.phoneNumber ?? null,
 		pointBalance: item.pointBalance,
 		presenceDisconnectedAt,
@@ -484,30 +466,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		// 운영자 콘솔은 전체 계정을 관리해야 하므로 넉넉한 상한으로 조회한다(목록은
 		// DataTable에서 클라이언트 페이징). 계정이 이 상한을 넘어서면 서버 페이징 필요.
 		orpc.bambi.moderation.listUsers.queryOptions({
-			input: { limit: 1000 },
+			input: MODERATION_USERS_QUERY_INPUT,
 		})
 	);
-	const presencePolicyQuery = useQuery(
-		orpc.bambi.siteSettings.getPresencePolicy.queryOptions()
-	);
-	const livePresence = useModeratorPresenceStream();
-	useEffect(() => {
-		if (livePresence.reconnectRevision <= 1) {
-			return;
-		}
-		queryClient
-			.invalidateQueries({
-				queryKey: orpc.bambi.moderation.listUsers.queryKey({
-					input: { limit: 1000 },
-				}),
-			})
-			.catch(() => undefined);
-		queryClient
-			.invalidateQueries({
-				queryKey: orpc.bambi.siteSettings.getPresencePolicy.queryKey(),
-			})
-			.catch(() => undefined);
-	}, [livePresence.reconnectRevision, queryClient]);
 	const setJobPostStatusMutation = useMutation(
 		orpc.bambi.moderation.setJobPostStatus.mutationOptions()
 	);
@@ -642,17 +603,8 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				time: formatDate(item.createdAt),
 			};
 		});
-		const offlineAfterMinutes =
-			livePresence.policyMinutes ??
-			presencePolicyQuery.data?.offlineAfterMinutes ??
-			DEFAULT_USER_OFFLINE_AFTER_MINUTES;
 		const apiUsers = moderationUsersQuery.data?.map((item) =>
-			toManagedUser({
-				event: livePresence.users.get(item.userId),
-				item,
-				now: livePresence.now,
-				offlineAfterMinutes,
-			})
+			toManagedUser({ item })
 		);
 		const visibleQueue = apiQueue ?? [];
 		const visibleReports = apiReports ?? [];
@@ -713,7 +665,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			const invalidations = [
 				queryClient.invalidateQueries({
 					queryKey: orpc.bambi.moderation.listUsers.queryKey({
-						input: { limit: 1000 },
+						input: MODERATION_USERS_QUERY_INPUT,
 					}),
 				}),
 			];
@@ -1077,8 +1029,6 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		moderationUsersQuery.data,
 		moderationUsersQuery.isError,
 		moderationUsersQuery.isPending,
-		livePresence,
-		presencePolicyQuery.data?.offlineAfterMinutes,
 		queryClient,
 		restoreWithdrawnAccountMutation,
 		revertLatestWarningMutation,

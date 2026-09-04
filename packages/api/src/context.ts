@@ -101,7 +101,7 @@ export async function createContext(req: IncomingHttpHeaders) {
 	const hasUserActivity =
 		headerValue(req, USER_ACTIVITY_HEADER) === USER_ACTIVITY_HEADER_VALUE;
 	if (session?.user && hasUserActivity) {
-		await recordUserActivity(session.user.id);
+		await recordUserActivity(session.user.id).catch(() => false);
 	}
 	return {
 		auth: null,

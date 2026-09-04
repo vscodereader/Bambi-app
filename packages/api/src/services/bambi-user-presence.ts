@@ -6,9 +6,13 @@ export const USER_ACTIVITY_SIGNAL_TTL_MS = 10_000;
 export const USER_PRESENCE_CONNECTION_LEASE_MS = 90_000;
 export const USER_PRESENCE_CONNECTION_RENEW_MS = 30_000;
 export const USER_PRESENCE_CHANNEL = "bambi_user_presence";
+export const USER_PRESENCE_CONNECTION_ID_QUERY = "connectionId";
+export const USER_PRESENCE_DISCONNECT_PATH = "/presence/disconnect";
+export const USER_PRESENCE_SSE_PATH = "/sse/presence";
 export const USER_PRESENCE_SSE_EVENT = "bambi:presence";
 export const USER_PRESENCE_SSE_HEARTBEAT_EVENT = "bambi:presence-ping";
 export const POSTGRES_INTEGER_MAX = 2_147_483_647;
+const MILLISECONDS_PER_MINUTE = 60_000;
 
 export interface UserPresenceSnapshot {
 	deletedAt: Date | null;
@@ -17,6 +21,9 @@ export interface UserPresenceSnapshot {
 }
 
 export type UserPresenceEvent =
+	| {
+			type: "resync";
+	  }
 	| {
 			deletedAt: number | null;
 			lastActivityAt: number | null;
@@ -55,7 +62,8 @@ export const isUserOnline = ({
 	}
 
 	return (
-		now.getTime() - lastActivityAt.getTime() < offlineAfterMinutes * 60_000
+		now.getTime() - lastActivityAt.getTime() <
+		offlineAfterMinutes * MILLISECONDS_PER_MINUTE
 	);
 };
 
@@ -64,7 +72,9 @@ export const getUserPresenceExpiryAt = (
 	offlineAfterMinutes: number
 ): Date | null =>
 	lastActivityAt
-		? new Date(lastActivityAt.getTime() + offlineAfterMinutes * 60_000)
+		? new Date(
+				lastActivityAt.getTime() + offlineAfterMinutes * MILLISECONDS_PER_MINUTE
+			)
 		: null;
 
 export const parseUserPresenceEvent = (
@@ -72,6 +82,9 @@ export const parseUserPresenceEvent = (
 ): UserPresenceEvent | null => {
 	try {
 		const parsed = JSON.parse(raw) as Partial<UserPresenceEvent>;
+		if (parsed.type === "resync") {
+			return { type: "resync" };
+		}
 		if (parsed.type === "policy") {
 			return typeof parsed.offlineAfterMinutes === "number" ||
 				parsed.offlineAfterMinutes === null

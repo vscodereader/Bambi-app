@@ -5,6 +5,7 @@ import {
 	parseUserPresenceEvent,
 	USER_ACTIVITY_WRITE_INTERVAL_MS,
 	USER_PRESENCE_SSE_EVENT,
+	USER_PRESENCE_SSE_PATH,
 	type UserPresenceEvent,
 } from "@bambi-app/api/services/bambi-user-presence";
 import { env } from "@bambi-app/env/web";
@@ -39,7 +40,7 @@ const open = (): void => {
 		return;
 	}
 	const nextSource = new EventSource(
-		`${env.NEXT_PUBLIC_SERVER_URL}/sse/presence`,
+		`${env.NEXT_PUBLIC_SERVER_URL}${USER_PRESENCE_SSE_PATH}`,
 		{ withCredentials: true }
 	);
 	nextSource.addEventListener("open", () => {
@@ -50,6 +51,10 @@ const open = (): void => {
 			(message as MessageEvent<string>).data
 		);
 		if (!event) {
+			return;
+		}
+		if (event.type === "resync") {
+			emit({ reconnectRevision: snapshot.reconnectRevision + 1 });
 			return;
 		}
 		if (event.type === "policy") {
@@ -89,7 +94,7 @@ const subscribe = (listener: () => void): (() => void) => {
 
 const getSnapshot = (): PresenceStoreSnapshot => snapshot;
 const serverSnapshot: PresenceStoreSnapshot = {
-	now: 0,
+	now: Date.now(),
 	policyMinutes: DEFAULT_USER_OFFLINE_AFTER_MINUTES,
 	reconnectRevision: 0,
 	users: new Map(),

@@ -4,7 +4,11 @@
 // 이 화면은 상태·역할·인증·누적 신고/경고 필터와 이름·이메일·아이디 검색을 클라이언트에서
 // 적용한다. 레이아웃·필터·빈 상태 패턴은 공고 관리(/moderator/jobs)와 동일하다.
 
-import { POSTGRES_INTEGER_MAX } from "@bambi-app/api/services/bambi-user-presence";
+import {
+	DEFAULT_USER_OFFLINE_AFTER_MINUTES,
+	isUserOnline,
+	POSTGRES_INTEGER_MAX,
+} from "@bambi-app/api/services/bambi-user-presence";
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
@@ -29,10 +33,17 @@ import {
 	legalAdvisorChoice,
 	ReasonConfirmSheet,
 } from "@/components/bambi/screens/moderator";
-import { useMod } from "@/components/bambi/screens/moderator-context";
+import {
+	MODERATION_USERS_QUERY_INPUT,
+	useMod,
+} from "@/components/bambi/screens/moderator-context";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { MODERATOR_ACCOUNT_CREATE_PATH } from "@/lib/bambi/moderator-navigation";
 import type { ManagedUser } from "@/lib/bambi/types";
+import {
+	resolveLivePresenceSnapshot,
+	useModeratorPresenceStream,
+} from "@/lib/bambi/use-moderator-presence-stream";
 import { orpc } from "@/utils/orpc";
 
 // 탈퇴는 계정 상태 enum이 아니라 deletedAt 유무지만, 운영자 눈에는 같은 축이라 함께 둔다.
@@ -105,6 +116,24 @@ export default function ModeratorUsersPage() {
 	const presencePolicyQuery = useQuery(
 		orpc.bambi.siteSettings.getPresencePolicy.queryOptions()
 	);
+	const livePresence = useModeratorPresenceStream();
+	useEffect(() => {
+		if (livePresence.reconnectRevision <= 1) {
+			return;
+		}
+		queryClient
+			.invalidateQueries({
+				queryKey: orpc.bambi.moderation.listUsers.queryKey({
+					input: MODERATION_USERS_QUERY_INPUT,
+				}),
+			})
+			.catch(() => undefined);
+		queryClient
+			.invalidateQueries({
+				queryKey: orpc.bambi.siteSettings.getPresencePolicy.queryKey(),
+			})
+			.catch(() => undefined);
+	}, [livePresence.reconnectRevision, queryClient]);
 	const [offlineAfterMinutes, setOfflineAfterMinutes] = useState("");
 	useEffect(() => {
 		if (presencePolicyQuery.data) {
@@ -201,10 +230,38 @@ export default function ModeratorUsersPage() {
 		updatePresencePolicy.mutate({ offlineAfterMinutes: value });
 	};
 
+	const liveUsers = useMemo(() => {
+		const offlineAfter =
+			livePresence.policyMinutes ??
+			presencePolicyQuery.data?.offlineAfterMinutes ??
+			DEFAULT_USER_OFFLINE_AFTER_MINUTES;
+		return users
+			.map((user) => {
+				const snapshot = resolveLivePresenceSnapshot(
+					livePresence.users.get(user.id),
+					user
+				);
+				return {
+					...user,
+					...snapshot,
+					isOnline: isUserOnline({
+						...snapshot,
+						now: new Date(livePresence.now),
+						offlineAfterMinutes: offlineAfter,
+					}),
+					offlineAfterMinutes: offlineAfter,
+				};
+			})
+			.sort(
+				(a, b) =>
+					(b.lastActivityAt?.getTime() ?? 0) -
+					(a.lastActivityAt?.getTime() ?? 0)
+			);
+	}, [livePresence, presencePolicyQuery.data?.offlineAfterMinutes, users]);
 	const filteredUsers = useMemo(() => {
 		const keyword = search.trim().toLowerCase();
 
-		return users.filter(
+		return liveUsers.filter(
 			(user) =>
 				matchesStatus(user, statusFilter) &&
 				(roleFilter === "all" || user.role === ROLE_FILTER_ITEMS[roleFilter]) &&
@@ -214,7 +271,7 @@ export default function ModeratorUsersPage() {
 				matchesKeyword(user, keyword)
 		);
 	}, [
-		users,
+		liveUsers,
 		statusFilter,
 		roleFilter,
 		phoneFilter,

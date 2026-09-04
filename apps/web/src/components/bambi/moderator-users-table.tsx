@@ -77,8 +77,7 @@ function getColumns({
 			header: "접속",
 			headerClassName: "w-12 text-center [&>button]:mx-auto",
 			cellClassName: "h-14 w-12 text-center align-middle",
-			sortValue: (user) =>
-				`${user.isOnline ? "1" : "0"}:${String(user.lastActivityAt?.getTime() ?? 0).padStart(15, "0")}`,
+			sortValue: (user) => (user.isOnline ? 1 : 0),
 			cell: (user) => (
 				<span className="flex justify-center">
 					<UserPresenceIndicator isOnline={user.isOnline} />

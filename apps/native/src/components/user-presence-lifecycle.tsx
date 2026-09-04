@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
 
 import { authClient } from "@/lib/auth-client";
-import { client, runWithoutNativeActivity } from "@/src/lib/orpc";
+import { client } from "@/src/lib/orpc";
 
 export function UserPresenceLifecycle() {
 	const connectionId = useRef(generateChatMessageId()).current;
@@ -16,20 +16,37 @@ export function UserPresenceLifecycle() {
 			return;
 		}
 		let connected = false;
+		let shouldBeConnected = AppState.currentState === "active";
+		let connectPromise: Promise<void> | null = null;
 		const connect = async () => {
-			await runWithoutNativeActivity(() =>
-				client.bambi.presence.connect({ connectionId })
-			);
-			connected = true;
+			shouldBeConnected = true;
+			if (connected || connectPromise) {
+				return;
+			}
+			connectPromise = client.bambi.presence
+				.connect({ connectionId })
+				.then(() => {
+					connected = true;
+				});
+			await connectPromise.finally(() => {
+				connectPromise = null;
+			});
+			if (!shouldBeConnected) {
+				await disconnect();
+			}
 		};
 		const disconnect = async () => {
+			shouldBeConnected = false;
+			if (connectPromise) {
+				await connectPromise.catch(() => undefined);
+			}
 			if (!connected) {
 				return;
 			}
 			connected = false;
-			await runWithoutNativeActivity(() =>
-				client.bambi.presence.disconnect({ connectionId })
-			).catch(() => undefined);
+			await client.bambi.presence
+				.disconnect({ connectionId })
+				.catch(() => undefined);
 		};
 
 		if (AppState.currentState === "active") {
@@ -49,9 +66,7 @@ export function UserPresenceLifecycle() {
 			if (!connected || AppState.currentState !== "active") {
 				return;
 			}
-			runWithoutNativeActivity(() =>
-				client.bambi.presence.renew({ connectionId })
-			).catch(() => undefined);
+			client.bambi.presence.renew({ connectionId }).catch(() => undefined);
 		}, USER_PRESENCE_CONNECTION_RENEW_MS);
 
 		return () => {

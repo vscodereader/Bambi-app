@@ -261,7 +261,7 @@ export const attendanceRouter = {
 
 	adminList: adminProcedure.input(adminListInput).handler(async ({ input }) => {
 		const today = getKstDateString();
-		const offlineAfterMinutesPromise = getUserOfflineAfterMinutes();
+		const offlineAfterMinutes = await getUserOfflineAfterMinutes();
 		const monthStart = `${today.slice(0, 7)}-01`;
 
 		// 집계는 전부 상관 서브쿼리로 뽑는다 — 조인으로 붙이면 출석일 수만큼 user row가
@@ -362,7 +362,6 @@ export const attendanceRouter = {
 			pageRows.map((row) => row.userId)
 		);
 
-		const offlineAfterMinutes = await offlineAfterMinutesPromise;
 		const now = new Date();
 		return {
 			items: pageRows.map((row) => ({

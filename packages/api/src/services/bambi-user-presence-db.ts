@@ -15,7 +15,7 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
-
+import { SITE_SETTINGS_ROW_ID } from "./bambi-point-settings";
 import {
 	resolveUserOfflineAfterMinutes,
 	USER_ACTIVITY_WRITE_INTERVAL_MS,
@@ -23,7 +23,6 @@ import {
 } from "./bambi-user-presence";
 
 export type UserPresencePlatform = "native" | "web";
-const SITE_SETTINGS_ROW_ID = "default";
 
 export const getUserOfflineAfterMinutes = async (): Promise<number> => {
 	const [row] = await db
@@ -114,6 +113,10 @@ export const registerUserPresenceConnection = async ({
 					eq(userPresenceConnection.userId, userId)
 				)
 			);
+		await tx
+			.update(user)
+			.set({ presenceDisconnectedAt: null })
+			.where(eq(user.id, userId));
 	});
 };
 

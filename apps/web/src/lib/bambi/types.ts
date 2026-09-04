@@ -255,6 +255,7 @@ export interface ManagedUser {
 	loginId: null | string;
 	name: string;
 	note: string;
+	offlineAfterMinutes: number;
 	// 소속 업소 표시명(구인자만 채워진다).
 	organizationNames: string[];
 	// 본인인증한 휴대폰 번호. 미인증이면 null.

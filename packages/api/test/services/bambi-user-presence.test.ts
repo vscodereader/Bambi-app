@@ -77,5 +77,8 @@ describe("bambi user presence", () => {
 			)
 		).toMatchObject({ type: "user", userId: "user-1" });
 		expect(parseUserPresenceEvent("invalid")).toBeNull();
+		expect(parseUserPresenceEvent('{"type":"resync"}')).toEqual({
+			type: "resync",
+		});
 	});
 });

@@ -6,6 +6,7 @@ import {
 	USER_PRESENCE_CHANNEL,
 	USER_PRESENCE_SSE_EVENT,
 	USER_PRESENCE_SSE_HEARTBEAT_EVENT,
+	USER_PRESENCE_SSE_PATH,
 } from "@bambi-app/api/services/bambi-user-presence";
 import {
 	resolveRealtimeConnectRateLimit,
@@ -14,9 +15,11 @@ import {
 import { env } from "@bambi-app/env/server";
 import type { FastifyPluginCallback } from "fastify";
 import { Client } from "pg";
+import {
+	REALTIME_HEARTBEAT_INTERVAL_MS,
+	REALTIME_SESSION_RECHECK_EVERY_HEARTBEATS,
+} from "./realtime-connection-policy";
 
-const HEARTBEAT_INTERVAL_MS = 30_000;
-const SESSION_RECHECK_EVERY_HEARTBEATS = 10;
 const RETRY_BASE_MS = 1000;
 const RETRY_MAX_MS = 30_000;
 
@@ -50,6 +53,7 @@ export const presencePlugin: FastifyPluginCallback = (app, _opts, done) => {
 			return;
 		}
 		const client = new Client({ connectionString: env.DATABASE_URL });
+		const isReconnect = reconnectAttempt > 0;
 		client.on("notification", (message) => {
 			if (message.channel !== USER_PRESENCE_CHANNEL || !message.payload) {
 				return;
@@ -86,6 +90,12 @@ export const presencePlugin: FastifyPluginCallback = (app, _opts, done) => {
 			await client.query(`LISTEN ${USER_PRESENCE_CHANNEL}`);
 			listener = client;
 			reconnectAttempt = 0;
+			if (isReconnect) {
+				const payload = JSON.stringify({ type: "resync" });
+				for (const subscriber of subscribers.values()) {
+					subscriber.send(payload);
+				}
+			}
 		} catch (error) {
 			await client.end().catch(() => undefined);
 			throw error;
@@ -97,7 +107,7 @@ export const presencePlugin: FastifyPluginCallback = (app, _opts, done) => {
 		scheduleReconnect();
 	});
 
-	app.get("/sse/presence", async (request, reply) => {
+	app.get(USER_PRESENCE_SSE_PATH, async (request, reply) => {
 		const connectLimit = resolveRealtimeConnectRateLimit({
 			clientIp: clientIpFromHeaders(request.headers),
 			scope: "presence",
@@ -170,12 +180,12 @@ export const presencePlugin: FastifyPluginCallback = (app, _opts, done) => {
 		heartbeatTimer = setInterval(() => {
 			writeEvent(USER_PRESENCE_SSE_HEARTBEAT_EVENT, "{}");
 			heartbeatCount += 1;
-			if (heartbeatCount % SESSION_RECHECK_EVERY_HEARTBEATS === 0) {
+			if (heartbeatCount % REALTIME_SESSION_RECHECK_EVERY_HEARTBEATS === 0) {
 				createContext(request.headers)
 					.then((current) => requireAdminProfile(current.session))
 					.catch(close);
 			}
-		}, HEARTBEAT_INTERVAL_MS);
+		}, REALTIME_HEARTBEAT_INTERVAL_MS);
 		request.raw.on("close", close);
 		raw.on("close", close);
 		raw.on("error", close);

@@ -5,6 +5,7 @@ import {
 	BAMBI_NOTIFICATION_SSE_EVENT,
 	type BambiNotificationEvent,
 } from "@bambi-app/api/services/bambi-notification-stream";
+import { USER_PRESENCE_CONNECTION_ID_QUERY } from "@bambi-app/api/services/bambi-user-presence";
 import { env } from "@bambi-app/env/web";
 import { type QueryKey, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
@@ -121,8 +122,11 @@ function openStream() {
 	}
 
 	const connectionId = getPresenceConnectionId();
+	const query = new URLSearchParams({
+		[USER_PRESENCE_CONNECTION_ID_QUERY]: connectionId,
+	});
 	const source = new EventSource(
-		`${env.NEXT_PUBLIC_SERVER_URL}${NOTIFICATION_STREAM_PATH}?connectionId=${encodeURIComponent(connectionId)}`,
+		`${env.NEXT_PUBLIC_SERVER_URL}${NOTIFICATION_STREAM_PATH}?${query}`,
 		{ withCredentials: true }
 	);
 

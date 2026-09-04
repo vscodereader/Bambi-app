@@ -250,3 +250,18 @@ Server:
 - 사용자 관리와 출석 관리 데이터 행 높이는 모두 기존 56px, `nowrap`이 아닌 데이터 셀은 0개였으며 표 너비는 기존 컨테이너 1070px 안에서 유지됐다.
 - DB·API·Server·Web·Native TypeScript 검사 통과, presence 정책 4건과 Web UI 회귀 7건 통과, 변경 파일 Biome 및 `git diff --check` 통과.
 - 개발 시드의 공고 이미지 파일 부재 경고 외 presence·사용자 관리·출석 관리 관련 브라우저 오류는 없었다.
+
+### PR #291 동료 리뷰 반영
+
+- 연결 재등록이 `presenceDisconnectedAt`을 null로 복구하도록 수정해 SSE 재연결·Native foreground 복귀 뒤 다음 클릭 전까지 오프라인에 고착되는 문제를 해소했다. 재연결은 마지막 활동 시각을 연장하지 않는다.
+- 사용자 목록의 오프라인 기준 조회를 즉시 await해 floating promise의 unhandled rejection 가능성을 제거했다.
+- `createContext`의 presence 부가 기록 실패를 본 요청과 격리해 일시적 DB 오류가 무관한 API를 실패시키지 않게 했다.
+- Web connection id는 `sessionStorage`·Web Crypto 접근을 방어하고 검증된 저장 id → `crypto.randomUUID` → 탭 수명 인메모리 UUID 순으로 폴백한다.
+- presence 구독과 10초 시계 tick을 대형 `ModProvider` 밖으로 옮겨 사용자 목록·사용자 상세·출석 화면만 다시 계산하도록 제한했다.
+- Native 자동 presence 호출 제외를 전역 depth가 아니라 oRPC path 단위로 판정해 동시에 발생한 실제 사용자 요청의 활동 헤더가 사라지지 않게 했다.
+- Native connect 진행 중 background 전환을 `shouldBeConnected`와 in-flight promise로 직렬화해 완료 뒤 유령 lease가 남지 않게 했다.
+- `useSyncExternalStore` 서버 snapshot의 기준시각을 실제 현재시각으로 바꿔 향후 SSR/prefetch에서도 활동 기록 사용자가 잘못 온라인으로 렌더되지 않게 했다.
+- 기존 `SITE_SETTINGS_ROW_ID`, SSE heartbeat·세션 재검사 정책을 재사용하고 presence 경로·query key·분 환산값을 공용 상수로 모았다. 온라인 정렬의 임의 `padStart(15)`도 제거했다.
+- 동료 리뷰 회귀 5건을 추가해 Web UI 12건과 presence 정책 4건이 통과했다. DB·API·Server·Web·Native 타입 검사와 변경 파일 Biome, `git diff --check`가 통과했다.
+- 임시 PostgreSQL 18에서 활동 → 마지막 연결 종료 → 같은 연결 재등록을 실행해 `presence_disconnected_at`이 다시 null이 되는 것을 확인했다.
+- 추가 감사에서 PostgreSQL `LISTEN`만 재연결되고 운영자 SSE는 유지되는 경우의 유실 구간을 발견해, listener 복구 시 `resync` 이벤트를 보내 사용자·설정 정본을 다시 읽도록 보완했다.

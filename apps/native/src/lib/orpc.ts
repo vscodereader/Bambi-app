@@ -15,18 +15,6 @@ import { authClient } from "@/lib/auth-client";
 import { readGuestToken } from "./guest-store";
 
 export const queryClient = new QueryClient();
-let automaticRequestDepth = 0;
-
-export const runWithoutNativeActivity = async <T>(
-	request: () => Promise<T>
-): Promise<T> => {
-	automaticRequestDepth += 1;
-	try {
-		return await request();
-	} finally {
-		automaticRequestDepth -= 1;
-	}
-};
 
 export const link = new RPCLink({
 	url: `${env.EXPO_PUBLIC_SERVER_URL}/rpc`,
@@ -36,13 +24,15 @@ export const link = new RPCLink({
 			credentials: Platform.OS === "web" ? "include" : "omit",
 		});
 	},
-	headers() {
+	headers(_options, path) {
 		if (Platform.OS === "web") {
 			return {};
 		}
 
 		const headers = new Map<string, string>();
-		if (AppState.currentState === "active" && automaticRequestDepth === 0) {
+		const isPresenceLifecycleRequest =
+			path[0] === "bambi" && path[1] === "presence";
+		if (AppState.currentState === "active" && !isPresenceLifecycleRequest) {
 			headers.set(USER_ACTIVITY_HEADER, USER_ACTIVITY_HEADER_VALUE);
 		}
 		const cookies = authClient.getCookie();

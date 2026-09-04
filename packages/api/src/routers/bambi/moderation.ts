@@ -2205,7 +2205,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
 			await normalizeAllExpiredWarningRestrictions();
-			const offlineAfterMinutesPromise = getUserOfflineAfterMinutes();
+			const offlineAfterMinutes = await getUserOfflineAfterMinutes();
 
 			// 계정 목록의 기준 테이블은 user다. bambi_profile은 좌측 조인해 부가 정보로만
 			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다.
@@ -2285,7 +2285,6 @@ export const moderationRouter = {
 				loadGradeBadges(userIds),
 			]);
 
-			const offlineAfterMinutes = await offlineAfterMinutesPromise;
 			const now = new Date();
 			return rows.map((row) => ({
 				...row,
