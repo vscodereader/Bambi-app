@@ -110,7 +110,19 @@ const uploadResolvedSource = async (params: {
 		};
 	}
 
+	// dev 서버(GCS 미구성)는 web 앱의 로컬 업로드 경로("/bambi/local-job-media?…")를 내려준다.
+	// web은 같은 출처라 거기로 PUT하지만 앱은 web 주소를 모른다 — web의 플레이스홀더 건너뛰기와
+	// 같은 규칙으로 dev에서만 업로드를 생략하고 storageKey만 실어 흐름을 잇는다(폼 미리보기는
+	// 로컬 uri라 그대로 보이고, 등록 뒤 목록 커버는 dev에서 폴백이 뜬다). 운영에서 서명 URL이
+	// 아니면 서버 구성 오류이므로 종전대로 막는다.
 	if (!intent.uploadUrl.startsWith("https://")) {
+		if (
+			process.env.NODE_ENV !== "production" &&
+			intent.uploadUrl.startsWith("/")
+		) {
+			return { picked: resolved, storageKey: intent.storageKey };
+		}
+
 		return {
 			error: "지금은 이미지를 등록할 수 없어요. 잠시 후 다시 시도해 주세요.",
 		};
