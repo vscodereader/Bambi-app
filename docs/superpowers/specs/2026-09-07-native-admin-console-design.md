@@ -58,8 +58,8 @@ web의 두 라벨 파일은 이 모듈을 re-export하는 껍데기로 바꾼다
 목록(`(tabs)/index.tsx`)
 
 - `listJobPosts({ limit: 50, status: "pending_review" })` 한 번.
-- Chip 두 줄: 위험도 필터(전체·높음·중간·낮음), 정렬(접수순·최신순·위험도순, 기본 접수순). 클라이언트 처리.
-- 위험도는 `detectedTerms`·`riskFlags`로 web `toApiQueueItem`과 같은 규칙으로 산출한다(공유 모듈).
+- Chip 두 줄: 위험도 필터(전체·감지됨·감지 없음), 정렬(접수순·최신순·감지 우선, 기본 접수순). 클라이언트 처리.
+- 위험도는 web `toApiQueueItem`과 같이 `detectedTerms` 유무 2단계(mid·low)로 산출한다(공유 모듈 `resolveQueueRiskLevel`). web에도 3단계는 없다.
 - 행: 업소명, 제목, 지역, 위험도 Pill, 감지 문구 최대 3개 또는 "감지된 문구 없음", 접수 시각, `#` + id 앞 8자. 탭하면 상세.
 - FlatList + RefreshControl. 빈 목록은 StateCard.
 
