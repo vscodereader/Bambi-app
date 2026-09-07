@@ -2,6 +2,7 @@ import { generateChatMessageId } from "@bambi-app/api/services/bambi-chat-messag
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { resolveUploadUrl } from "@/src/lib/dev-web-url";
 import { readLocalFileBytes } from "@/src/lib/local-file-bytes";
 import { orpc } from "@/src/lib/orpc";
 
@@ -178,23 +179,29 @@ export function useChatSend({
 					mimeType: resolved.mimeType,
 				});
 
-				if (!intent.uploadUrl.startsWith("https://")) {
-					// 서버 GCS 미구성(dev)이면 local:// 플레이스홀더가 온다 — 올리지 않고 멈춘다.
+				// dev 서버(GCS 미구성)는 web 로컬 라우트 상대 URL을 내려주므로 앱이 닿을 절대
+				// URL로 푼다. null이면 운영 구성 오류라 차단, ""이면 web 주소 미설정이라 PUT을
+				// 생략하되 storageKey는 그대로 두고 메시지 전송까지 흐름을 잇는다.
+				const target = resolveUploadUrl(intent.uploadUrl);
+
+				if (target === null) {
 					throw new Error(
 						"지금은 파일을 보낼 수 없어요. 잠시 후 다시 시도해 주세요."
 					);
 				}
 
-				const response = await fetch(intent.uploadUrl, {
-					body: bytes,
-					headers: { "Content-Type": intent.mimeType },
-					method: "PUT",
-				});
+				if (target) {
+					const response = await fetch(target, {
+						body: bytes,
+						headers: { "Content-Type": intent.mimeType },
+						method: "PUT",
+					});
 
-				if (!response.ok) {
-					throw new Error(
-						"파일 업로드에 실패했어요. 잠시 후 다시 시도해 주세요."
-					);
+					if (!response.ok) {
+						throw new Error(
+							"파일 업로드에 실패했어요. 잠시 후 다시 시도해 주세요."
+						);
+					}
 				}
 
 				const trimmed = body.trim();

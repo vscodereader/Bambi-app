@@ -18,6 +18,7 @@ import {
 } from "@/src/components/bambi-screen";
 import { MemberOnly } from "@/src/components/member-only";
 import { publicObjectUri } from "@/src/lib/bambi-native";
+import { resolveUploadUrl } from "@/src/lib/dev-web-url";
 import { readLocalFileBytes } from "@/src/lib/local-file-bytes";
 import {
 	formatBirthDate8,
@@ -101,6 +102,52 @@ const profileImageErrorMessage = (error: unknown): string => {
 	);
 };
 
+// 업로드 인텐트 → PUT 실행 후 저장할 이미지 URL. dev/운영 분기를 여기 모아 handlePick을 얇게 둔다.
+// null이면 "지금은 등록할 수 없음"(운영 구성 오류 또는 저장할 URL 없음)이라 호출부가 안내한다.
+async function uploadProfileImage(
+	intent: { mimeType: string; storageKey: string; uploadUrl: string },
+	bytes: Uint8Array<ArrayBuffer>
+): Promise<null | string> {
+	// dev 서버(GCS 미구성)는 web 앱의 로컬 라우트("/bambi/local-editor-media?key=…&fileName=…",
+	// 상대 URL)를 uploadUrl로 내려준다. web은 같은 출처라 그대로 PUT하지만 앱은
+	// EXPO_PUBLIC_WEB_URL에 붙여야 닿는다 — 거기 올려야 web의 GET이 같은 key로 이미지를 읽는다.
+	// null이면 운영 구성 오류(차단), ""면 web 주소가 없어 업로드만 생략한다.
+	const resolvedUpload = resolveUploadUrl(intent.uploadUrl);
+
+	if (resolvedUpload === null) {
+		return null;
+	}
+
+	// PUT 대상이 있을 때만 올린다. Content-Length는 손대지 않는다 — 네트워크 스택이 채운다.
+	if (resolvedUpload !== "") {
+		const response = await fetch(resolvedUpload, {
+			body: bytes,
+			headers: { "Content-Type": intent.mimeType },
+			method: "PUT",
+		});
+
+		if (!response.ok) {
+			// GCS 오류 본문은 영어 XML이라 화면에 싣지 않는다.
+			throw new Error("upload failed");
+		}
+	}
+
+	// 운영 서명 URL(https)은 공개 객체 URL로 저장한다(env 미설정 폴백: 서명 URL에서 쿼리만 떼면
+	// 같다, gcs.ts:71). dev 상대 경로였으면 resolveUploadUrl이 만든 절대 web URL을 그대로 저장한다
+	// — 쿼리의 key로 web local-editor-media GET이 서빙하므로 쿼리를 떼면 안 된다.
+	if (intent.uploadUrl.startsWith("https://")) {
+		return (
+			publicObjectUri(intent.storageKey, GCS_PUBLIC_BASE_URL) ??
+			intent.uploadUrl.split("?")[0]
+		);
+	}
+
+	// "" 생략 경로는 올린 데가 없어 저장할 절대 URL이 없다 — 폴백만 시도한다(없으면 null).
+	return (
+		resolvedUpload || publicObjectUri(intent.storageKey, GCS_PUBLIC_BASE_URL)
+	);
+}
+
 // 프로필 사진. 웹은 고른 뒤 별도 저장 버튼을 누르는 2단계지만 native는 선택 즉시 반영한다.
 // 아바타 정본은 세션 user.image 하나라(getMine에는 없다) refetch 한 번이면 이 화면과
 // 내 정보 탭 ProfileCard가 함께 갱신된다.
@@ -164,9 +211,10 @@ function ProfileImageCard() {
 			}
 
 			const intent = await uploadMutation.mutateAsync(resolved);
+			const savedImage = await uploadProfileImage(intent, bytes);
 
-			if (!intent.uploadUrl.startsWith("https://")) {
-				// 서버 GCS 미구성(dev)이면 local:// 플레이스홀더가 내려온다 — 올리지 않고 멈춘다.
+			if (!savedImage) {
+				// 운영 구성 오류거나 dev에서 web 주소가 없어 저장할 URL을 못 만든 경우.
 				Alert.alert(
 					"지금은 프로필 사진을 등록할 수 없어요",
 					"잠시 후 다시 시도해 주세요."
@@ -175,23 +223,7 @@ function ProfileImageCard() {
 				return;
 			}
 
-			// Content-Length는 손대지 않는다 — 네트워크 스택이 body 길이로 채운다.
-			const response = await fetch(intent.uploadUrl, {
-				body: bytes,
-				headers: { "Content-Type": intent.mimeType },
-				method: "PUT",
-			});
-
-			if (!response.ok) {
-				// GCS 오류 본문은 영어 XML이라 화면에 싣지 않는다.
-				throw new Error("upload failed");
-			}
-
-			await saveImage(
-				// env 미설정 기기 폴백: 서명 URL에서 쿼리만 떼면 공개 객체 URL과 같다(gcs.ts:71).
-				publicObjectUri(intent.storageKey, GCS_PUBLIC_BASE_URL) ??
-					intent.uploadUrl.split("?")[0]
-			);
+			await saveImage(savedImage);
 			Alert.alert("저장했어요", "프로필 사진을 변경했어요.");
 		} catch (error) {
 			Alert.alert("저장하지 못했어요", profileImageErrorMessage(error));

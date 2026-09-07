@@ -5,6 +5,7 @@ import { Button } from "heroui-native";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 
+import { resolveUploadUrl, resolveWebUrl } from "@/src/lib/dev-web-url";
 import { businessErrorMessage } from "@/src/lib/employer/business";
 import { readLocalFileBytes } from "@/src/lib/local-file-bytes";
 import { orpc } from "@/src/lib/orpc";
@@ -146,7 +147,12 @@ export function BusinessDocumentSection({
 				organizationId: orgId,
 			});
 
-			if (!intent.uploadUrl.startsWith("https://")) {
+			// 운영은 https 서명 URL 그대로, dev 서버는 web 로컬 라우트 상대 URL을 EXPO_PUBLIC_WEB_URL에
+			// 붙인 절대 URL로 푼다. null이면 서버 구성 오류라 차단, ""이면 web 주소가 없어 PUT은 생략하되
+			// 서류 행 등록(addMutation)까지는 이어 흐름을 끊지 않는다.
+			const resolvedUploadUrl = resolveUploadUrl(intent.uploadUrl);
+
+			if (resolvedUploadUrl === null) {
 				Alert.alert(
 					"지금은 서류를 올릴 수 없어요",
 					"잠시 후 다시 시도해 주세요."
@@ -154,14 +160,16 @@ export function BusinessDocumentSection({
 				return;
 			}
 
-			const response = await fetch(intent.uploadUrl, {
-				body: doc.bytes,
-				headers: { "Content-Type": intent.mimeType },
-				method: "PUT",
-			});
+			if (resolvedUploadUrl !== "") {
+				const response = await fetch(resolvedUploadUrl, {
+					body: doc.bytes,
+					headers: { "Content-Type": intent.mimeType },
+					method: "PUT",
+				});
 
-			if (!response.ok) {
-				throw new Error("upload failed");
+				if (!response.ok) {
+					throw new Error("upload failed");
+				}
 			}
 
 			await addMutation.mutateAsync({
@@ -186,7 +194,18 @@ export function BusinessDocumentSection({
 				documentId,
 				download: false,
 			});
-			await openBrowserAsync(url);
+			// dev 서버는 web 로컬 라우트 상대 URL을 내려주므로 EXPO_PUBLIC_WEB_URL에 붙여야 앱이 닿는다.
+			const resolvedUrl = resolveWebUrl(url);
+
+			if (resolvedUrl === null) {
+				Alert.alert(
+					"지금은 서류를 열 수 없어요",
+					"잠시 후 다시 시도해 주세요."
+				);
+				return;
+			}
+
+			await openBrowserAsync(resolvedUrl);
 		} catch (error) {
 			Alert.alert("열지 못했어요", businessErrorMessage(error));
 		}

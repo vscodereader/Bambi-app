@@ -12,6 +12,7 @@ import {
 
 import type { ChatSendStatus } from "@/src/lib/chat/chat-optimistic";
 import type { ChatRoomAttachment } from "@/src/lib/chat/chat-types";
+import { resolveWebUrl } from "@/src/lib/dev-web-url";
 
 const BYTES_PER_KB = 1024;
 const BYTES_PER_MB = 1024 * 1024;
@@ -68,8 +69,11 @@ export function ChatAttachmentMessage({
 	const { height: windowHeight, width: windowWidth } = useWindowDimensions();
 	const [isViewerOpen, setIsViewerOpen] = useState(false);
 	const foreground = useThemeColor("foreground");
+	// dev 서버는 objectUrl로 web 로컬 라우트 상대 URL을 내려주므로 앱이 닿을 절대 URL로 푼다.
 	const imageUri =
-		attachment?.category === "image" ? attachment.objectUrl : localImageUri;
+		attachment?.category === "image"
+			? resolveWebUrl(attachment.objectUrl)
+			: localImageUri;
 	const ratio = useImageAspectRatio(imageUri);
 	const imageWidth = Math.round(windowWidth * IMAGE_WIDTH_RATIO);
 
@@ -131,6 +135,9 @@ export function ChatAttachmentMessage({
 		return null;
 	}
 
+	// 못 풀면(운영 비https 등) 열기 비활성 — 종전엔 상대 URL 그대로 열려 실패했다.
+	const openUrl = resolveWebUrl(attachment.objectUrl);
+
 	return (
 		<Surface
 			className="w-64 flex-row items-center gap-3 rounded-2xl p-3"
@@ -153,9 +160,12 @@ export function ChatAttachmentMessage({
 			<Pressable
 				accessibilityLabel="PDF 열기"
 				accessibilityRole="button"
+				disabled={!openUrl}
 				hitSlop={8}
 				onPress={() => {
-					openBrowserAsync(attachment.objectUrl).catch(() => undefined);
+					if (openUrl) {
+						openBrowserAsync(openUrl).catch(() => undefined);
+					}
 				}}
 			>
 				<Ionicons color={foreground} name="open-outline" size={20} />
