@@ -180,6 +180,8 @@ export function NativeJobFormScreen({
 	const [detail, setDetail] = useState<JobMediaUploadItem[]>(
 		initialDetail ?? []
 	);
+	// 이미지 픽·업로드 진행 중. 이 동안 "다음"을 잠근다(JobImagePickerSection.onBusyChange 참고).
+	const [isMediaBusy, setIsMediaBusy] = useState(false);
 
 	// 사용자가 필드를 한 번이라도 바꿨는지. 초기 시딩(setForm/useState 초기값)은 dirty가 아니다
 	// — 사용자 핸들러(markDirty)에서만 세워, 빈 폼·프리필만 있는 화면에서 이탈 경고가 뜨지 않게 한다.
@@ -504,7 +506,10 @@ export function NativeJobFormScreen({
 							{formMessage}
 						</Text>
 					) : null}
-					<Button isDisabled={isSubmitting} onPress={handlePrimary}>
+					<Button
+						isDisabled={isSubmitting || isMediaBusy}
+						onPress={handlePrimary}
+					>
 						<Button.Label>
 							{isSubmitting ? "저장 중" : primaryLabel}
 						</Button.Label>
@@ -738,6 +743,7 @@ export function NativeJobFormScreen({
 						detail={detail}
 						initialPreviews={initialPreviews}
 						key={form.organizationId}
+						onBusyChange={setIsMediaBusy}
 						onChange={(next) => {
 							markDirty();
 							setCover(next.cover);

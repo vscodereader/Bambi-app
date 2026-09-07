@@ -18,6 +18,10 @@ interface Props {
 	detail: JobMediaUploadItem[];
 	// 수정 프리필용 storageKey→원격 미리보기 URL. 없으면 파일명으로 폴백한다.
 	initialPreviews?: Record<string, string>;
+	// 픽커가 열려 있거나 업로드 중인 동안 true. 폼이 "다음"을 잠그는 데 쓴다 — Android 포토
+	// 픽커의 Done 버튼이 고정 바의 "다음"과 같은 자리라, 픽커가 닫히는 순간 겹쳐 들어온 탭이
+	// 노출 화면으로 넘어가 버린다.
+	onBusyChange?: (busy: boolean) => void;
 	onChange: (next: {
 		cover: JobMediaUploadItem | null;
 		detail: JobMediaUploadItem[];
@@ -51,6 +55,7 @@ export function JobImagePickerSection({
 	cover,
 	detail,
 	initialPreviews,
+	onBusyChange,
 	onChange,
 	onCoverPreviewChange,
 	organizationId,
@@ -58,6 +63,10 @@ export function JobImagePickerSection({
 }: Props) {
 	const [isBusy, setIsBusy] = useState(false);
 	const [previews, setPreviews] = useState<PreviewMap>(initialPreviews ?? {});
+	const setBusy = (busy: boolean) => {
+		setIsBusy(busy);
+		onBusyChange?.(busy);
+	};
 	const uploadMutation = useMutation(
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
 	);
@@ -65,14 +74,14 @@ export function JobImagePickerSection({
 	const originalDetail = detail.filter(isOriginalDetail);
 
 	const handleCoverPick = async () => {
-		setIsBusy(true);
+		setBusy(true);
 		const result = await pickAndUploadJobImage({
 			createUpload: uploadMutation.mutateAsync,
 			organizationId,
 			teamId,
 			usage: "cover",
 		});
-		setIsBusy(false);
+		setBusy(false);
 
 		if ("cancelled" in result) {
 			return;
@@ -100,13 +109,13 @@ export function JobImagePickerSection({
 			return;
 		}
 
-		setIsBusy(true);
+		setBusy(true);
 		const result = await pickAndUploadDetailImages({
 			createUpload: uploadMutation.mutateAsync,
 			organizationId,
 			teamId,
 		});
-		setIsBusy(false);
+		setBusy(false);
 
 		if ("cancelled" in result) {
 			return;
