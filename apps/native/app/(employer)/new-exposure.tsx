@@ -9,6 +9,7 @@ import { BambiScreen, LoadingState } from "@/src/components/bambi-screen";
 import { JobBannerPickerSection } from "@/src/components/job-banner-picker-section";
 import { JobExposureSection } from "@/src/components/job-exposure-section";
 import { localErrorMessage } from "@/src/lib/chat/chat-errors";
+import { findBannerLayoutIssue } from "@/src/lib/employer/ad-banner-layout";
 import {
 	getRequiredBannerUsages,
 	type NativeExposureState,
@@ -122,6 +123,18 @@ export default function NewEmployerJobExposureScreen() {
 			)
 		) {
 			setBannerError(REQUIRED_BANNER_ERROR);
+			return;
+		}
+
+		// 빈 문구·단색 배경에 문구 0 같은 레이아웃 결함은 서버 zod가 원인 불명 에러로만 반려한다.
+		// 등록 전에 여기서 사유를 짚어 막는다(요구 슬롯만 검사).
+		const layoutIssue = findBannerLayoutIssue(
+			draft.bannerLayout,
+			requiredBannerUsages
+		);
+
+		if (layoutIssue) {
+			setBannerError(layoutIssue.message);
 			return;
 		}
 

@@ -1,109 +1,104 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	addTextBlock,
 	createEmptyBannerLayout,
-	getSlotBackground,
-	isBannerImageRequired,
-	withSlotBackground,
+	findBannerLayoutIssue,
+	isLowContrast,
+	removeTextBlock,
+	updateTextBlock,
+	withSlot,
 } from "./ad-banner-layout";
 
-describe("createEmptyBannerLayout", () => {
-	// 서버 스키마가 strict라 슬롯마다 background·scrim·texts가 모두 있어야 한다.
-	it("두 슬롯을 웹 기본값으로 만든다", () => {
-		const layout = createEmptyBannerLayout();
+describe("addTextBlock", () => {
+	it("문구를 추가할 때마다 좌표를 어긋나게 놓고 id가 겹치지 않는다", () => {
+		const first = addTextBlock(null, "horizontal");
+		const second = addTextBlock(first.layout, "horizontal");
 
-		expect(layout.version).toBe(1);
-		expect(layout.horizontal.background).toEqual({ type: "image" });
-		expect(layout.horizontal.scrim).toEqual({ enabled: true, opacity: 65 });
-		expect(layout.horizontal.texts).toEqual([]);
-		expect(layout.vertical.texts).toEqual([]);
+		// 첫 블록은 중앙(50), 둘째는 6% 어긋나 겹치지 않는다.
+		expect(first.block.x).toBe(50);
+		expect(first.block.y).toBe(50);
+		expect(second.block.x).toBe(56);
+		expect(second.block.y).toBe(56);
+		expect(second.block.id).not.toBe(first.block.id);
+		expect(second.layout.horizontal.texts).toHaveLength(2);
 	});
 });
 
-describe("withSlotBackground", () => {
-	it("고른 슬롯의 배경만 바꾼다", () => {
-		const next = withSlotBackground(
-			createEmptyBannerLayout(),
-			"ad_horizontal",
-			{
-				color: "#ff0000",
-				type: "color",
-			}
-		);
-
-		expect(next.horizontal.background).toEqual({
-			color: "#ff0000",
-			type: "color",
+describe("updateTextBlock", () => {
+	it("숫자 범위를 접는다(fontSize 99→20, x −5→0)", () => {
+		const added = addTextBlock(null, "horizontal");
+		const next = updateTextBlock(added.layout, "horizontal", added.block.id, {
+			fontSize: 99,
+			x: -5,
 		});
-		expect(next.vertical.background).toEqual({ type: "image" });
+
+		expect(next.horizontal.texts[0].fontSize).toBe(20);
+		expect(next.horizontal.texts[0].x).toBe(0);
 	});
 
-	// 앱에는 문구 편집기가 없다. 통째로 새 레이아웃을 보내면 웹에서 만든 문구가 사라진다.
-	it("웹에서 만든 문구 블록을 보존한다", () => {
-		const base = createEmptyBannerLayout();
-		const withText = {
-			...base,
-			horizontal: {
-				...base.horizontal,
-				texts: [
-					{
-						align: "center" as const,
-						animation: null,
-						color: "#ffffff",
-						content: "오픈 이벤트",
-						fontSize: 8,
-						id: "t1",
-						weight: "bold" as const,
-						width: 60,
-						x: 50,
-						y: 50,
-					},
-				],
-			},
-		};
-
-		const next = withSlotBackground(withText, "ad_horizontal", {
-			color: "#1f2937",
-			type: "color",
+	it("이미지 배경에서 글리치를 고르면 꺼져 있던 스크림을 자동으로 켠다", () => {
+		const withScrimOff = withSlot(createEmptyBannerLayout(), "horizontal", {
+			scrim: { enabled: false, opacity: 50 },
+		});
+		const added = addTextBlock(withScrimOff, "horizontal");
+		const next = updateTextBlock(added.layout, "horizontal", added.block.id, {
+			animation: "glitch",
 		});
 
-		expect(next.horizontal.texts).toHaveLength(1);
-		expect(next.horizontal.texts[0].content).toBe("오픈 이벤트");
-	});
-
-	it("레이아웃이 없던 공고는 기본값에서 시작한다", () => {
-		const next = withSlotBackground(null, "ad_vertical", {
-			color: "#1f2937",
-			type: "color",
-		});
-
-		expect(next.vertical.background).toEqual({
-			color: "#1f2937",
-			type: "color",
-		});
-		expect(next.horizontal.background).toEqual({ type: "image" });
+		expect(next.horizontal.scrim.enabled).toBe(true);
 	});
 });
 
-describe("getSlotBackground", () => {
-	it("레이아웃이 없으면 이미지 배경이 기본이다", () => {
-		expect(getSlotBackground(null, "ad_horizontal")).toEqual({ type: "image" });
+describe("removeTextBlock", () => {
+	it("id로 블록을 지운다", () => {
+		const added = addTextBlock(null, "horizontal");
+		const next = removeTextBlock(added.layout, "horizontal", added.block.id);
+
+		expect(next.horizontal.texts).toHaveLength(0);
 	});
 });
 
-describe("isBannerImageRequired", () => {
-	it("이미지 배경이면 업로드가 필요하다", () => {
-		expect(isBannerImageRequired(null, "ad_horizontal")).toBe(true);
+describe("findBannerLayoutIssue", () => {
+	const required = ["ad_horizontal"] as const;
+
+	it("레이아웃이 없으면 null이다", () => {
+		expect(findBannerLayoutIssue(null, required)).toBeNull();
 	});
 
-	// 단색으로 덮으면 업로드한 이미지가 보이지 않으므로 필수가 아니다(web과 같은 규칙).
-	it("단색 배경이면 업로드가 필요 없다", () => {
-		const layout = withSlotBackground(null, "ad_horizontal", {
-			color: "#1f2937",
-			type: "color",
+	it("빈 문구가 있으면 그 슬롯 결함을 짚는다", () => {
+		const added = addTextBlock(null, "horizontal");
+		const blank = updateTextBlock(added.layout, "horizontal", added.block.id, {
+			content: "   ",
 		});
 
-		expect(isBannerImageRequired(layout, "ad_horizontal")).toBe(false);
-		expect(isBannerImageRequired(layout, "ad_vertical")).toBe(true);
+		expect(findBannerLayoutIssue(blank, required)?.slot).toBe("horizontal");
+	});
+
+	it("단색 배경에 문구가 하나도 없으면 결함이다", () => {
+		const colorOnly = withSlot(createEmptyBannerLayout(), "horizontal", {
+			background: { color: "#1f2937", type: "color" },
+		});
+
+		expect(findBannerLayoutIssue(colorOnly, required)?.slot).toBe("horizontal");
+	});
+
+	it("요구 슬롯이 아닌 곳의 결함은 무시한다", () => {
+		// 세로형에만 단색+문구 0 결함이 있지만 요구 슬롯은 가로형뿐이라 통과한다.
+		const verticalIssue = withSlot(createEmptyBannerLayout(), "vertical", {
+			background: { color: "#1f2937", type: "color" },
+		});
+
+		expect(findBannerLayoutIssue(verticalIssue, required)).toBeNull();
+	});
+});
+
+describe("isLowContrast", () => {
+	it("어두운 배경 위 흰 글자는 저대비가 아니다", () => {
+		expect(isLowContrast("#1f2937", "#ffffff")).toBe(false);
+	});
+
+	it("어두운 배경 위 어두운 글자는 저대비다", () => {
+		expect(isLowContrast("#1f2937", "#111827")).toBe(true);
 	});
 });
