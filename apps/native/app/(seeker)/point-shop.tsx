@@ -28,6 +28,7 @@ import { orpc, queryClient } from "@/src/lib/orpc";
 import {
 	benefitNoticeMessage,
 	canCancelOrder,
+	type PurchaseMode,
 	pointText,
 	purchaseBlockMessage,
 	resolvePurchaseMode,
@@ -150,9 +151,11 @@ function ItemCard({
 
 function PurchaseSummary({
 	balance,
+	mode,
 	pricePoints,
 }: {
 	balance: null | number;
+	mode: PurchaseMode;
 	pricePoints: number;
 }) {
 	return (
@@ -171,6 +174,14 @@ function PurchaseSummary({
 					</Text>
 				</View>
 			)}
+			{balance !== null && mode === "buy" ? (
+				<View className="flex-row justify-between">
+					<Text className="text-muted text-sm">구매 후 잔액</Text>
+					<Text className="font-extrabold text-foreground text-sm">
+						{pointText(balance - pricePoints)}
+					</Text>
+				</View>
+			) : null}
 		</Surface>
 	);
 }
@@ -236,7 +247,11 @@ function PurchaseDialog({
 					<Dialog.Description>
 						{item.description ?? "운영자가 확인한 뒤 순서대로 지급해요."}
 					</Dialog.Description>
-					<PurchaseSummary balance={balance} pricePoints={item.pricePoints} />
+					<PurchaseSummary
+						balance={balance}
+						mode={mode}
+						pricePoints={item.pricePoints}
+					/>
 					<Text className="text-muted text-sm">
 						{benefitNoticeMessage(item)}
 					</Text>
@@ -515,10 +530,14 @@ export default function SeekerPointShopScreen() {
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	const role = profile?.role ?? "job_seeker";
 	// 잔액은 구매 자격이 있는 역할에서만 조회한다(서버 requirePurchaseProfile과 같은 축) —
-	// 운영자 계정에서 403을 반복해 받지 않는다.
+	// role 기본값(job_seeker)으로 mineQuery 완료 전에 먼저 발화해 admin 등에서 403을
+	// 받는 일이 없도록 mineQuery 성공 후에만 켠다.
 	const balanceQuery = useQuery({
 		...orpc.bambi.pointShop.getMyBalance.queryOptions(),
-		enabled: isSignedIn && (role === "job_seeker" || role === "employer"),
+		enabled:
+			isSignedIn &&
+			mineQuery.isSuccess &&
+			(role === "job_seeker" || role === "employer"),
 	});
 	const balance = balanceQuery.data?.pointBalance ?? null;
 
