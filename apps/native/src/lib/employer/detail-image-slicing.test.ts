@@ -1,4 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// native 모듈은 node 환경에 없다. 정적 import라 모듈 로드 시점에 대신 세워 둔다.
+vi.mock("expo-image-manipulator", () => ({
+	ImageManipulator: { manipulate: vi.fn() },
+	SaveFormat: { JPEG: "jpeg" },
+}));
 
 import { toSliceCropRegions } from "./detail-image-slicing";
 

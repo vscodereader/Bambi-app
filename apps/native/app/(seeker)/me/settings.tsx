@@ -18,6 +18,7 @@ import {
 } from "@/src/components/bambi-screen";
 import { MemberOnly } from "@/src/components/member-only";
 import { publicObjectUri } from "@/src/lib/bambi-native";
+import { readLocalFileBytes } from "@/src/lib/local-file-bytes";
 import {
 	formatBirthDate8,
 	formatPhoneNumber,
@@ -152,9 +153,9 @@ function ProfileImageCard() {
 
 		try {
 			// 서명에 content-length가 묶여 있어 실제 전송 바이트와 1바이트라도 다르면 GCS가 403이다.
-			// asset.fileSize는 크롭·압축 뒤 어긋날 수 있으므로 blob.size를 정본으로 쓴다.
-			const blob = await (await fetch(asset.uri)).blob();
-			const resolved = resolveProfileImageUpload(asset, blob.size);
+			// asset.fileSize는 크롭·압축 뒤 어긋날 수 있으므로 읽은 바이트 길이를 정본으로 쓴다.
+			const { bytes } = await readLocalFileBytes(asset.uri);
+			const resolved = resolveProfileImageUpload(asset, bytes.byteLength);
 
 			if ("error" in resolved) {
 				Alert.alert("등록할 수 없는 사진이에요", resolved.error);
@@ -176,7 +177,7 @@ function ProfileImageCard() {
 
 			// Content-Length는 손대지 않는다 — 네트워크 스택이 body 길이로 채운다.
 			const response = await fetch(intent.uploadUrl, {
-				body: blob,
+				body: bytes,
 				headers: { "Content-Type": intent.mimeType },
 				method: "PUT",
 			});

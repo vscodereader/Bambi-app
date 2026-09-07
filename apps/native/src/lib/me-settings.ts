@@ -68,7 +68,7 @@ const fileExtension = (value: string): string => {
 };
 
 // 고른 사진을 createProfileImageUpload 입력으로 옮긴다. byteSize는 호출부가 실제 전송 바이트
-// (blob.size)를 넘긴다 — asset.fileSize는 크롭·압축 뒤 어긋날 수 있는데 GCS 서명에
+// (bytes.byteLength)를 넘긴다 — asset.fileSize는 크롭·압축 뒤 어긋날 수 있는데 GCS 서명에
 // content-length가 묶여 있어 1바이트만 달라도 403이다.
 export const resolveProfileImageUpload = (
 	asset: { fileName?: null | string; mimeType?: string; uri: string },
