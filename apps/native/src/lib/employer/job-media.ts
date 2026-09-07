@@ -23,7 +23,7 @@ const fileExtension = (value: string): string => {
 };
 
 // expo-image-picker asset. width/height는 asset이 함께 준다 — web처럼 createImageBitmap이
-// 필요 없다. byteSize는 호출부가 blob.size(실측)를 넘긴다(asset.fileSize는 크롭·압축 뒤
+// 필요 없다. byteSize는 호출부가 bytes.byteLength(실측)를 넘긴다(asset.fileSize는 크롭·압축 뒤
 // 어긋나 GCS 403).
 export interface PickedJobImage {
 	byteSize: number;

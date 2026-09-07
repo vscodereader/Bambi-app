@@ -13,7 +13,7 @@ const fileNameFromUri = (uri: string): string =>
 	uri.split("?")[0]?.split("/").pop() || "attachment";
 
 // expo-image-picker(asset.fileName/mimeType/fileSize)·expo-document-picker(name/mimeType/size)
-// 결과를 한 모양으로 맞춘다. 크기가 비어 있으면 0 — 전송 직전에 blob.size로 덮는다
+// 결과를 한 모양으로 맞춘다. 크기가 비어 있으면 0 — 전송 직전에 bytes.byteLength로 덮는다
 // (서명 URL이 content-length에 묶여 있어 실제 바이트가 정본).
 export const toPickedAttachment = (
 	input: {

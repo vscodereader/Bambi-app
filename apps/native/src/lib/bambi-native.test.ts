@@ -21,6 +21,7 @@ import {
 	type NativeSeekerJobPage,
 	pointsToNextLabel,
 	profileRoleLabel,
+	publicObjectUri,
 	resolveJobCoverUri,
 	type SignupFormValues,
 	validateNativeJobForm,
@@ -351,6 +352,35 @@ describe("bambi native helpers", () => {
 			{ label: "당일면접", tone: "warning" },
 			{ label: "인증 완료", tone: "success" },
 		]);
+	});
+
+	it("dev에서는 공고 미디어 키를 web 로컬 라우트로 돌린다", () => {
+		// 업로드가 web 로컬 저장소에 갔으니 읽기도 같은 라우트여야 앱에 썸네일이 뜬다.
+		expect(
+			publicObjectUri(
+				"bambi-job-post-media/org/local/u/a.jpg",
+				"https://cdn.example.com",
+				"http://localhost:23001/"
+			)
+		).toBe(
+			"http://localhost:23001/bambi/local-job-media?key=bambi-job-post-media%2Forg%2Flocal%2Fu%2Fa.jpg"
+		);
+		// 공고 미디어가 아닌 키(프로필 등)는 종전대로 공개 버킷.
+		expect(
+			publicObjectUri(
+				"profile/u/a.jpg",
+				"https://cdn.example.com",
+				"http://localhost:23001"
+			)
+		).toBe("https://cdn.example.com/profile/u/a.jpg");
+		// web 주소가 없으면 종전대로 공개 버킷.
+		expect(
+			publicObjectUri(
+				"bambi-job-post-media/org/local/u/a.jpg",
+				"https://cdn.example.com",
+				undefined
+			)
+		).toBe("https://cdn.example.com/bambi-job-post-media/org/local/u/a.jpg");
 	});
 
 	it("resolves cover URIs from the right source per job kind", () => {

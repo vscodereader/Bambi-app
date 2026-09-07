@@ -5,7 +5,9 @@ import { Button } from "heroui-native";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 
+import { resolveUploadUrl, resolveWebUrl } from "@/src/lib/dev-web-url";
 import { businessErrorMessage } from "@/src/lib/employer/business";
+import { readLocalFileBytes } from "@/src/lib/local-file-bytes";
 import { orpc } from "@/src/lib/orpc";
 
 export interface BusinessDocumentItem {
@@ -67,11 +69,11 @@ export function BusinessDocumentSection({
 		orpc.bambi.onboarding.createBusinessDocumentViewUrl.mutationOptions()
 	);
 
-	// 파일 선택 → blob 실측 → MIME·크기 검증 → (강등 상태면) 확인. 통과하면 업로드에 필요한
+	// 파일 선택 → 바이트 실측 → MIME·크기 검증 → (강등 상태면) 확인. 통과하면 업로드에 필요한
 	// 값을 돌려주고, 취소·검증 실패·거절이면 null. setIsBusy(true)는 파일이 실제로 잡힌 뒤에만
 	// 켜고, 끄는 것은 호출부 handleAdd의 finally가 맡는다.
 	const pickDocument = async (): Promise<null | {
-		blob: Blob;
+		bytes: Uint8Array<ArrayBuffer>;
 		mimeType: string;
 		name: string;
 	}> => {
@@ -89,8 +91,11 @@ export function BusinessDocumentSection({
 
 		setIsBusy(true);
 
-		const blob = await (await fetch(asset.uri)).blob();
-		const mimeType = asset.mimeType ?? blob.type;
+		const { bytes, mimeType: detectedMimeType } = await readLocalFileBytes(
+			asset.uri
+		);
+		// 피커 MIME가 정본이고, 없으면 파일 읽기가 추정한 MIME → 그래도 없으면 ""로 둬 아래 검증이 거른다.
+		const mimeType = asset.mimeType ?? detectedMimeType ?? "";
 
 		if (!BUSINESS_DOC_MIME_TYPES.has(mimeType)) {
 			Alert.alert(
@@ -100,7 +105,7 @@ export function BusinessDocumentSection({
 			return null;
 		}
 
-		if (blob.size < 1 || blob.size > BUSINESS_DOC_MAX_BYTES) {
+		if (bytes.byteLength < 1 || bytes.byteLength > BUSINESS_DOC_MAX_BYTES) {
 			Alert.alert("등록할 수 없는 파일", "파일 크기는 10MB 이하여야 해요.");
 			return null;
 		}
@@ -115,7 +120,7 @@ export function BusinessDocumentSection({
 			return null;
 		}
 
-		return { blob, mimeType, name: asset.name };
+		return { bytes, mimeType, name: asset.name };
 	};
 
 	const handleAdd = async () => {
@@ -136,13 +141,18 @@ export function BusinessDocumentSection({
 
 			const orgId = organizationId ?? (await onEnsureOrganizationId());
 			const intent = await uploadMutation.mutateAsync({
-				byteSize: doc.blob.size,
+				byteSize: doc.bytes.byteLength,
 				fileName: doc.name,
 				mimeType: doc.mimeType,
 				organizationId: orgId,
 			});
 
-			if (!intent.uploadUrl.startsWith("https://")) {
+			// 운영은 https 서명 URL 그대로, dev 서버는 web 로컬 라우트 상대 URL을 EXPO_PUBLIC_WEB_URL에
+			// 붙인 절대 URL로 푼다. null이면 서버 구성 오류라 차단, ""이면 web 주소가 없어 PUT은 생략하되
+			// 서류 행 등록(addMutation)까지는 이어 흐름을 끊지 않는다.
+			const resolvedUploadUrl = resolveUploadUrl(intent.uploadUrl);
+
+			if (resolvedUploadUrl === null) {
 				Alert.alert(
 					"지금은 서류를 올릴 수 없어요",
 					"잠시 후 다시 시도해 주세요."
@@ -150,18 +160,20 @@ export function BusinessDocumentSection({
 				return;
 			}
 
-			const response = await fetch(intent.uploadUrl, {
-				body: doc.blob,
-				headers: { "Content-Type": intent.mimeType },
-				method: "PUT",
-			});
+			if (resolvedUploadUrl !== "") {
+				const response = await fetch(resolvedUploadUrl, {
+					body: doc.bytes,
+					headers: { "Content-Type": intent.mimeType },
+					method: "PUT",
+				});
 
-			if (!response.ok) {
-				throw new Error("upload failed");
+				if (!response.ok) {
+					throw new Error("upload failed");
+				}
 			}
 
 			await addMutation.mutateAsync({
-				byteSize: doc.blob.size,
+				byteSize: doc.bytes.byteLength,
 				fileName: doc.name,
 				mimeType: doc.mimeType,
 				organizationId: orgId,
@@ -182,7 +194,18 @@ export function BusinessDocumentSection({
 				documentId,
 				download: false,
 			});
-			await openBrowserAsync(url);
+			// dev 서버는 web 로컬 라우트 상대 URL을 내려주므로 EXPO_PUBLIC_WEB_URL에 붙여야 앱이 닿는다.
+			const resolvedUrl = resolveWebUrl(url);
+
+			if (resolvedUrl === null) {
+				Alert.alert(
+					"지금은 서류를 열 수 없어요",
+					"잠시 후 다시 시도해 주세요."
+				);
+				return;
+			}
+
+			await openBrowserAsync(resolvedUrl);
 		} catch (error) {
 			Alert.alert("열지 못했어요", businessErrorMessage(error));
 		}

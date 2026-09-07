@@ -3,6 +3,7 @@
 // 해상도까지 깎아 흐려진다. 각 조각을 한계 아래로 잘라 올리면 원본 화질로 디코드된다. 웹은
 // canvas로 자르지만 native는 expo-image-manipulator로 같은 계획(planDetailSlices)을 실행한다.
 import { planDetailSlices } from "@bambi-app/api/services/bambi-job-media-policy";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
 export interface SliceCropRegion {
 	height: number;
@@ -38,8 +39,9 @@ export const toSliceCropRegions = (
 
 // 세로가 임계값을 넘는 상세 이미지를 가로 전폭·세로 조각들로 자른다. 자를 필요가 없거나
 // 조작이 실패하면 null — 호출부는 원본을 그대로 한 장 업로드한다(슬라이싱 실패가 업로드를
-// 막으면 안 된다). expo-image-manipulator는 native 모듈이라 지연 import로 불러온다(vitest가
-// 순수 함수 테스트에서 native 모듈을 로드하지 않게).
+// 막으면 안 된다). expo-image-manipulator는 정적 import다 — import()로 두면 이 프로젝트의
+// metro lazy 청크가 실기기에서 "Requiring unknown module"로 터진다(auth-client의 expo-network와
+// 같은 증상). vitest는 테스트 쪽 vi.mock으로 native 모듈을 대신한다.
 export const sliceDetailImage = async ({
 	height,
 	uri,
@@ -56,9 +58,6 @@ export const sliceDetailImage = async ({
 	}
 
 	try {
-		const { ImageManipulator, SaveFormat } = await import(
-			"expo-image-manipulator"
-		);
 		const slices: DetailImageSlice[] = [];
 
 		for (const region of regions) {

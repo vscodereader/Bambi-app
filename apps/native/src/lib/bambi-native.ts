@@ -1,5 +1,10 @@
 import type { AdBannerLayoutInput } from "@bambi-app/api/services/bambi-ad-banner-layout";
 import type { JobDescriptionBlock } from "@bambi-app/api/services/bambi-job-description-blocks";
+import {
+	buildLocalMediaUrl,
+	isJobPostMediaStorageKey,
+	LOCAL_JOB_MEDIA_PATH,
+} from "@bambi-app/api/services/bambi-storage-policy";
 import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
 
 import type { AdPreviewTemplateValue } from "@/src/lib/employer/ad-exposure";
@@ -587,13 +592,30 @@ const TRAILING_SLASH_RE = /\/$/;
 
 // 공개 버킷 객체 URL 조립(server gcs.ts getPublicObjectUrl과 같은 모양). base가 없으면
 // (개발·env 미설정) 만들 수 없으므로 null — 호출부가 각자 폴백을 고른다.
+// dev의 공고 미디어는 GCS가 아니라 web 앱 로컬 라우트에 올라간다(job-image-upload가
+// EXPO_PUBLIC_WEB_URL로 PUT) — web의 jobMediaPublicUrl과 같은 규칙으로 그 키는 같은 라우트
+// (GET)에서 읽는다. 이 모듈은 순수(테스트가 노드에서 돈다)라 env 스키마를 import하지 않고
+// process.env를 직접 본다(Expo가 EXPO_PUBLIC_*를 빌드 시 인라인한다).
 export const publicObjectUri = (
 	storageKey: string,
-	gcsPublicBaseUrl: string | undefined
-): null | string =>
-	gcsPublicBaseUrl
+	gcsPublicBaseUrl: string | undefined,
+	webUrl: string | undefined = process.env.EXPO_PUBLIC_WEB_URL
+): null | string => {
+	if (
+		process.env.NODE_ENV !== "production" &&
+		webUrl &&
+		isJobPostMediaStorageKey(storageKey)
+	) {
+		return `${webUrl.replace(TRAILING_SLASH_RE, "")}${buildLocalMediaUrl(
+			LOCAL_JOB_MEDIA_PATH,
+			storageKey
+		)}`;
+	}
+
+	return gcsPublicBaseUrl
 		? `${gcsPublicBaseUrl.replace(TRAILING_SLASH_RE, "")}/${storageKey}`
 		: null;
+};
 
 // 목록 카드 커버 이미지의 소스 URI를 고른다(web api-job-mapper의 커버 우선순위 이식).
 // 순수 공고는 공개 버킷 base + storageKey로 URL을 조립하고, 수집 공고는 base64 data URI를

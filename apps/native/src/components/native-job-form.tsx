@@ -3,7 +3,7 @@ import {
 	normalizeJobDescriptionBlocks,
 } from "@bambi-app/api/services/bambi-job-description-blocks";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigation } from "expo-router";
+import { useFocusEffect, useNavigation } from "expo-router";
 import {
 	Alert,
 	Button,
@@ -17,8 +17,8 @@ import {
 	TextField,
 } from "heroui-native";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { findNodeHandle, Alert as RNAlert, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert as RNAlert, Text, View } from "react-native";
 import type { KeyboardAwareScrollViewRef } from "react-native-keyboard-controller";
 
 import { BambiScreen } from "@/src/components/bambi-screen";
@@ -180,6 +180,8 @@ export function NativeJobFormScreen({
 	const [detail, setDetail] = useState<JobMediaUploadItem[]>(
 		initialDetail ?? []
 	);
+	// 이미지 픽·업로드 진행 중. 이 동안 "다음"을 잠근다(JobImagePickerSection.onBusyChange 참고).
+	const [isMediaBusy, setIsMediaBusy] = useState(false);
 
 	// 사용자가 필드를 한 번이라도 바꿨는지. 초기 시딩(setForm/useState 초기값)은 dirty가 아니다
 	// — 사용자 핸들러(markDirty)에서만 세워, 빈 폼·프리필만 있는 화면에서 이탈 경고가 뜨지 않게 한다.
@@ -192,6 +194,15 @@ export function NativeJobFormScreen({
 		setIsDirty(true);
 		submittedRef.current = false;
 	};
+	// 노출 화면에서 등록을 마치면 dismissTo가 이 화면까지 한꺼번에 걷어 가는데, 그때 이 화면은
+	// isDirty=true·submittedRef=false라 "작성 중인 내용이 있어요"가 떴다(등록은 이미 끝난 뒤).
+	// "다음"으로 넘길 때 통과 표식을 세우고, 노출 화면에서 뒤로 돌아와 이 화면이 다시 포커스를
+	// 받으면 되돌려 가드를 재무장한다(dismissTo로 걷힐 땐 포커스가 돌아오지 않아 표식이 남는다).
+	useFocusEffect(
+		useCallback(() => {
+			submittedRef.current = false;
+		}, [])
+	);
 
 	// 노출 상품·결제 선택·배너는 더 이상 이 폼이 들지 않는다 — 노출 화면(스택 push)이 초안
 	// 스토어로 들고 있어 왕복해도 살아남는다. 폼은 작성 + 미리보기만 책임진다.
@@ -264,14 +275,17 @@ export function NativeJobFormScreen({
 			return;
 		}
 
-		const scrollNode = findNodeHandle(scroll);
+		// Fabric(RN 0.85)의 measureLayout은 숫자 핸들(findNodeHandle)이 아니라 호스트 컴포넌트
+		// 참조를 요구한다 — 숫자를 넘기면 "must be called with a ref to a native component"
+		// 경고만 내고 스크롤하지 않는다. ScrollView 인스턴스의 getNativeScrollRef()가 그 참조다.
+		const scrollHost = scroll.getNativeScrollRef?.();
 
-		if (scrollNode === null) {
+		if (!scrollHost) {
 			return;
 		}
 
 		target.measureLayout(
-			scrollNode,
+			scrollHost,
 			(_x, y) => scroll.scrollTo({ animated: true, y: Math.max(y - 16, 0) }),
 			// 측정 실패 시엔 스크롤하지 않는다 — 좌표 없이 scrollTo하면 맨 위로 튄다.
 			() => {
@@ -456,7 +470,8 @@ export function NativeJobFormScreen({
 
 	// 고정 바 버튼. 검증을 돌리고, 실패하면 첫 오류로 스크롤한다. 통과하면 등록 화면은 조립된
 	// 입력을 노출 화면으로 넘기고(onNext, push라 이 화면은 남는다), 노출 단계가 없는 수정 화면은
-	// 그대로 저장한다(onSubmit — 이때 화면이 제거되므로 submittedRef로 이탈 가드를 통과시킨다).
+	// 그대로 저장한다(onSubmit). 두 경로 모두 submittedRef로 이탈 가드를 통과시킨다 — onNext는
+	// 초안에 담긴 뒤 노출 화면의 등록 성공이 이 화면까지 걷어 가고, 되돌아오면 포커스가 재무장한다.
 	const handlePrimary = () => {
 		const result = buildValidInput();
 
@@ -467,12 +482,13 @@ export function NativeJobFormScreen({
 
 		const base = buildBase(result.input);
 
+		submittedRef.current = true;
+
 		if (exposureEnabled) {
 			onNext?.(base);
 			return;
 		}
 
-		submittedRef.current = true;
 		onSubmit?.(base);
 	};
 
@@ -493,7 +509,10 @@ export function NativeJobFormScreen({
 							{formMessage}
 						</Text>
 					) : null}
-					<Button isDisabled={isSubmitting} onPress={handlePrimary}>
+					<Button
+						isDisabled={isSubmitting || isMediaBusy}
+						onPress={handlePrimary}
+					>
 						<Button.Label>
 							{isSubmitting ? "저장 중" : primaryLabel}
 						</Button.Label>
@@ -727,6 +746,7 @@ export function NativeJobFormScreen({
 						detail={detail}
 						initialPreviews={initialPreviews}
 						key={form.organizationId}
+						onBusyChange={setIsMediaBusy}
 						onChange={(next) => {
 							markDirty();
 							setCover(next.cover);

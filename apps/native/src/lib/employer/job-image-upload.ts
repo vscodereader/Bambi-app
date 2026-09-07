@@ -7,6 +7,7 @@ import {
 } from "expo-image-picker";
 
 import { localErrorMessage } from "@/src/lib/chat/chat-errors";
+import { resolveUploadUrl } from "@/src/lib/dev-web-url";
 import { sliceDetailImage } from "@/src/lib/employer/detail-image-slicing";
 import {
 	type JobMediaUploadItem,
@@ -14,6 +15,7 @@ import {
 	resolveJobImagePick,
 	toJobMediaItem,
 } from "@/src/lib/employer/job-media";
+import { readLocalFileBytes } from "@/src/lib/local-file-bytes";
 
 // createMediaUpload 프로시저의 입력·출력을 orpc 라우터에서 그대로 따온다. 호출부가 넘기는
 // mutateAsync가 이 시그니처에 맞아떨어져야 하므로 손으로 다시 쓰지 않는다 — 서버 스키마가
@@ -63,10 +65,10 @@ const pickImageAsset = async (): Promise<
 	return { asset };
 };
 
-// blob 실측 → 규격 확인 → 업로드 인텐트 발급 → PUT 업로드. 단일 이미지와 조각 각각이
+// 바이트 실측 → 규격 확인 → 업로드 인텐트 발급 → PUT 업로드. 단일 이미지와 조각 각각이
 // 공유한다(픽·조각내기 로직은 호출부).
 const uploadResolvedSource = async (params: {
-	blob: Blob;
+	bytes: Uint8Array<ArrayBuffer>;
 	createUpload: CreateUpload;
 	organizationId: string;
 	source: {
@@ -81,8 +83,8 @@ const uploadResolvedSource = async (params: {
 }): Promise<
 	{ error: string } | { picked: PickedJobImage; storageKey: string }
 > => {
-	const { blob, createUpload, organizationId, source, teamId, usage } = params;
-	const resolved = resolveJobImagePick(source, blob.size);
+	const { bytes, createUpload, organizationId, source, teamId, usage } = params;
+	const resolved = resolveJobImagePick(source, bytes.byteLength);
 
 	if ("error" in resolved) {
 		return { error: resolved.error };
@@ -109,15 +111,26 @@ const uploadResolvedSource = async (params: {
 		};
 	}
 
-	if (!intent.uploadUrl.startsWith("https://")) {
+	// dev 서버(GCS 미구성)는 web 앱의 로컬 업로드 경로("/bambi/local-job-media?…", 상대 URL)를
+	// 내려준다. web은 같은 출처라 그대로 PUT하지만 앱은 EXPO_PUBLIC_WEB_URL에 붙여야 닿는다 —
+	// 거기 올려야 web의 검수 큐·상세가 같은 경로(GET)로 이미지를 읽는다. 주소가 없으면 web의
+	// 플레이스홀더 건너뛰기처럼 업로드만 생략하고 storageKey를 실어 흐름을 잇는다(그 경우 web엔
+	// 이미지가 안 보인다). 운영에서 서명 URL이 아니면 서버 구성 오류이므로 종전대로 막는다.
+	const uploadUrl = resolveUploadUrl(intent.uploadUrl);
+
+	if (uploadUrl === null) {
 		return {
 			error: "지금은 이미지를 등록할 수 없어요. 잠시 후 다시 시도해 주세요.",
 		};
 	}
 
+	if (uploadUrl === "") {
+		return { picked: resolved, storageKey: intent.storageKey };
+	}
+
 	try {
-		const response = await fetch(intent.uploadUrl, {
-			body: blob,
+		const response = await fetch(uploadUrl, {
+			body: bytes,
 			headers: { "Content-Type": intent.mimeType },
 			method: "PUT",
 		});
@@ -152,10 +165,10 @@ export const pickAndUploadJobImage = async (args: {
 		return asset;
 	}
 
-	// 서명 content-length에 blob.size가 묶인다 — asset.fileSize가 아니라 실측 바이트.
-	const blob = await (await fetch(asset.asset.uri)).blob();
+	// 서명 content-length에 실측 바이트가 묶인다 — asset.fileSize가 아니라 읽은 바이트 길이.
+	const { bytes } = await readLocalFileBytes(asset.asset.uri);
 	const result = await uploadResolvedSource({
-		blob,
+		bytes,
 		createUpload,
 		organizationId,
 		source: {
@@ -222,9 +235,9 @@ export const pickAndUploadDetailImages = async (args: {
 		const previews: Record<string, string> = {};
 
 		for (const slice of sliced) {
-			const blob = await (await fetch(slice.uri)).blob();
+			const { bytes } = await readLocalFileBytes(slice.uri);
 			const result = await uploadResolvedSource({
-				blob,
+				bytes,
 				createUpload,
 				organizationId,
 				source: {
@@ -254,9 +267,9 @@ export const pickAndUploadDetailImages = async (args: {
 		return { items, previews };
 	}
 
-	const blob = await (await fetch(source.uri)).blob();
+	const { bytes } = await readLocalFileBytes(source.uri);
 	const result = await uploadResolvedSource({
-		blob,
+		bytes,
 		createUpload,
 		organizationId,
 		source: {
