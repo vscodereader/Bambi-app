@@ -3,7 +3,6 @@ import { type Href, Redirect, Stack } from "expo-router";
 
 import { authClient } from "@/lib/auth-client";
 import { ErrorState, LoadingState } from "@/src/components/bambi-screen";
-import { RoleSwitchMenu } from "@/src/components/role-switch-menu";
 import {
 	getNativeHomeRoute,
 	type NativeProfileRole,
@@ -41,16 +40,14 @@ export default function ModeratorLayout() {
 		return <Redirect href={getNativeHomeRoute(role) as Href} />;
 	}
 
+	// 복귀 진입점(RoleSwitchMenu)은 탭 셸 헤더(ModeratorHomeHeader)가 맡는다. 상세는
+	// 이 Stack에 push되므로 기본 뒤로 버튼으로 목록에 돌아간다.
 	return (
-		<Stack
-			screenOptions={{
-				// 역할 영역은 루트 Stack에 push된 별도 셸이라 세 화면 모두에 복귀 진입점이 필요하다.
-				headerRight: () => <RoleSwitchMenu currentArea="/(moderator)" />,
-			}}
-		>
-			<Stack.Screen name="index" options={{ title: "관리자 검수" }} />
-			<Stack.Screen name="reports" options={{ title: "신고" }} />
-			<Stack.Screen name="users" options={{ title: "사용자" }} />
+		<Stack>
+			<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+			<Stack.Screen name="queue/[id]" options={{ title: "공고 검수" }} />
+			<Stack.Screen name="reports/[id]" options={{ title: "신고 상세" }} />
+			<Stack.Screen name="users/[id]" options={{ title: "사용자 상세" }} />
 		</Stack>
 	);
 }
