@@ -1,7 +1,9 @@
+import type { Href } from "expo-router";
 import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BambiLogo } from "@/src/components/bambi-logo";
+import { NotificationBell } from "@/src/components/notification-bell";
 import { RoleSwitchMenu } from "@/src/components/role-switch-menu";
 
 // 구인자 탭 셸 홈 헤더. Tabs의 커스텀 header로 쓰이므로 상단 안전영역 인셋을 스스로 채운다.
@@ -24,7 +26,12 @@ export function EmployerHomeHeader() {
 						밤비알바 구인
 					</Text>
 				</View>
-				<RoleSwitchMenu currentArea="/(employer)" />
+				<View className="flex-row items-center gap-2">
+					<NotificationBell
+						href={"/(employer)/notifications" as unknown as Href}
+					/>
+					<RoleSwitchMenu currentArea="/(employer)" />
+				</View>
 			</View>
 		</View>
 	);

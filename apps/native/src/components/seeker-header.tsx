@@ -6,6 +6,7 @@ import { type ColorValue, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BambiLogo } from "@/src/components/bambi-logo";
+import { NotificationBell } from "@/src/components/notification-bell";
 
 // 룩은 웹 헤더의 outline 아이콘 버튼(border+card 표면, 반경 16px=rounded-2xl)을 따른다.
 function HeaderIconButton({
@@ -119,10 +120,8 @@ export function SeekerHomeHeader() {
 						label="포인트몰"
 						name="storefront-outline"
 					/>
-					<HeaderIconButton
+					<NotificationBell
 						href={"/(seeker)/notifications" as unknown as Href}
-						label="알림"
-						name="notifications-outline"
 					/>
 				</View>
 			</View>
