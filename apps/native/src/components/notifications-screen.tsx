@@ -64,9 +64,13 @@ function NotificationCard({
 	const body = notificationBody(view);
 	const isUnread = item.readAt === null;
 
+	// 테두리는 항상 두고 색만 바꾼다(안읽음=accent, 읽음=transparent). 카드를 눌러 읽음 처리되면
+	// 이 컴포넌트가 마운트된 채로 클래스가 바뀌는데, heroui Surface는 overflow-hidden이라
+	// Android에서 borderWidth가 1→0으로 바뀌는 순간 자식이 통째로 클리핑돼 빈 카드만 남았다
+	// (화면 재진입=재마운트 때만 복구). boost-options·attendance의 border 상시 유지 패턴과 같다.
 	return (
 		<Surface
-			className={`rounded-lg ${isUnread ? "border border-accent" : ""}`}
+			className={`rounded-lg border ${isUnread ? "border-accent" : "border-transparent"}`}
 			variant="secondary"
 		>
 			<Pressable
