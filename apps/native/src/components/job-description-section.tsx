@@ -5,9 +5,9 @@ import {
 import { Text, View } from "react-native";
 
 import { CrawledJobDetailImages } from "@/src/components/crawled-job-detail-images";
+import { publicObjectUri } from "@/src/lib/bambi-native";
 
 const BULLET_ITEM_SEPARATOR = /\n+/;
-const TRAILING_SLASH_RE = /\/$/;
 
 // getById media.detail 행에서 이 섹션이 실제로 읽는 필드만 좁힌다(웹 detailImages와 같은 축).
 // sliceGroupId/sliceIndex는 서버가 긴 원본을 잘라 저장한 조각 메타(비조각은 null). 서버
@@ -98,24 +98,24 @@ export function JobDescriptionSection({
 		descriptionBlocks,
 	});
 
-	// storageKey를 공개 버킷 URL로 조립(웹 jobMediaPublicUrl과 같은 축). base가 없거나(개발)
-	// 크기 메타가 없는 행은 aspectRatio를 못 잡으므로 뺀다.
-	const base = gcsPublicBaseUrl?.replace(TRAILING_SLASH_RE, "");
-	const imageRows = base
-		? detail.flatMap((media) =>
-				media.width && media.height
-					? [
-							{
-								height: media.height,
-								sliceGroupId: media.sliceGroupId ?? null,
-								src: `${base}/${media.storageKey}`,
-								storageKey: media.storageKey,
-								width: media.width,
-							},
-						]
-					: []
-			)
-		: [];
+	// storageKey → URL은 목록 커버와 같은 publicObjectUri 한 곳을 지난다(dev의 web 로컬
+	// 라우트 분기까지 포함) — 여기서 따로 조립하면 목록엔 뜨는데 상세만 빈 칸이 된다.
+	// URL을 못 만들거나(base 없음) 크기 메타가 없는 행은 aspectRatio를 못 잡으므로 뺀다.
+	const imageRows = detail.flatMap((media) => {
+		const src = publicObjectUri(media.storageKey, gcsPublicBaseUrl);
+
+		return src && media.width && media.height
+			? [
+					{
+						height: media.height,
+						sliceGroupId: media.sliceGroupId ?? null,
+						src,
+						storageKey: media.storageKey,
+						width: media.width,
+					},
+				]
+			: [];
+	});
 	const imageDocument = {
 		assets: imageRows.map((row) => ({
 			height: row.height,
