@@ -1,5 +1,6 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { generateChatMessageId } from "@bambi-app/api/services/bambi-chat-message-id";
+import { env } from "@bambi-app/env/native";
 import {
 	type ImagePickerAsset,
 	type ImagePickerResult,
@@ -110,26 +111,25 @@ const uploadResolvedSource = async (params: {
 		};
 	}
 
-	// dev 서버(GCS 미구성)는 web 앱의 로컬 업로드 경로("/bambi/local-job-media?…")를 내려준다.
-	// web은 같은 출처라 거기로 PUT하지만 앱은 web 주소를 모른다 — web의 플레이스홀더 건너뛰기와
-	// 같은 규칙으로 dev에서만 업로드를 생략하고 storageKey만 실어 흐름을 잇는다(폼 미리보기는
-	// 로컬 uri라 그대로 보이고, 등록 뒤 목록 커버는 dev에서 폴백이 뜬다). 운영에서 서명 URL이
-	// 아니면 서버 구성 오류이므로 종전대로 막는다.
-	if (!intent.uploadUrl.startsWith("https://")) {
-		if (
-			process.env.NODE_ENV !== "production" &&
-			intent.uploadUrl.startsWith("/")
-		) {
-			return { picked: resolved, storageKey: intent.storageKey };
-		}
+	// dev 서버(GCS 미구성)는 web 앱의 로컬 업로드 경로("/bambi/local-job-media?…", 상대 URL)를
+	// 내려준다. web은 같은 출처라 그대로 PUT하지만 앱은 EXPO_PUBLIC_WEB_URL에 붙여야 닿는다 —
+	// 거기 올려야 web의 검수 큐·상세가 같은 경로(GET)로 이미지를 읽는다. 주소가 없으면 web의
+	// 플레이스홀더 건너뛰기처럼 업로드만 생략하고 storageKey를 실어 흐름을 잇는다(그 경우 web엔
+	// 이미지가 안 보인다). 운영에서 서명 URL이 아니면 서버 구성 오류이므로 종전대로 막는다.
+	const uploadUrl = resolveUploadUrl(intent.uploadUrl);
 
+	if (uploadUrl === null) {
 		return {
 			error: "지금은 이미지를 등록할 수 없어요. 잠시 후 다시 시도해 주세요.",
 		};
 	}
 
+	if (uploadUrl === "") {
+		return { picked: resolved, storageKey: intent.storageKey };
+	}
+
 	try {
-		const response = await fetch(intent.uploadUrl, {
+		const response = await fetch(uploadUrl, {
 			body: bytes,
 			headers: { "Content-Type": intent.mimeType },
 			method: "PUT",
@@ -148,6 +148,24 @@ const uploadResolvedSource = async (params: {
 	}
 
 	return { picked: resolved, storageKey: intent.storageKey };
+};
+
+const TRAILING_SLASH = /\/$/;
+
+// 인텐트의 uploadUrl을 실제 PUT 대상으로 푼다. 서명 URL(https)은 그대로, dev의 상대 경로는
+// web 주소에 붙이고, web 주소가 없으면 ""(업로드 생략), 그 밖(운영 비https)은 null(차단).
+const resolveUploadUrl = (uploadUrl: string): null | string => {
+	if (uploadUrl.startsWith("https://")) {
+		return uploadUrl;
+	}
+
+	if (process.env.NODE_ENV !== "production" && uploadUrl.startsWith("/")) {
+		const webUrl = env.EXPO_PUBLIC_WEB_URL?.replace(TRAILING_SLASH, "");
+
+		return webUrl ? `${webUrl}${uploadUrl}` : "";
+	}
+
+	return null;
 };
 
 // 사진 선택 → 업로드까지의 공통 로직. cover·banner가 함께 쓰므로 화면 의존(Alert 등)을
