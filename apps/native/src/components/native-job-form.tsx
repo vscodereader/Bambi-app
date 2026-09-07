@@ -18,7 +18,7 @@ import {
 } from "heroui-native";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { findNodeHandle, Alert as RNAlert, Text, View } from "react-native";
+import { Alert as RNAlert, Text, View } from "react-native";
 import type { KeyboardAwareScrollViewRef } from "react-native-keyboard-controller";
 
 import { BambiScreen } from "@/src/components/bambi-screen";
@@ -275,14 +275,17 @@ export function NativeJobFormScreen({
 			return;
 		}
 
-		const scrollNode = findNodeHandle(scroll);
+		// Fabric(RN 0.85)의 measureLayout은 숫자 핸들(findNodeHandle)이 아니라 호스트 컴포넌트
+		// 참조를 요구한다 — 숫자를 넘기면 "must be called with a ref to a native component"
+		// 경고만 내고 스크롤하지 않는다. ScrollView 인스턴스의 getNativeScrollRef()가 그 참조다.
+		const scrollHost = scroll.getNativeScrollRef?.();
 
-		if (scrollNode === null) {
+		if (!scrollHost) {
 			return;
 		}
 
 		target.measureLayout(
-			scrollNode,
+			scrollHost,
 			(_x, y) => scroll.scrollTo({ animated: true, y: Math.max(y - 16, 0) }),
 			// 측정 실패 시엔 스크롤하지 않는다 — 좌표 없이 scrollTo하면 맨 위로 튄다.
 			() => {
