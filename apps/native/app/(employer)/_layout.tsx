@@ -57,6 +57,7 @@ export default function EmployerLayout() {
 			<Stack.Screen name="me/teams" options={{ title: "팀 관리" }} />
 			<Stack.Screen name="promotions" options={{ title: "광고 관리" }} />
 			<Stack.Screen name="analytics" options={{ title: "성과 분석" }} />
+			<Stack.Screen name="notifications" options={{ title: "알림" }} />
 			<Stack.Screen
 				name="boost-options"
 				options={{ title: "끌어올리기 옵션" }}
