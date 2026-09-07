@@ -14,6 +14,7 @@ import {
 	resolveJobImagePick,
 	toJobMediaItem,
 } from "@/src/lib/employer/job-media";
+import { readLocalFileBytes } from "@/src/lib/local-file-bytes";
 
 // createMediaUpload 프로시저의 입력·출력을 orpc 라우터에서 그대로 따온다. 호출부가 넘기는
 // mutateAsync가 이 시그니처에 맞아떨어져야 하므로 손으로 다시 쓰지 않는다 — 서버 스키마가
@@ -63,10 +64,10 @@ const pickImageAsset = async (): Promise<
 	return { asset };
 };
 
-// blob 실측 → 규격 확인 → 업로드 인텐트 발급 → PUT 업로드. 단일 이미지와 조각 각각이
+// 바이트 실측 → 규격 확인 → 업로드 인텐트 발급 → PUT 업로드. 단일 이미지와 조각 각각이
 // 공유한다(픽·조각내기 로직은 호출부).
 const uploadResolvedSource = async (params: {
-	blob: Blob;
+	bytes: Uint8Array<ArrayBuffer>;
 	createUpload: CreateUpload;
 	organizationId: string;
 	source: {
@@ -81,8 +82,8 @@ const uploadResolvedSource = async (params: {
 }): Promise<
 	{ error: string } | { picked: PickedJobImage; storageKey: string }
 > => {
-	const { blob, createUpload, organizationId, source, teamId, usage } = params;
-	const resolved = resolveJobImagePick(source, blob.size);
+	const { bytes, createUpload, organizationId, source, teamId, usage } = params;
+	const resolved = resolveJobImagePick(source, bytes.byteLength);
 
 	if ("error" in resolved) {
 		return { error: resolved.error };
@@ -117,7 +118,7 @@ const uploadResolvedSource = async (params: {
 
 	try {
 		const response = await fetch(intent.uploadUrl, {
-			body: blob,
+			body: bytes,
 			headers: { "Content-Type": intent.mimeType },
 			method: "PUT",
 		});
@@ -152,10 +153,10 @@ export const pickAndUploadJobImage = async (args: {
 		return asset;
 	}
 
-	// 서명 content-length에 blob.size가 묶인다 — asset.fileSize가 아니라 실측 바이트.
-	const blob = await (await fetch(asset.asset.uri)).blob();
+	// 서명 content-length에 실측 바이트가 묶인다 — asset.fileSize가 아니라 읽은 바이트 길이.
+	const { bytes } = await readLocalFileBytes(asset.asset.uri);
 	const result = await uploadResolvedSource({
-		blob,
+		bytes,
 		createUpload,
 		organizationId,
 		source: {
@@ -222,9 +223,9 @@ export const pickAndUploadDetailImages = async (args: {
 		const previews: Record<string, string> = {};
 
 		for (const slice of sliced) {
-			const blob = await (await fetch(slice.uri)).blob();
+			const { bytes } = await readLocalFileBytes(slice.uri);
 			const result = await uploadResolvedSource({
-				blob,
+				bytes,
 				createUpload,
 				organizationId,
 				source: {
@@ -254,9 +255,9 @@ export const pickAndUploadDetailImages = async (args: {
 		return { items, previews };
 	}
 
-	const blob = await (await fetch(source.uri)).blob();
+	const { bytes } = await readLocalFileBytes(source.uri);
 	const result = await uploadResolvedSource({
-		blob,
+		bytes,
 		createUpload,
 		organizationId,
 		source: {

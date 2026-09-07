@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 
 import { businessErrorMessage } from "@/src/lib/employer/business";
+import { readLocalFileBytes } from "@/src/lib/local-file-bytes";
 import { orpc } from "@/src/lib/orpc";
 
 export interface BusinessDocumentItem {
@@ -67,11 +68,11 @@ export function BusinessDocumentSection({
 		orpc.bambi.onboarding.createBusinessDocumentViewUrl.mutationOptions()
 	);
 
-	// 파일 선택 → blob 실측 → MIME·크기 검증 → (강등 상태면) 확인. 통과하면 업로드에 필요한
+	// 파일 선택 → 바이트 실측 → MIME·크기 검증 → (강등 상태면) 확인. 통과하면 업로드에 필요한
 	// 값을 돌려주고, 취소·검증 실패·거절이면 null. setIsBusy(true)는 파일이 실제로 잡힌 뒤에만
 	// 켜고, 끄는 것은 호출부 handleAdd의 finally가 맡는다.
 	const pickDocument = async (): Promise<null | {
-		blob: Blob;
+		bytes: Uint8Array<ArrayBuffer>;
 		mimeType: string;
 		name: string;
 	}> => {
@@ -89,8 +90,11 @@ export function BusinessDocumentSection({
 
 		setIsBusy(true);
 
-		const blob = await (await fetch(asset.uri)).blob();
-		const mimeType = asset.mimeType ?? blob.type;
+		const { bytes, mimeType: detectedMimeType } = await readLocalFileBytes(
+			asset.uri
+		);
+		// 피커 MIME가 정본이고, 없으면 파일 읽기가 추정한 MIME → 그래도 없으면 ""로 둬 아래 검증이 거른다.
+		const mimeType = asset.mimeType ?? detectedMimeType ?? "";
 
 		if (!BUSINESS_DOC_MIME_TYPES.has(mimeType)) {
 			Alert.alert(
@@ -100,7 +104,7 @@ export function BusinessDocumentSection({
 			return null;
 		}
 
-		if (blob.size < 1 || blob.size > BUSINESS_DOC_MAX_BYTES) {
+		if (bytes.byteLength < 1 || bytes.byteLength > BUSINESS_DOC_MAX_BYTES) {
 			Alert.alert("등록할 수 없는 파일", "파일 크기는 10MB 이하여야 해요.");
 			return null;
 		}
@@ -115,7 +119,7 @@ export function BusinessDocumentSection({
 			return null;
 		}
 
-		return { blob, mimeType, name: asset.name };
+		return { bytes, mimeType, name: asset.name };
 	};
 
 	const handleAdd = async () => {
@@ -136,7 +140,7 @@ export function BusinessDocumentSection({
 
 			const orgId = organizationId ?? (await onEnsureOrganizationId());
 			const intent = await uploadMutation.mutateAsync({
-				byteSize: doc.blob.size,
+				byteSize: doc.bytes.byteLength,
 				fileName: doc.name,
 				mimeType: doc.mimeType,
 				organizationId: orgId,
@@ -151,7 +155,7 @@ export function BusinessDocumentSection({
 			}
 
 			const response = await fetch(intent.uploadUrl, {
-				body: doc.blob,
+				body: doc.bytes,
 				headers: { "Content-Type": intent.mimeType },
 				method: "PUT",
 			});
@@ -161,7 +165,7 @@ export function BusinessDocumentSection({
 			}
 
 			await addMutation.mutateAsync({
-				byteSize: doc.blob.size,
+				byteSize: doc.bytes.byteLength,
 				fileName: doc.name,
 				mimeType: doc.mimeType,
 				organizationId: orgId,

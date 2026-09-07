@@ -2,6 +2,7 @@ import { generateChatMessageId } from "@bambi-app/api/services/bambi-chat-messag
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { readLocalFileBytes } from "@/src/lib/local-file-bytes";
 import { orpc } from "@/src/lib/orpc";
 
 import {
@@ -161,9 +162,9 @@ export function useChatSend({
 		async (id: string, picked: PickedAttachment, body: string) => {
 			setIsUploading(true);
 			try {
-				// 서명이 content-length에 묶여 있어 피커가 준 size가 아니라 실제 blob 크기를 쓴다.
-				const blob = await (await fetch(picked.uri)).blob();
-				const resolved = { ...picked, byteSize: blob.size };
+				// 서명이 content-length에 묶여 있어 피커가 준 size가 아니라 실측 바이트 길이를 쓴다.
+				const { bytes } = await readLocalFileBytes(picked.uri);
+				const resolved = { ...picked, byteSize: bytes.byteLength };
 				const validation = validatePickedAttachment(resolved);
 
 				if (!validation.ok) {
@@ -185,7 +186,7 @@ export function useChatSend({
 				}
 
 				const response = await fetch(intent.uploadUrl, {
-					body: blob,
+					body: bytes,
 					headers: { "Content-Type": intent.mimeType },
 					method: "PUT",
 				});
