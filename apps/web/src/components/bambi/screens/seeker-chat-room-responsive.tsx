@@ -47,6 +47,7 @@ import {
 } from "@/lib/bambi/image-signature";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { useChatMessageScroll } from "@/lib/bambi/use-chat-message-scroll";
+import { useChatPresenceRefresh } from "@/lib/bambi/use-chat-presence-refresh";
 import { useChatRoomAutoRead } from "@/lib/bambi/use-chat-room-auto-read";
 import { useMobileKeyboardState } from "@/lib/bambi/use-mobile-keyboard-state";
 import { useOlderChatMessages } from "@/lib/bambi/use-older-chat-messages";
@@ -73,6 +74,7 @@ import {
 	ChatAttachmentPreview,
 	type ChatAttachmentPreviewItem,
 } from "../chat-attachment-preview";
+import { ChatAvailabilityBadges } from "../chat-availability-badges";
 import { Avatar, Badge, Button, Card } from "../ds";
 import { FieldLabel } from "../form-message";
 import {
@@ -86,6 +88,7 @@ import {
 	ShieldIcon,
 	XIcon,
 } from "../icons";
+import { JobMetadataBadges } from "../job-metadata-badges";
 import { ReportDialog } from "../report-dialog";
 
 interface SeekerChatRoomResponsiveProps {
@@ -894,23 +897,6 @@ function ChatJobPostLink({
 }
 
 // 헤더 상태 배지. 남는 상태는 운영자 차단뿐이다 — 상대가 나갔는지는 드러내지 않는다.
-function ChatRoomStateBadge({
-	counterpartWithdrawn = false,
-	isBlocked,
-}: {
-	counterpartWithdrawn?: boolean;
-	isBlocked: boolean;
-}) {
-	if (counterpartWithdrawn) {
-		return <Badge tone="danger">대화 불가능</Badge>;
-	}
-	if (isBlocked) {
-		return <Badge tone="danger">차단됨</Badge>;
-	}
-
-	return <Badge tone="success">대화 가능</Badge>;
-}
-
 function ChatCounterpartName({ name }: { name: string | null }) {
 	if (!name) {
 		return null;
@@ -1226,6 +1212,11 @@ function ContactRevealAction({
 }
 
 interface ChatRoomSidePanelProps {
+	counterpartIsOnline: boolean;
+	counterpartResponseBucket: Parameters<
+		typeof ChatAvailabilityBadges
+	>[0]["counterpartResponseBucket"];
+	counterpartWithdrawn: boolean;
 	currentUserId: string;
 	employerVerifiedPhone: null | string;
 	interviewAt: string;
@@ -1259,12 +1250,17 @@ interface ChatRoomSidePanelProps {
 		interviewScheduleId: string,
 		status: "canceled" | "confirmed" | "declined"
 	) => void;
+	showRealtimeBadge: boolean;
+	viewerIsOnline: boolean;
 }
 
 // 공고 조건·면접 일정·연락처 카드. 데스크톱 사이드바(aside)와 모바일 서랍(Sheet)이
 // 같은 내용을 쓴다 — 서랍에만 있는 조각(공고 보기·상태 배지·안전 섹션)은 md:hidden으로
 // 데스크톱 사이드바에서만 빠진다(모바일 헤더에서 뺀 것들의 새 자리라 데스크톱은 무변경).
 function ChatRoomSidePanel({
+	counterpartIsOnline,
+	counterpartResponseBucket,
+	counterpartWithdrawn,
 	currentUserId,
 	employerVerifiedPhone,
 	interviewAt,
@@ -1283,17 +1279,24 @@ function ChatRoomSidePanel({
 	scheduleErrorMessage,
 	schedules,
 	setScheduleStatus,
+	showRealtimeBadge,
+	viewerIsOnline,
 }: ChatRoomSidePanelProps) {
 	return (
 		<div className="grid gap-4">
 			<Card className="rounded-lg" pad="lg" tone="outline">
-				<div className="flex items-center justify-between gap-2">
-					<h2 className="m-0 font-extrabold text-lg">공고 조건</h2>
-					<span className="md:hidden">
-						<ChatRoomStateBadge isBlocked={isBlocked} />
-					</span>
-				</div>
+				<h2 className="m-0 font-extrabold text-lg">공고 조건</h2>
 				<div className="mt-4 grid gap-3 text-sm">
+					<div className="flex flex-wrap gap-1 md:hidden">
+						<ChatAvailabilityBadges
+							counterpartIsOnline={counterpartIsOnline}
+							counterpartResponseBucket={counterpartResponseBucket}
+							counterpartWithdrawn={counterpartWithdrawn}
+							isBlocked={isBlocked}
+							showRealtimeBadge={showRealtimeBadge}
+							viewerIsOnline={viewerIsOnline}
+						/>
+					</div>
 					<div className="flex items-center gap-2 font-bold">
 						<span className="inline-flex size-4 text-coral-600">
 							<DollarCircle />
@@ -1511,6 +1514,13 @@ export function SeekerChatRoomResponsive({
 			queryKey: orpc.bambi.chats.listMine.queryKey(),
 		});
 	}, [queryClient, roomId]);
+	useChatPresenceRefresh(
+		[
+			roomQuery.data?.viewerPresenceRefreshAt,
+			roomQuery.data?.counterpartPresenceRefreshAt,
+		],
+		invalidateRoom
+	);
 	const sendMessageMutation = useMutation(
 		orpc.bambi.chats.sendMessage.mutationOptions({
 			onError: (error) => {
@@ -1741,6 +1751,9 @@ export function SeekerChatRoomResponsive({
 		const handleRealtimeError = (payload: { message: string }) => {
 			setErrorMessage(payload.message);
 		};
+		const handlePresenceChange = () => {
+			invalidateRoom().catch(() => undefined);
+		};
 		const handleTypingStarted = (payload: {
 			roomId: string;
 			userId: string;
@@ -1792,6 +1805,8 @@ export function SeekerChatRoomResponsive({
 		socket.on("chat:error", handleRealtimeError);
 		socket.on("chat:message:created", handleMessageCreated);
 		socket.on("chat:message:read", refreshIfCurrentRoom);
+		socket.on("chat:participant:presence", handlePresenceChange);
+		socket.on("chat:participant:presence:resync", handlePresenceChange);
 		socket.on("chat:room:updated", refreshIfCurrentRoom);
 		socket.on("chat:unread:updated", handleUnreadUpdated);
 		// 유저 채널로 오는 신호라 방 소켓룸을 잃은 상태에서도 도착한다 — 방 화면의
@@ -1808,6 +1823,8 @@ export function SeekerChatRoomResponsive({
 			socket.off("chat:error", handleRealtimeError);
 			socket.off("chat:message:created", handleMessageCreated);
 			socket.off("chat:message:read", refreshIfCurrentRoom);
+			socket.off("chat:participant:presence", handlePresenceChange);
+			socket.off("chat:participant:presence:resync", handlePresenceChange);
 			socket.off("chat:room:updated", refreshIfCurrentRoom);
 			socket.off("chat:unread:updated", handleUnreadUpdated);
 			socket.off("chat:list:updated", refreshIfCurrentRoom);
@@ -1939,7 +1956,9 @@ export function SeekerChatRoomResponsive({
 	}
 
 	const {
+		counterpartIsOnline,
 		counterpartName,
+		counterpartResponseBucket,
 		counterpartProfileImageUrl,
 		counterpartWithdrawn,
 		currentUserId,
@@ -1947,7 +1966,9 @@ export function SeekerChatRoomResponsive({
 		jobPost,
 		room,
 		schedules,
+		viewerIsOnline,
 	} = roomQuery.data;
+	const bothParticipantsOnline = viewerIsOnline && counterpartIsOnline;
 	const isJobSeeker = currentUserId === room.jobSeekerUserId;
 	const blockedUserId = resolveBlockedUserId(isJobSeeker, room);
 	const isAttachmentSubmitting =
@@ -2177,6 +2198,9 @@ export function SeekerChatRoomResponsive({
 	};
 	const sidePanel = (
 		<ChatRoomSidePanel
+			counterpartIsOnline={counterpartIsOnline}
+			counterpartResponseBucket={counterpartResponseBucket}
+			counterpartWithdrawn={counterpartWithdrawn}
 			currentUserId={currentUserId}
 			employerVerifiedPhone={employerVerifiedPhone}
 			interviewAt={interviewAt}
@@ -2210,6 +2234,10 @@ export function SeekerChatRoomResponsive({
 			scheduleErrorMessage={scheduleErrorMessage}
 			schedules={schedules}
 			setScheduleStatus={setScheduleStatus}
+			showRealtimeBadge={
+				bothParticipantsOnline && realtimeStatus === "connected"
+			}
+			viewerIsOnline={viewerIsOnline}
 		/>
 	);
 
@@ -2250,13 +2278,15 @@ export function SeekerChatRoomResponsive({
 								aria-hidden="true"
 								className={cn(
 									"size-2 flex-none rounded-full",
-									realtimeStatus === "connected"
+									bothParticipantsOnline && realtimeStatus === "connected"
 										? "bg-green-500"
 										: "bg-muted-foreground/40"
 								)}
 							/>
 							<span className="sr-only">
-								{getRealtimeStatusLabel(realtimeStatus)}
+								{bothParticipantsOnline
+									? getRealtimeStatusLabel(realtimeStatus)
+									: "상대 오프라인"}
 							</span>
 						</div>
 						<p className="m-0 truncate text-muted-foreground text-xs">
@@ -2289,23 +2319,26 @@ export function SeekerChatRoomResponsive({
 								{jobPost?.title ?? "공고 채팅"}
 							</h1>
 							<ChatCounterpartName name={counterpartName} />
-							<p className="mt-1 mb-0 truncate text-muted-foreground text-xs">
-								{jobPost?.industryCategory ?? "공고"} ·{" "}
-								{jobPost?.region ?? "지역 확인"}
-							</p>
+							<JobMetadataBadges
+								className="mt-1"
+								district={jobPost?.district}
+								industryCategory={jobPost?.industryCategory}
+								region={jobPost?.region}
+							/>
 						</div>
 					</div>
 					<div className="flex min-w-0 items-center gap-2 overflow-hidden">
 						<ChatJobPostLink jobPost={jobPost} />
-						<ChatRoomStateBadge
+						<ChatAvailabilityBadges
+							counterpartIsOnline={counterpartIsOnline}
+							counterpartResponseBucket={counterpartResponseBucket}
 							counterpartWithdrawn={counterpartWithdrawn}
 							isBlocked={room.isBlocked}
+							showRealtimeBadge={
+								bothParticipantsOnline && realtimeStatus === "connected"
+							}
+							viewerIsOnline={viewerIsOnline}
 						/>
-						<Badge
-							tone={realtimeStatus === "connected" ? "success" : "neutral"}
-						>
-							{getRealtimeStatusLabel(realtimeStatus)}
-						</Badge>
 					</div>
 				</header>
 				<ChatSafetyBannerMobile />

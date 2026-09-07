@@ -17,6 +17,8 @@ import {
 } from "drizzle-orm";
 import { SITE_SETTINGS_ROW_ID } from "./bambi-point-settings";
 import {
+	getUserPresenceExpiryAt,
+	isUserOnline,
 	resolveUserOfflineAfterMinutes,
 	USER_ACTIVITY_WRITE_INTERVAL_MS,
 	USER_PRESENCE_CONNECTION_LEASE_MS,
@@ -31,6 +33,54 @@ export const getUserOfflineAfterMinutes = async (): Promise<number> => {
 		.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
 		.limit(1);
 	return resolveUserOfflineAfterMinutes(row?.value);
+};
+
+export interface UserPresenceState {
+	isOnline: boolean;
+	presenceRefreshAt: Date | null;
+}
+
+export const getUserPresenceStatesByIds = async (
+	userIds: string[],
+	now = new Date()
+): Promise<Map<string, UserPresenceState>> => {
+	const uniqueUserIds = [...new Set(userIds)];
+	if (uniqueUserIds.length === 0) {
+		return new Map();
+	}
+	const [offlineAfterMinutes, rows] = await Promise.all([
+		getUserOfflineAfterMinutes(),
+		db
+			.select({
+				deletedAt: user.deletedAt,
+				id: user.id,
+				lastActivityAt: user.lastActivityAt,
+				presenceDisconnectedAt: user.presenceDisconnectedAt,
+			})
+			.from(user)
+			.where(inArray(user.id, uniqueUserIds)),
+	]);
+
+	return new Map(
+		rows.map((row) => {
+			const isOnline = isUserOnline({
+				deletedAt: row.deletedAt,
+				lastActivityAt: row.lastActivityAt,
+				now,
+				offlineAfterMinutes,
+				presenceDisconnectedAt: row.presenceDisconnectedAt,
+			});
+			return [
+				row.id,
+				{
+					isOnline,
+					presenceRefreshAt: isOnline
+						? getUserPresenceExpiryAt(row.lastActivityAt, offlineAfterMinutes)
+						: null,
+				},
+			] as const;
+		})
+	);
 };
 
 const leaseExpiry = (now: Date): Date =>
