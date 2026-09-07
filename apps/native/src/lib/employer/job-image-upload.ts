@@ -1,6 +1,5 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { generateChatMessageId } from "@bambi-app/api/services/bambi-chat-message-id";
-import { env } from "@bambi-app/env/native";
 import {
 	type ImagePickerAsset,
 	type ImagePickerResult,
@@ -8,6 +7,7 @@ import {
 } from "expo-image-picker";
 
 import { localErrorMessage } from "@/src/lib/chat/chat-errors";
+import { resolveUploadUrl } from "@/src/lib/dev-web-url";
 import { sliceDetailImage } from "@/src/lib/employer/detail-image-slicing";
 import {
 	type JobMediaUploadItem,
@@ -148,24 +148,6 @@ const uploadResolvedSource = async (params: {
 	}
 
 	return { picked: resolved, storageKey: intent.storageKey };
-};
-
-const TRAILING_SLASH = /\/$/;
-
-// 인텐트의 uploadUrl을 실제 PUT 대상으로 푼다. 서명 URL(https)은 그대로, dev의 상대 경로는
-// web 주소에 붙이고, web 주소가 없으면 ""(업로드 생략), 그 밖(운영 비https)은 null(차단).
-const resolveUploadUrl = (uploadUrl: string): null | string => {
-	if (uploadUrl.startsWith("https://")) {
-		return uploadUrl;
-	}
-
-	if (process.env.NODE_ENV !== "production" && uploadUrl.startsWith("/")) {
-		const webUrl = env.EXPO_PUBLIC_WEB_URL?.replace(TRAILING_SLASH, "");
-
-		return webUrl ? `${webUrl}${uploadUrl}` : "";
-	}
-
-	return null;
 };
 
 // 사진 선택 → 업로드까지의 공통 로직. cover·banner가 함께 쓰므로 화면 의존(Alert 등)을
