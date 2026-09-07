@@ -24,7 +24,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ChatAttachmentPreview } from "@/components/bambi/chat-attachment-preview";
+import { BusinessDocumentFileRow } from "@/components/bambi/business-document-file-row";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	formatBusinessStartDate,
@@ -194,10 +194,10 @@ export default function ModeratorEmployersPage() {
 									</Badge>
 								</div>
 								{employer.businessDocuments.length > 0 ? (
-									<ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+									<ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
 										{employer.businessDocuments.map((document) => (
 											<li className="min-w-0" key={document.id}>
-												<ChatAttachmentPreview
+												<BusinessDocumentFileRow
 													actions={
 														<Button
 															aria-label={`${document.fileName} 삭제`}
@@ -213,9 +213,9 @@ export default function ModeratorEmployersPage() {
 															<Trash2 aria-hidden />
 														</Button>
 													}
-													attachment={document}
+													document={document}
 													downloadUrl={`${document.objectUrl}?download=1`}
-													mine={false}
+													viewUrl={document.objectUrl}
 												/>
 											</li>
 										))}
@@ -243,7 +243,10 @@ export default function ModeratorEmployersPage() {
 							/>
 							<div className="flex gap-2">
 								<Button
-									disabled={decide.isPending}
+									disabled={
+										decide.isPending ||
+										employer.verificationStatus === "verified"
+									}
 									onClick={() =>
 										decide.mutate({
 											organizationId: employer.organizationId,

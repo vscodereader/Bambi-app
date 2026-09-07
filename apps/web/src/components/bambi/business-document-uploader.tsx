@@ -17,15 +17,9 @@ import {
 	AlertDialogTitle,
 } from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
-import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import { Button } from "@bambi-app/ui/components/button";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-	Download,
-	ExternalLink,
-	FileText,
-	ImageIcon,
-	Trash2,
-} from "lucide-react";
+import { Trash2 } from "lucide-react";
 import {
 	type Ref,
 	useEffect,
@@ -34,6 +28,10 @@ import {
 	useState,
 } from "react";
 import { toast } from "sonner";
+import {
+	type BusinessDocument,
+	BusinessDocumentFileRow,
+} from "@/components/bambi/business-document-file-row";
 import {
 	detectImageSignature,
 	isPdfSignature,
@@ -47,15 +45,6 @@ const MAX_FILE_BYTES = CHAT_MEDIA_MAX_BYTES;
 const BYTES_PER_MEGABYTE = 1024 * 1024;
 const MAX_FILE_MEGABYTES = CHAT_MEDIA_MAX_BYTES / BYTES_PER_MEGABYTE;
 
-export interface BusinessDocument {
-	byteSize: number;
-	category: "image" | "pdf";
-	fileName: string;
-	id: string;
-	mimeType: string;
-	objectUrl: string;
-}
-
 interface BusinessDocumentUploaderProps {
 	documents: BusinessDocument[];
 	onPendingFilesChange?: (hasPendingFiles: boolean) => void;
@@ -68,14 +57,6 @@ export interface BusinessDocumentUploaderHandle {
 	hasPendingFiles: () => boolean;
 	uploadPendingFiles: (organizationId: string) => Promise<void>;
 }
-
-const formatBytes = (bytes: number): string => {
-	if (bytes < 1024 * 1024) {
-		return `${Math.max(1, Math.round(bytes / 1024))}KB`;
-	}
-
-	return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-};
 
 const validateFile = async (file: File): Promise<string | null> => {
 	if (!ACCEPTED_MIME_TYPES.has(file.type)) {
@@ -99,6 +80,45 @@ const validateFile = async (file: File): Promise<string | null> => {
 
 	return null;
 };
+
+function StagedBusinessDocumentRow({
+	file,
+	onRemove,
+}: {
+	file: File;
+	onRemove: () => void;
+}) {
+	const [objectUrl, setObjectUrl] = useState<string>();
+
+	useEffect(() => {
+		const nextObjectUrl = URL.createObjectURL(file);
+		setObjectUrl(nextObjectUrl);
+		return () => URL.revokeObjectURL(nextObjectUrl);
+	}, [file]);
+
+	return (
+		<BusinessDocumentFileRow
+			actions={
+				<Button
+					aria-label={`${file.name} 삭제`}
+					onClick={onRemove}
+					size="icon"
+					type="button"
+					variant="ghost"
+				>
+					<Trash2 aria-hidden />
+				</Button>
+			}
+			document={{
+				byteSize: file.size,
+				category: file.type === "application/pdf" ? "pdf" : "image",
+				fileName: file.name,
+			}}
+			downloadUrl={objectUrl}
+			viewUrl={objectUrl}
+		/>
+	);
+}
 
 export function BusinessDocumentUploader({
 	documents,
@@ -254,70 +274,36 @@ export function BusinessDocumentUploader({
 				</div>
 
 				{documents.length > 0 ? (
-					<ul className="grid gap-2">
+					<ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
 						{documents.map((document) => (
-							<li
-								className="flex min-w-0 items-center justify-between gap-2 rounded-lg border p-3"
-								key={document.id}
-							>
-								<div className="flex min-w-0 items-center gap-2">
-									{document.category === "image" ? (
-										<ImageIcon aria-hidden className="size-4 shrink-0" />
-									) : (
-										<FileText aria-hidden className="size-4 shrink-0" />
-									)}
-									<div className="min-w-0">
-										<p className="truncate text-sm">{document.fileName}</p>
-										<p className="text-muted-foreground text-xs">
-											{formatBytes(document.byteSize)}
-										</p>
-									</div>
-								</div>
-								<div className="flex shrink-0 items-center gap-1">
-									<a
-										aria-label={`${document.fileName} 새 창에서 열기`}
-										className={buttonVariants({
-											size: "icon",
-											variant: "ghost",
-										})}
-										href={document.objectUrl}
-										rel="noreferrer"
-										target="_blank"
-									>
-										<ExternalLink aria-hidden />
-									</a>
-									<a
-										aria-label={`${document.fileName} 다운로드`}
-										className={buttonVariants({
-											size: "icon",
-											variant: "ghost",
-										})}
-										download={document.fileName}
-										href={`${document.objectUrl}?download=1`}
-									>
-										<Download aria-hidden />
-									</a>
-									<Button
-										aria-label={`${document.fileName} 삭제`}
-										disabled={
-											isDeleteLocked || deleteDocumentMutation.isPending
-										}
-										onClick={() => {
-											if (requiresConfirmation) {
-												setPendingDeleteId(document.id);
-												return;
+							<li className="min-w-0" key={document.id}>
+								<BusinessDocumentFileRow
+									actions={
+										<Button
+											aria-label={`${document.fileName} 삭제`}
+											disabled={
+												isDeleteLocked || deleteDocumentMutation.isPending
 											}
-											deleteDocumentMutation.mutate({
-												documentId: document.id,
-											});
-										}}
-										size="icon"
-										type="button"
-										variant="ghost"
-									>
-										<Trash2 aria-hidden />
-									</Button>
-								</div>
+											onClick={() => {
+												if (requiresConfirmation) {
+													setPendingDeleteId(document.id);
+													return;
+												}
+												deleteDocumentMutation.mutate({
+													documentId: document.id,
+												});
+											}}
+											size="icon"
+											type="button"
+											variant="ghost"
+										>
+											<Trash2 aria-hidden />
+										</Button>
+									}
+									document={document}
+									downloadUrl={`${document.objectUrl}?download=1`}
+									viewUrl={document.objectUrl}
+								/>
 							</li>
 						))}
 					</ul>
@@ -327,30 +313,20 @@ export function BusinessDocumentUploader({
 					</p>
 				)}
 				{stagedFiles.length > 0 ? (
-					<ul className="grid gap-2">
+					<ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
 						{stagedFiles.map((file) => (
 							<li
-								className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-dashed p-3"
+								className="min-w-0"
 								key={`${file.name}-${file.size}-${file.lastModified}`}
 							>
-								<div className="min-w-0">
-									<p className="truncate text-sm">{file.name}</p>
-									<p className="text-muted-foreground text-xs">
-										제출 대기 · {formatBytes(file.size)}
-									</p>
-								</div>
-								<Button
-									onClick={() =>
+								<StagedBusinessDocumentRow
+									file={file}
+									onRemove={() =>
 										setStagedFiles((current) =>
 											current.filter((currentFile) => currentFile !== file)
 										)
 									}
-									size="sm"
-									type="button"
-									variant="ghost"
-								>
-									제거
-								</Button>
+								/>
 							</li>
 						))}
 					</ul>
