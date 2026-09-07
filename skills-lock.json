@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "agent-device": {
+      "source": "callstack/agent-device",
+      "sourceType": "github",
+      "skillPath": "skills/agent-device/SKILL.md",
+      "computedHash": "ff35273224ae38aae23f3b5a905a288b5020ea96b9c62528351517959dbec49b"
+    },
     "ai-sdk": {
       "source": "vercel/ai",
       "sourceType": "github",
@@ -11,6 +17,12 @@
       "source": "evlog.dev",
       "sourceType": "well-known",
       "computedHash": "28bd8254997b767ebba1f7f2cf4567ddb6c51b1fcdca9baf9b9cd7ee3ca51d7c"
+    },
+    "android-emulator": {
+      "source": "callstack/agent-device",
+      "sourceType": "github",
+      "skillPath": "skills/android-emulator/SKILL.md",
+      "computedHash": "324f7396ad7ebdd9f0577440258ac5fba98d8a245953c48e31e6c36d755ae1b8"
     },
     "better-auth-best-practices": {
       "source": "better-auth/skills",
@@ -53,6 +65,12 @@
       "sourceType": "github",
       "skillPath": "skills/heroui-native/SKILL.md",
       "computedHash": "d2fc03a13d03678d40799726a144ba72ba1cb08126176ddbf0a0461c901aef29"
+    },
+    "ios-simulator": {
+      "source": "callstack/agent-device",
+      "sourceType": "github",
+      "skillPath": "skills/ios-simulator/SKILL.md",
+      "computedHash": "6bdc9f0d4d94be6a78432b392190ee557692a6ae921deced02d6e4c9c6ec87d4"
     },
     "native-data-fetching": {
       "source": "expo/skills",
