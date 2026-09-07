@@ -27,6 +27,18 @@ afterEach(() => {
 });
 
 describe("readLocalFileBytes", () => {
+	it("Expo Go 스코프 경로의 이중 인코딩을 한 번 풀어 fetch한다", async () => {
+		stubFetch({});
+
+		await readLocalFileBytes(
+			"file:///cache/ExperienceData/%2540anonymous%252Fslug/ImagePicker/a.jpg"
+		);
+
+		expect(fetch).toHaveBeenCalledWith(
+			"file:///cache/ExperienceData/%40anonymous%2Fslug/ImagePicker/a.jpg"
+		);
+	});
+
 	it("arrayBuffer를 Uint8Array로 바꾸고 byteLength가 실측 크기다", async () => {
 		const source = new Uint8Array([1, 2, 3, 4, 5]);
 		stubFetch({ body: source.buffer, contentType: "image/jpeg" });
