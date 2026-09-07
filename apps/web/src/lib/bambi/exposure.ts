@@ -1,4 +1,8 @@
+import { LISTING_QUEUE_SHORT_LABELS as LISTING_QUEUE_SHORT_LABELS_INTERNAL } from "@bambi-app/api/services/bambi-ad-exposure";
 import { jobStatusLabels } from "../bambi-options";
+
+// biome-ignore lint/performance/noBarrelFile: 정본(packages/api) 이전에 따른 경로 호환용 재수출.
+export { LISTING_QUEUE_SHORT_LABELS } from "@bambi-app/api/services/bambi-ad-exposure";
 
 export const EXPOSURE_TYPE_LABELS = {
 	"premium-banner": "프리미엄 배너",
@@ -21,13 +25,6 @@ export const PAYMENT_STATUS_LABELS = {
 export const JOB_DETAIL_DESIGN_STATUS_LABELS = {
 	requested: "제작 대기",
 	completed: "제작 완료",
-} as const;
-
-// 리스팅 대기열 배지용 짧은 라벨. EXPOSURE_TYPE_LABELS("스페셜 채용")는 배지엔 길어서
-// 대기열 표기 전용의 축약 라벨 맵을 따로 둔다. 대기열은 스페셜·추천 2종에만 존재한다.
-export const LISTING_QUEUE_SHORT_LABELS = {
-	recommended: "추천",
-	special: "스페셜",
 } as const;
 
 export type ExposureType = keyof typeof EXPOSURE_TYPE_LABELS;
@@ -145,7 +142,7 @@ export interface QueueableJobFields {
 export const isQueuedListing = (job: QueueableJobFields): boolean =>
 	job.status === "published" &&
 	job.paymentStatus === "paid" &&
-	job.exposureType in LISTING_QUEUE_SHORT_LABELS &&
+	job.exposureType in LISTING_QUEUE_SHORT_LABELS_INTERNAL &&
 	job.exposureEndsAt === null;
 
 /**
@@ -157,8 +154,8 @@ export const listingQueueBadgeLabel = (
 	position: number | null
 ): string => {
 	const shortLabel =
-		LISTING_QUEUE_SHORT_LABELS[
-			exposureType as keyof typeof LISTING_QUEUE_SHORT_LABELS
+		LISTING_QUEUE_SHORT_LABELS_INTERNAL[
+			exposureType as keyof typeof LISTING_QUEUE_SHORT_LABELS_INTERNAL
 		];
 
 	if (shortLabel === undefined) {

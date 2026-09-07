@@ -64,13 +64,15 @@ export function RoleSwitchMenu({
 	return (
 		<Menu>
 			<Menu.Trigger asChild>
-				{/* 헤더 우측의 보조 컨트롤. 아이콘만 담되 터치 타깃은 48dp(h-12 w-12)를 지킨다. */}
+				{/* 헤더 우측의 보조 컨트롤. 옆의 알림 종(NotificationBell)·구직자 헤더 아이콘 버튼과
+				    같은 outline 박스(border+surface, h-11 w-11 rounded-2xl)로 맞춘다 — 테두리 없는
+				    점 세 개만 있으면 종 옆에서 버튼으로 읽히지 않는다. 터치 타깃 44dp. */}
 				<Pressable
 					accessibilityLabel="화면 전환 메뉴"
 					accessibilityRole="button"
-					className="h-12 w-12 items-center justify-center rounded-2xl active:opacity-75"
+					className="h-11 w-11 items-center justify-center rounded-2xl border border-border bg-surface active:opacity-75"
 				>
-					<Ionicons color={foreground} name="ellipsis-horizontal" size={24} />
+					<Ionicons color={foreground} name="ellipsis-horizontal" size={22} />
 				</Pressable>
 			</Menu.Trigger>
 			<Menu.Portal>

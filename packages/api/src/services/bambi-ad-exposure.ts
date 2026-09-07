@@ -74,6 +74,13 @@ export const EXPOSURE_TYPE_LABELS: Record<JobExposureType, string> = {
 	urgent: "급구 채용",
 };
 
+// 리스팅 대기열 배지·알림 문구용 짧은 라벨. EXPOSURE_TYPE_LABELS("스페셜 채용")는 배지엔
+// 길어서 축약 맵을 따로 둔다. 대기열은 스페셜·추천 2종에만 존재한다(web exposure.ts에서 이동).
+export const LISTING_QUEUE_SHORT_LABELS = {
+	recommended: "추천",
+	special: "스페셜",
+} as const;
+
 // 유료 노출이 아직 유효한가 — 만료일이 없으면(운영자가 기간 없이 결제 처리 등) 유효로 본다.
 export const isExposureActive = (
 	exposureEndsAt: Date | null,

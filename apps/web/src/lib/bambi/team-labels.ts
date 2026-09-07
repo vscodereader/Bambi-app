@@ -2,16 +2,11 @@
 // 운영자 팀 합류 승인(moderator/team-invites)이 공유한다. moderation-labels.ts와 동일 패턴:
 // Record<string, string> + string 입력 + 알 수 없는 값에도 안전한 중립 폴백(enum 원값 노출 금지).
 
-// 조직 관리 역할(owner/manager/staff).
-export const ORGANIZATION_ROLE_LABELS: Record<string, string> = {
-	manager: "매니저",
-	owner: "소유자",
-	staff: "스태프",
-};
-
-export function organizationRoleLabel(role: string): string {
-	return ORGANIZATION_ROLE_LABELS[role] ?? "구성원";
-}
+// biome-ignore lint/performance/noBarrelFile: 정본(packages/api) 이전에 따른 경로 호환용 재수출.
+export {
+	ORGANIZATION_ROLE_LABELS,
+	organizationRoleLabel,
+} from "@bambi-app/api/services/bambi-team-labels";
 
 // 멤버·초대 상태(member.status / invitation.status).
 export const MEMBER_STATUS_LABELS: Record<string, string> = {
