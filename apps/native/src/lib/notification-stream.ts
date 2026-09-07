@@ -122,6 +122,10 @@ const openStream = (onClose: () => void): (() => void) => {
 	const pump = async () => {
 		const cookie = authClient.getCookie();
 		const response = await fetch(STREAM_URL, {
+			// 쿠키는 아래 헤더로만 싣는다(orpc.ts link.fetch와 같은 규칙) — 기본값 include면
+			// 플랫폼 쿠키 저장소 값이 먼저 붙어 "Cookie: a=X,a=X"로 병합되거나 SecureStore
+			// 정본을 덮어써 세션 파싱이 깨지고 401 → 백오프 루프가 된다.
+			credentials: "omit",
 			headers: {
 				Accept: "text/event-stream",
 				...(cookie ? { Cookie: cookie } : {}),
