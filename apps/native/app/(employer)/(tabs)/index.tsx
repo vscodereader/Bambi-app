@@ -278,20 +278,27 @@ function DeleteJobDialog({
 				<Dialog.Content>
 					<Dialog.Title>{`“${title}” 공고를 삭제할까요?`}</Dialog.Title>
 					<Dialog.Description>{description}</Dialog.Description>
-					<View className="flex-row justify-end gap-2 pt-2">
-						<Pressable
-							className="rounded-lg border border-border bg-background px-4 py-2 active:opacity-75"
-							onPress={onCancel}
-						>
-							<Text className="font-semibold text-foreground">취소</Text>
-						</Pressable>
-						<Button
-							isDisabled={isDeleting || isRefundLoading}
-							onPress={onConfirm}
-							variant="danger"
-						>
-							<Button.Label>{isDeleting ? "삭제 중" : "삭제"}</Button.Label>
-						</Button>
+					{/* 팀 삭제 다이얼로그(me/teams)와 같은 버튼 줄 — 둘 다 Button이라 높이·모서리가
+					    맞고, flex-1로 반씩 나눠 한쪽만 작게 보이지 않는다. */}
+					<View className="flex-row gap-3 pt-2">
+						<View className="flex-1">
+							<Button
+								isDisabled={isDeleting}
+								onPress={onCancel}
+								variant="tertiary"
+							>
+								<Button.Label>취소</Button.Label>
+							</Button>
+						</View>
+						<View className="flex-1">
+							<Button
+								isDisabled={isDeleting || isRefundLoading}
+								onPress={onConfirm}
+								variant="danger"
+							>
+								<Button.Label>{isDeleting ? "삭제 중" : "삭제"}</Button.Label>
+							</Button>
+						</View>
 					</View>
 				</Dialog.Content>
 			</Dialog.Portal>
