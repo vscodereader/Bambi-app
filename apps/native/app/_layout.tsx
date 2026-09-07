@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
+import { NotificationStreamGate } from "@/src/components/notification-stream-gate";
 import { queryClient } from "@/src/lib/orpc";
 
 export const unstable_settings = {
@@ -39,6 +40,7 @@ export default function Layout() {
 				<KeyboardProvider>
 					<AppThemeProvider>
 						<HeroUINativeProvider>
+							<NotificationStreamGate />
 							<StackLayout />
 						</HeroUINativeProvider>
 					</AppThemeProvider>
