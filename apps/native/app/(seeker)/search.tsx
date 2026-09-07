@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { type Href, Link, router } from "expo-router";
 import { Button, SearchField, Skeleton, useThemeColor } from "heroui-native";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FlatList, Image, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -14,6 +14,7 @@ import {
 	resolveJobCoverUri,
 } from "@/src/lib/bambi-native";
 import { orpc } from "@/src/lib/orpc";
+import { useDebouncedValue } from "@/src/lib/use-debounced-value";
 
 // 웹 job-search-command.tsx와 동일 문구.
 const SEARCH_PLACEHOLDER = "업종, 지역, 공고 제목 검색";
@@ -21,16 +22,6 @@ const SKELETON_KEYS = ["s1", "s2", "s3"] as const;
 
 // 공개 버킷 base URL. 순수 공고 커버는 storageKey만 내려오므로 이 값과 합쳐 URL을 만든다.
 const GCS_PUBLIC_BASE_URL = env.EXPO_PUBLIC_GCS_PUBLIC_BASE_URL;
-
-// 웹 useDebouncedValue 이식 — 타이핑 사이 250ms 쉴 때만 검색어를 확정한다.
-function useDebouncedValue(value: string, delayMs = 250): string {
-	const [debounced, setDebounced] = useState(value);
-	useEffect(() => {
-		const timer = setTimeout(() => setDebounced(value), delayMs);
-		return () => clearTimeout(timer);
-	}, [value, delayMs]);
-	return debounced;
-}
 
 // 커버 없는 공고는 탐색 카드와 같은 업소명 두 글자 타일(size-14)로 폴백한다.
 function JobCoverTile({ name }: { name: string }) {
