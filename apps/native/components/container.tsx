@@ -1,8 +1,14 @@
 import { cn } from "heroui-native";
-import { type PropsWithChildren, type ReactNode, useState } from "react";
+import {
+	type PropsWithChildren,
+	type ReactNode,
+	type Ref,
+	useState,
+} from "react";
 import { type ScrollViewProps, View, type ViewProps } from "react-native";
 import {
 	KeyboardAwareScrollView,
+	type KeyboardAwareScrollViewRef,
 	KeyboardStickyView,
 } from "react-native-keyboard-controller";
 import Animated, { type AnimatedProps } from "react-native-reanimated";
@@ -15,6 +21,9 @@ type Props = AnimatedProps<ViewProps> & {
 	hasTopInset?: boolean;
 	isScrollable?: boolean;
 	scrollViewProps?: Omit<ScrollViewProps, "contentContainerStyle">;
+	// ScrollView 핸들이 필요한 화면(첫 오류로 scrollTo 등)만 넘긴다. ref는 스프레드로는
+	// KeyboardAwareScrollView(forwardRef)에 닿지 않아 전용 prop으로 받는다. 안 넘기면 undefined다.
+	scrollViewRef?: Ref<KeyboardAwareScrollViewRef>;
 	stickyFooter?: ReactNode;
 };
 
@@ -24,6 +33,7 @@ export function Container({
 	hasTopInset = false,
 	isScrollable = true,
 	scrollViewProps,
+	scrollViewRef,
 	stickyFooter,
 	...props
 }: PropsWithChildren<Props>) {
@@ -66,6 +76,7 @@ export function Container({
 					contentInsetAdjustmentBehavior="automatic"
 					keyboardShouldPersistTaps="handled"
 					mode="layout"
+					ref={scrollViewRef}
 					{...scrollViewProps}
 				>
 					{children}

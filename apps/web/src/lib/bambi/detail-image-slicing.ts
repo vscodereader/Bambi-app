@@ -3,82 +3,19 @@
 // 다운샘플해 가로 해상도까지 깎아 흐려진다. 각 조각을 한계 아래로 잘라 저장하면 원본 화질로
 // 디코드된다(웹은 브라우저가 원본을 그리므로 무관). 서버는 바이트를 만지지 않고 서명 URL로
 // 브라우저가 GCS에 직접 올리므로, 무의존성 정공법은 클라이언트 canvas다.
-import { DETAIL_SLICE_MAX_HEIGHT } from "@bambi-app/api/services/bambi-job-media-policy";
+import {
+	DETAIL_SLICE_MAX_HEIGHT,
+	planDetailSlices,
+} from "@bambi-app/api/services/bambi-job-media-policy";
 
-export interface DetailSlicePlan {
-	// 조각 세로 픽셀(<= maxHeight).
-	height: number;
-	// 그룹 내 순서(0부터) = sliceIndex.
-	index: number;
-	// 원본에서 잘라낼 시작 y.
-	offsetY: number;
-}
-
-// 세로가 maxHeight를 넘으면 가로 전폭·세로 균등 조각 계획을 돌려준다(합이 정확히 height).
-// 넘지 않으면 [] — 슬라이싱 불필요.
-export const planDetailSlices = (
-	height: number,
-	maxHeight: number = DETAIL_SLICE_MAX_HEIGHT
-): DetailSlicePlan[] => {
-	if (!(Number.isFinite(height) && height > maxHeight)) {
-		return [];
-	}
-
-	const count = Math.ceil(height / maxHeight);
-	const base = Math.floor(height / count);
-	// 나머지 픽셀은 앞 조각들에 1px씩 분배해 반올림 손실 없이 합 = height. base < maxHeight가
-	// 보장되므로(넘으면 count가 더 컸다) base+1도 maxHeight 이하다.
-	const remainder = height - base * count;
-	const plans: DetailSlicePlan[] = [];
-	let offsetY = 0;
-
-	for (let index = 0; index < count; index += 1) {
-		const sliceHeight = base + (index < remainder ? 1 : 0);
-
-		plans.push({ height: sliceHeight, index, offsetY });
-		offsetY += sliceHeight;
-	}
-
-	return plans;
-};
-
-// 같은 sliceGroupId를 공유하는 조각들을 하나의 그룹으로 묶는다. 비-슬라이스 미디어는 단독
-// 그룹. 그룹 위치는 첫 조각의 등장 순서를 따르고(서버 position 정렬 유지), 그룹 내부는
-// sliceIndex 순으로 정렬한다(서버가 이미 보장하지만 방어적으로).
-export const groupDetailMediaBySlice = <
-	T extends { sliceGroupId?: null | string; sliceIndex?: null | number },
->(
-	images: T[]
-): T[][] => {
-	const groups: T[][] = [];
-	const byGroupId = new Map<string, T[]>();
-
-	for (const image of images) {
-		if (!image.sliceGroupId) {
-			groups.push([image]);
-			continue;
-		}
-
-		const existing = byGroupId.get(image.sliceGroupId);
-
-		if (existing) {
-			existing.push(image);
-		} else {
-			const group = [image];
-
-			byGroupId.set(image.sliceGroupId, group);
-			groups.push(group);
-		}
-	}
-
-	for (const group of groups) {
-		if (group.length > 1) {
-			group.sort((a, b) => (a.sliceIndex ?? 0) - (b.sliceIndex ?? 0));
-		}
-	}
-
-	return groups;
-};
+// planDetailSlices·groupDetailMediaBySlice·DetailSlicePlan은 순수 로직이라 서비스로 옮겨
+// native와 공유한다. 웹은 재수출만 하고 canvas 조각 생성(sliceDetailImageFile)만 유지한다.
+// biome-ignore lint/performance/noBarrelFile: 정본(packages/api) 이전에 따른 경로 호환용 재수출.
+export {
+	type DetailSlicePlan,
+	groupDetailMediaBySlice,
+	planDetailSlices,
+} from "@bambi-app/api/services/bambi-job-media-policy";
 
 export interface SlicedDetailFile {
 	file: File;

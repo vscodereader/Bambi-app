@@ -1,3 +1,4 @@
+import type { AdBannerLayoutInput } from "@bambi-app/api/services/bambi-ad-banner-layout";
 import type { JobDescriptionBlock } from "@bambi-app/api/services/bambi-job-description-blocks";
 import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
 
@@ -45,10 +46,17 @@ export interface NativeJobForm {
 }
 
 export interface NativeJobPostInput {
+	// 배너 레이아웃(단색 배경 등). 키 생략 = 서버가 기존 값 보존, null = 삭제. 앱은 background만
+	// 바꿔 되돌려 웹에서 만든 문구 블록을 보존한다(bambi-ad-banner-layout).
+	adBannerLayout?: AdBannerLayoutInput | null;
 	adProductId?: null | string;
 	beginnerFriendly?: boolean;
 	description: string;
 	descriptionBlocks?: JobDescriptionBlock[];
+	detailDesignAmount?: null | number;
+	// 상세이미지 디자인 제작 애드온. 키 생략 = 서버가 기존 신청 상태 보존(값이 바뀐 경우에만
+	// 싣는다). detailDesignAmount는 "클라이언트가 본 가격"이라 서버가 재확인용으로만 쓴다.
+	detailDesignRequested?: boolean;
 	// 세부지역(시군구). 미선택이면 웹 폼과 같이 키 자체를 빼서 보낸다(서버가 "시/도 전체").
 	districtCode?: string;
 	exposureAmount?: null | number;
