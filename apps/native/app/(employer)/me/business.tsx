@@ -16,7 +16,9 @@ import {
 import { verificationStatusLabels } from "@/src/lib/bambi-native";
 import {
 	businessErrorMessage,
+	canAutosaveBusinessDraft,
 	getBiznumCheckText,
+	hasBusinessDraftChanges,
 	resolveBusinessScreenState,
 	validateBusinessForm,
 } from "@/src/lib/employer/business";
@@ -104,6 +106,72 @@ export default function EmployerBusinessScreen() {
 			},
 		})
 	);
+	// 자동 임시 저장. 성공·실패 모두 알림을 띄우지 않고, getMine을 invalidate하지도 않는다
+	// (invalidate하면 organizationProfile 참조가 바뀌어 아래 effect가 다시 돌아 저장이 반복된다).
+	const draftMutation = useMutation(
+		orpc.bambi.onboarding.saveEmployerBusinessDraft.mutationOptions()
+	);
+
+	// 입력 4종이 바뀌면 500ms 뒤 임시 저장한다(web /employer/me와 같은 간격). 확정 제출은
+	// 별도 버튼(submitMutation)이 담당하고, 여기서는 실패해도 조용히 넘어간다.
+	// draftMutation은 참조가 안정적이지 않아 의존성에서 뺀다(넣으면 매 렌더 재예약된다).
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 위 사유
+	useEffect(() => {
+		const organizationId = organizationProfile?.organizationId;
+
+		if (
+			!(
+				didInitFormRef.current &&
+				organizationId &&
+				canAutosaveBusinessDraft({
+					organizationId,
+					status: organizationProfile?.verificationStatus ?? "none",
+				})
+			)
+		) {
+			return;
+		}
+
+		// 값이 그대로면 보내지 않는다. 서버는 같은 값이어도 verified를 changes_unsubmitted로
+		// 내리므로, 이 가드가 없으면 화면을 열기만 해도 업체 인증이 풀린다.
+		const changed = hasBusinessDraftChanges(
+			{ brn, displayName, representativeName, startDate },
+			{
+				brn:
+					organizationProfile?.draftBusinessRegistrationNumber ??
+					organizationProfile?.businessRegistrationNumber ??
+					"",
+				displayName:
+					organizationProfile?.draftDisplayName ??
+					organizationProfile?.displayName ??
+					"",
+				representativeName:
+					organizationProfile?.draftRepresentativeName ??
+					organizationProfile?.representativeName ??
+					"",
+				startDate: toDateInput(
+					organizationProfile?.draftBusinessStartDate ??
+						organizationProfile?.businessStartDate
+				),
+			}
+		);
+
+		if (!changed) {
+			return;
+		}
+
+		const timer = setTimeout(() => {
+			draftMutation.mutate({
+				businessRegistrationNumber: brn,
+				businessStartDate: startDate,
+				displayName,
+				organizationId,
+				representativeName,
+			});
+		}, 500);
+
+		return () => clearTimeout(timer);
+	}, [brn, displayName, organizationProfile, representativeName, startDate]);
 
 	if (mineQuery.isLoading) {
 		return <LoadingState label="사업자 인증 정보를 불러오고 있어요." />;

@@ -4,6 +4,7 @@ import {
 	BOOST_INELIGIBLE_MESSAGES,
 	type BoostPurchaseLike,
 	countDueAutoBoostSlots,
+	formatBoostOptionSpec,
 	getAutoBoostSlotOffsetMs,
 	getKstDayStart,
 	isBoostPurchaseActive,
@@ -516,5 +517,51 @@ describe("getAutoBoostSlotOffsetMs", () => {
 				expect(lastSlotMs).toBeLessThan(WINDOW_DURATION_MS);
 			}
 		}
+	});
+});
+
+describe("formatBoostOptionSpec", () => {
+	it("횟수권은 총 횟수만 쓴다", () => {
+		expect(
+			formatBoostOptionSpec({
+				boostCount: 10,
+				boostsPerDay: null,
+				durationDays: null,
+				optionType: "manual_count",
+			})
+		).toBe("10회 충전");
+	});
+
+	it("기간제는 하루 횟수와 기간을 이어 붙인다", () => {
+		expect(
+			formatBoostOptionSpec({
+				boostCount: null,
+				boostsPerDay: 2,
+				durationDays: 30,
+				optionType: "manual_period",
+			})
+		).toBe("하루 2회 · 30일");
+	});
+
+	it("채워지지 않은 값은 빼고 남은 것만 남긴다", () => {
+		expect(
+			formatBoostOptionSpec({
+				boostCount: null,
+				boostsPerDay: null,
+				durationDays: 7,
+				optionType: "auto_period",
+			})
+		).toBe("7일");
+	});
+
+	it("재료가 없으면 빈 문자열", () => {
+		expect(
+			formatBoostOptionSpec({
+				boostCount: null,
+				boostsPerDay: null,
+				durationDays: null,
+				optionType: "manual_count",
+			})
+		).toBe("");
 	});
 });

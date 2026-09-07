@@ -87,12 +87,12 @@ export const getBoostState = (ad: AdBoostFields, now: Date): BoostState => {
 	}
 
 	// 하루 한도(상품+옵션)도 없고 횟수권 잔여도 없으면 애초에 쓸 끌어올리기가 없다.
-	// 옵션 구매창은 앱에 없어 웹으로 안내한다.
+	// 카드의 "옵션 구매" 버튼으로 유도한다.
 	if (dailyBoostLimit(ad) === 0 && ad.boostCountRemaining === 0) {
 		return {
 			canBoost: false,
 			disabledReason:
-				"사용할 수 있는 끌어올리기가 없어요. 웹에서 끌어올리기 옵션을 구매할 수 있어요.",
+				"사용할 수 있는 끌어올리기가 없어요. 끌어올리기 옵션을 구매해 보세요.",
 		};
 	}
 
