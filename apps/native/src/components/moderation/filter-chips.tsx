@@ -10,6 +10,8 @@ export interface FilterChipOption<T extends string> {
 // 운영 목록 화면의 단일 선택 필터 행. 홈 업종 필터(IndustryChipRail)와 같은 규칙 —
 // Chip이 PressableProps를 상속하므로 래퍼 없이 직접 터치를 걸고, hitSlop은 부모 뷰
 // 경계를 넘지 못하므로 래퍼에 py-2.5를 줘 28+20=48dp 터치 타깃을 확보한다.
+// 세로 flex 컬럼(헤더·칩·FlatList) 안에서 가로 ScrollView가 남은 높이를 먹지 않게
+// flexGrow·flexShrink를 0으로 고정한다(RN ScrollView 기본값은 둘 다 1이라 긴 목록 옆에서 눌린다).
 export function FilterChips<T extends string>({
 	onChange,
 	options,
@@ -22,7 +24,11 @@ export function FilterChips<T extends string>({
 	const accentForegroundColor = useThemeColor("accent-foreground");
 
 	return (
-		<ScrollView horizontal showsHorizontalScrollIndicator={false}>
+		<ScrollView
+			horizontal
+			showsHorizontalScrollIndicator={false}
+			style={{ flexGrow: 0, flexShrink: 0 }}
+		>
 			<View className="flex-row gap-2 px-4 py-2.5">
 				{options.map((option) => {
 					const selected = option.value === value;
