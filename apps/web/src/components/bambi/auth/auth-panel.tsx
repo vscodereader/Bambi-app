@@ -11,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ChangeEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { getAuthModeUrl } from "@/lib/bambi/auth-mode-url";
@@ -44,6 +44,7 @@ import {
 } from "./auth-fields";
 import { AuthNotice, type Notice } from "./auth-notice";
 import { AuthVerifyStep } from "./auth-verify-step";
+import { useGuestSignupVerification } from "./use-guest-signup-verification";
 
 type AuthMode = "sign-in" | "sign-up";
 // 회원가입은 본인인증(verify)을 마쳐야 가입 폼(form)이 열리는 2단계다.
@@ -197,6 +198,34 @@ function SignupBonusCallout() {
 	);
 }
 
+const confirmReusableGuestSignup = async ({
+	enabled,
+	onAccountExists,
+	onExpired,
+}: {
+	enabled: boolean;
+	onAccountExists: () => void;
+	onExpired: () => void;
+}): Promise<boolean> => {
+	if (!enabled) {
+		return true;
+	}
+	const { status } = await client.bambi.onboarding.getGuestSignupStatus();
+	if (status === "available") {
+		return true;
+	}
+	if (status === "account_exists") {
+		onAccountExists();
+	} else {
+		onExpired();
+	}
+	return false;
+};
+
+// 로그인·신규 인증·저장된 게스트 인증의 세 상태와 Better Auth 콜백을 한 카드에서
+// 조율한다. 각 인증 복원 상태는 useGuestSignupVerification으로 분리했지만, 폼 값을
+// 소유한 이 컴포넌트가 성공·만료 시 초기화까지 원자적으로 처리해야 한다.
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: authentication state transitions stay coordinated here.
 export function AuthPanel() {
 	const router = useRouter();
 	const pathname = usePathname();
@@ -211,10 +240,30 @@ export function AuthPanel() {
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [signupRole, setSignupRole] = useState<SignupRole>("job_seeker");
 	const [agreedToTerms, setAgreedToTerms] = useState(false);
-	const [step, setStep] = useState<SignupStep>("verify");
-	const [verifiedId, setVerifiedId] = useState<string | null>(null);
 	const isSignUp = mode === "sign-up";
+	const guestSignup = useGuestSignupVerification(isSignUp);
+	const {
+		isChecking: isCheckingGuestSignup,
+		reuseGuestVerification,
+		status: guestSignupStatus,
+		step,
+		verifiedId,
+	} = guestSignup;
 	const isVerifyStep = isSignUp && step === "verify";
+
+	useEffect(() => {
+		if (!(isSignUp && guestSignupStatus === "account_exists")) {
+			return;
+		}
+		setMode("sign-in");
+		setNotice({
+			text: "이미 가입된 계정이 있어요. 로그인해 주세요.",
+			tone: "error",
+		});
+		router.replace(getAuthModeUrl(pathname, searchParams, "sign-in") as Route, {
+			scroll: false,
+		});
+	}, [guestSignupStatus, isSignUp, pathname, router, searchParams]);
 	// 모드는 state와 URL 두 곳에 남긴다. 모바일 본인인증은 리디렉션이라 복귀하면 페이지가
 	// 새로 뜨고 이 패널은 쿼리(auth)만 보고 모드를 복원한다 — state만 바꾸면 회원가입으로
 	// 전환한 뒤 인증을 마쳐도 로그인 폼으로 돌아온다. 히스토리에 남길 이동이 아니므로
@@ -280,8 +329,7 @@ export function AuthPanel() {
 			return;
 		}
 		await postGuestVerification({ identityVerificationId });
-		setVerifiedId(identityVerificationId);
-		setStep("form");
+		guestSignup.acceptRealVerification(identityVerificationId);
 	};
 
 	// 비회원 둘러보기: 같은 인증을 거치되 가입은 하지 않고 목록으로 보낸다.
@@ -295,8 +343,7 @@ export function AuthPanel() {
 	// 포트원 미구성 개발 환경의 목 폼 경로. 실제 인증 건이 없어 verifiedId는 비운다.
 	const handleMockVerifiedForSignup = async (input: MockPhoneVerifyInput) => {
 		await postGuestVerification(input);
-		setVerifiedId(null);
-		setStep("form");
+		guestSignup.acceptGuestVerification();
 	};
 
 	const handleMockVerifiedForGuest = async (input: MockPhoneVerifyInput) => {
@@ -311,6 +358,9 @@ export function AuthPanel() {
 		const profilePayload = {
 			...(gender ? { gender } : {}),
 			...(verifiedId ? { identityVerificationId: verifiedId } : {}),
+			...(reuseGuestVerification
+				? { reuseGuestVerification: true as const }
+				: {}),
 		};
 		const createdProfile =
 			signupRole === "employer"
@@ -322,6 +372,7 @@ export function AuthPanel() {
 		// 이용약관·개인정보 처리방침 동의 이력을 저장한다(체크박스로 이미 동의를 받았다).
 		// 감사 로그 성격이라 저장 실패가 가입 완료를 막지 않도록 오류는 삼킨다.
 		await client.bambi.onboarding.recordLegalConsent().catch(() => undefined);
+		await clearGuestCookie();
 		queryClient.invalidateQueries();
 		writeSignupOnboardingIntent({
 			role: signupRole,
@@ -343,12 +394,10 @@ export function AuthPanel() {
 			typeof document === "undefined"
 				? null
 				: readGuestGenderFromCookieString(document.cookie);
-		// 실제 세션이 생겼으니 게스트 열람 권한(쿠키)을 회수한다. 남겨두면
-		// 로그아웃·세션 만료 후에도 게스트로 마켓을 볼 수 있게 된다. 게이트가
-		// 쿠키 없는 상태를 보도록 내비게이션 전에 삭제를 기다린다.
-		await clearGuestCookie();
 		if (isSignUp) {
-			finishSignup(gender).catch((error: unknown) => {
+			try {
+				await finishSignup(gender);
+			} catch (error: unknown) {
 				setNotice({
 					text:
 						error instanceof Error
@@ -356,9 +405,11 @@ export function AuthPanel() {
 							: "프로필 생성에 실패했어요.",
 					tone: "error",
 				});
-			});
+			}
 			return;
 		}
+		// 로그인은 프로필 생성 단계가 없으므로 이동 전에 게스트 쿠키를 바로 회수한다.
+		await clearGuestCookie();
 		queryClient.invalidateQueries();
 		// 로그아웃(push("/"))이 "/"→비로그인 인증 화면 리다이렉트 결과를 Router
 		// Cache에 남긴다. router.push("/")는 이 stale 엔트리를 재생할 수 있고, 이를
@@ -386,6 +437,34 @@ export function AuthPanel() {
 
 		if (isSignUp && !agreedToTerms) {
 			toast("이용약관과 개인정보 처리방침에 동의해주세요");
+			return;
+		}
+
+		if (
+			isSignUp &&
+			!(await confirmReusableGuestSignup({
+				enabled: reuseGuestVerification,
+				onAccountExists: () => {
+					setForm(EMPTY_FORM);
+					setAgreedToTerms(false);
+					guestSignup.reset();
+					changeMode("sign-in");
+					setNotice({
+						text: "이미 가입된 계정이 있어요. 로그인해 주세요.",
+						tone: "error",
+					});
+				},
+				onExpired: () => {
+					setForm(EMPTY_FORM);
+					setAgreedToTerms(false);
+					guestSignup.reset();
+					setNotice({
+						text: "기존 인증 정보가 만료되었습니다. 다시 본인인증해 주세요.",
+						tone: "error",
+					});
+				},
+			}))
+		) {
 			return;
 		}
 
@@ -451,6 +530,7 @@ export function AuthPanel() {
 
 	const toggleMode = () => {
 		setNotice(null);
+		guestSignup.reset();
 		changeMode(isSignUp ? "sign-in" : "sign-up");
 	};
 
@@ -472,13 +552,22 @@ export function AuthPanel() {
 				    똑같이 나눠 준다. 한쪽에 몰면 "아래가 텅 빈" 카드가 되지만, 나눠 두면 머리는
 				    위, 액션은 광학 중앙, 고지는 바닥이라는 삼단 구성으로 읽힌다. */}
 				<div className="my-auto">
-					{isVerifyStep ? (
+					{isCheckingGuestSignup ? (
+						<div
+							aria-live="polite"
+							className="flex items-center justify-center gap-2 text-muted-foreground text-sm"
+						>
+							<Spinner /> 기존 인증 정보를 확인하고 있어요.
+						</div>
+					) : null}
+					{!isCheckingGuestSignup && isVerifyStep ? (
 						<AuthVerifyStep
 							onMockVerifiedForSignup={handleMockVerifiedForSignup}
 							onToggleMode={toggleMode}
 							onVerifiedForSignup={handleVerifiedForSignup}
 						/>
-					) : (
+					) : null}
+					{isCheckingGuestSignup || isVerifyStep ? null : (
 						// @container: 2열 전환 기준은 뷰포트가 아니라 카드 폭이다 — 카드가
 						// max-w로 뷰포트보다 좁게 고정돼 있어 뷰포트 breakpoint로는 폼이
 						// 실제로 2열을 감당하는 시점을 맞출 수 없다.
