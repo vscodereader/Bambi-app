@@ -383,10 +383,128 @@ function IndustryReviewCard() {
 	);
 }
 
+function useCrawlChoices() {
+	return {
+		boardsQuery: useQuery(orpc.bambi.communityBoards.list.queryOptions()),
+		gradesQuery: useQuery(orpc.bambi.memberGrades.list.queryOptions()),
+	};
+}
+function CrawlCommunityFields({
+	boardKey,
+	setBoardKey,
+	editorGradeId,
+	setEditorGradeId,
+	boardsQuery,
+	gradesQuery,
+}: ReturnType<typeof useCrawlChoices> & {
+	boardKey: string | null;
+	setBoardKey: (key: string | null) => void;
+	editorGradeId: string | null;
+	setEditorGradeId: (id: string | null) => void;
+}) {
+	return (
+		<div className="flex flex-wrap gap-4">
+			<div className="flex min-w-0 flex-col gap-2">
+				<Label htmlFor="crawl-board">수집할 게시판</Label>
+				<Select
+					items={(boardsQuery.data ?? []).map((board) => ({
+						value: board.key,
+						label: board.label,
+					}))}
+					onOpenChange={(open) => {
+						if (open) {
+							boardsQuery.refetch().catch(() => undefined);
+						}
+					}}
+					onValueChange={setBoardKey}
+					value={boardKey}
+				>
+					<SelectTrigger
+						className="w-56 max-w-full"
+						disabled={boardsQuery.isPending}
+						id="crawl-board"
+					>
+						<SelectValue placeholder="게시판 선택" />
+					</SelectTrigger>
+					<SelectContent>
+						{(boardsQuery.data ?? []).map((board) => (
+							<SelectItem key={board.key} value={board.key}>
+								{board.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				{boardsQuery.isError && (
+					<p className="text-destructive text-sm">
+						게시판을 불러오지 못했어요. 목록을 다시 열어 주세요.
+					</p>
+				)}
+				{!(boardsQuery.isPending || boardsQuery.isError) &&
+					boardsQuery.data?.length === 0 && (
+						<p className="text-muted-foreground text-sm">
+							등록된 게시판이 없어요.
+						</p>
+					)}
+			</div>
+			<div className="flex min-w-0 flex-col gap-2">
+				<Label htmlFor="crawl-editor-grade">편집 글·댓글 표시 등급</Label>
+				<Select
+					items={(gradesQuery.data ?? []).map((grade) => ({
+						value: grade.id,
+						label: grade.name,
+					}))}
+					onOpenChange={(open) => {
+						if (open) {
+							gradesQuery.refetch().catch(() => undefined);
+						}
+					}}
+					onValueChange={setEditorGradeId}
+					value={editorGradeId}
+				>
+					<SelectTrigger
+						className="w-56 max-w-full"
+						disabled={gradesQuery.isPending}
+						id="crawl-editor-grade"
+					>
+						<SelectValue placeholder="등급 선택" />
+					</SelectTrigger>
+					<SelectContent>
+						{(gradesQuery.data ?? []).map((grade) => (
+							<SelectItem key={grade.id} value={grade.id}>
+								{grade.name}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				{gradesQuery.isError && (
+					<p className="text-destructive text-sm">
+						등급을 불러오지 못했어요. 목록을 다시 열어 주세요.
+					</p>
+				)}
+				<p className="text-muted-foreground text-xs">
+					저장하면 기존에 편집한 글·댓글에도 적용돼요.
+				</p>
+			</div>
+		</div>
+	);
+}
+const hasCrawlBoardSelection = (
+	type: CrawlContentType,
+	key: string | null,
+	query: ReturnType<typeof useCrawlChoices>["boardsQuery"]
+) =>
+	type !== "community" ||
+	Boolean(
+		key && !query.isError && query.data?.some((board) => board.key === key)
+	);
+
 export default function ModeratorCrawlerPage() {
 	const queryClient = useQueryClient();
 
 	const settingsQuery = useQuery(orpc.bambi.crawler.getSettings.queryOptions());
+	const { boardsQuery, gradesQuery } = useCrawlChoices();
+	const [boardKey, setBoardKey] = useState<string | null>(null);
+	const [editorGradeId, setEditorGradeId] = useState<string | null>(null);
 	const summaryQuery = useQuery(orpc.bambi.crawler.getSummary.queryOptions());
 	const runsQuery = useQuery(orpc.bambi.crawler.listRuns.queryOptions());
 
@@ -406,6 +524,8 @@ export default function ModeratorCrawlerPage() {
 			data.intervalHours === null ? "" : String(data.intervalHours)
 		);
 		setContentType(data.contentType);
+		setBoardKey(data.boardKey);
+		setEditorGradeId(data.editorGradeId);
 	}, [settingsQuery.data]);
 
 	const saveMutation = useMutation(
@@ -413,6 +533,9 @@ export default function ModeratorCrawlerPage() {
 			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
 			onSuccess: async () => {
 				toast.success("수집 설정을 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.community.key(),
+				});
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.crawler.getSettings.queryKey(),
 				});
@@ -521,6 +644,8 @@ export default function ModeratorCrawlerPage() {
 		}
 
 		saveMutation.mutate({
+			boardKey,
+			editorGradeId,
 			contentType,
 			enabled,
 			intervalHours: parsed,
@@ -643,15 +768,33 @@ export default function ModeratorCrawlerPage() {
 							</p>
 						</div>
 
+						{contentType === "community" && (
+							<CrawlCommunityFields
+								boardKey={boardKey}
+								boardsQuery={boardsQuery}
+								editorGradeId={editorGradeId}
+								gradesQuery={gradesQuery}
+								setBoardKey={setBoardKey}
+								setEditorGradeId={setEditorGradeId}
+							/>
+						)}
 						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 							<Button
 								disabled={
 									runNowMutation.isPending ||
 									settingsQuery.isLoading ||
-									!selectedTargetReady
+									!selectedTargetReady ||
+									!hasCrawlBoardSelection(contentType, boardKey, boardsQuery)
 								}
 								// 저장을 거치지 않고 지금 화면에서 고른 수집 데이터로 한 회차를 돌린다.
-								onClick={() => runNowMutation.mutate({ contentType })}
+								onClick={() =>
+									runNowMutation.mutate({
+										contentType,
+										...(contentType === "community" && boardKey
+											? { boardKey }
+											: {}),
+									})
+								}
 								type="button"
 								variant="outline"
 							>
@@ -733,11 +876,12 @@ export default function ModeratorCrawlerPage() {
 								수집 커뮤니티 글 노출
 							</Label>
 							<p className="m-0 text-muted-foreground text-xs">
-								수집한 커뮤니티 글이 「밤문화 이야기」 게시판과 수다방 홈
-								미리보기에 섞입니다. 우리 회원 글이 항상 먼저 나오고 남은 자리에
-								붙습니다. 목록·상세에 출처 표시는 붙지 않고, 회원·비회원이 우리
-								글과 같은 규칙으로 댓글을 남길 수 있어요(글 자체의 좋아요·신고는
-								제공되지 않습니다).
+								수집한 커뮤니티 글이 선택한 게시판과 수다방 홈 미리보기에
+								섞입니다. 미편집 수집 글은 우리 회원 글 뒤에 붙고, 관리자가
+								수정한 수집 글은 수정일 기준으로 함께 정렬됩니다. 목록·상세에
+								출처 표시는 붙지 않고, 회원·비회원이 우리 글과 같은 규칙으로
+								댓글을 남길 수 있어요(글 자체의 좋아요·신고는 제공되지
+								않습니다).
 							</p>
 						</div>
 						<Switch
@@ -862,6 +1006,14 @@ export default function ModeratorCrawlerPage() {
 											<TableCell className="whitespace-nowrap">
 												{CRAWL_SOURCE_SITE_LABELS[run.sourceSite]}/
 												{CRAWL_CONTENT_TYPE_LABELS[run.contentType]}
+												{run.boardKey && (
+													<span className="ml-1 text-muted-foreground">
+														·{" "}
+														{boardsQuery.data?.find(
+															(board) => board.key === run.boardKey
+														)?.label ?? "삭제된 게시판"}
+													</span>
+												)}
 											</TableCell>
 											<TableCell>
 												<Badge variant={CRAWL_RUN_STATUS_VARIANTS[run.status]}>
