@@ -36,7 +36,6 @@ import {
 } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 import z from "zod";
-
 import { protectedProcedure, publicProcedure } from "../../index";
 import {
 	type BambiAccessProfile,
@@ -56,6 +55,7 @@ import {
 	GUEST_LOCKED_ERROR,
 	isSecretBoard,
 	LEGAL_BOARD,
+	NOTICE_BOARD,
 	requireCommunityMember,
 	requireGuestPassword,
 	resolveCommunityActor,
@@ -63,6 +63,7 @@ import {
 	resolveCommunityReaderForBoard,
 	resolveLockedForBoard,
 	SECRET_AUTHOR_NAME,
+	SECRET_BOARD,
 } from "../../services/bambi-community-authz";
 import {
 	type CommunityNavigationCandidate,
@@ -74,12 +75,24 @@ import {
 } from "../../services/bambi-community-password";
 import {
 	COMMUNITY_AUTHOR_NAME_MAX_LENGTH,
+	COMMUNITY_BODY_JSON_MAX_LENGTH,
+	COMMUNITY_COMMENT_BODY_MAX_LENGTH,
 	COMMUNITY_PASSWORD_MAX_LENGTH,
 	COMMUNITY_PASSWORD_MIN_LENGTH,
 	COMMUNITY_TITLE_MAX_LENGTH,
 	COMMUNITY_TITLE_MIN_LENGTH,
 } from "../../services/bambi-community-post-policy";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
+import {
+	crawledDisplayBodyText,
+	crawledDisplayDate,
+	crawledDisplayTitle,
+	loadCrawledEditorGrade,
+	loadCrawledSourceComments,
+	loadCrawledTopicForReader,
+	resolveCrawledCommentActor,
+} from "../../services/bambi-crawled-community";
+import { CRAWLED_EDITED_AUTHOR_NAME } from "../../services/bambi-crawled-community-policy";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import { pingCommunityPost } from "../../services/bambi-indexnow";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
@@ -119,7 +132,7 @@ const BEST_WINDOW_DAYS = 30;
 const BEST_MIN_LIKES = 1;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOCKED_TITLE = "비밀글입니다";
-const BODY_MAX = 30_000;
+const BODY_MAX = COMMUNITY_BODY_JSON_MAX_LENGTH;
 const COMMENTS_CAP = 200;
 
 // 게시판 목록은 community_board 테이블이 정본이라 입력에서는 좁히지 않는다 —
@@ -150,7 +163,6 @@ const isPublicBoard = (board: string): boolean =>
 type CommunityFeedSource = "crawled" | "native";
 
 // 설계 D4 — 수집 커뮤니티 글이 합류하는 게시판. 상수 하나만 바꾸면 다른 게시판으로 옮길 수 있게 둔다.
-const CRAWLED_COMMUNITY_BOARD = "work_talk";
 
 // 원본 게시판명이 비어 있을 때 작성자 자리에 세울 값(수집 대상 게시판 이름).
 const CRAWLED_AUTHOR_NAME = "밤문화이야기";
@@ -386,7 +398,7 @@ const postReadInput = postIdInput.extend({
 // 소유권 증명용 비밀번호다. 비회원은 잠긴 글에 댓글을 달 수 없어(공개 보드 한정) 두 뜻이
 // 한 요청에서 겹치지 않는다.
 const createCommentInput = postIdInput.extend({
-	body: z.string().trim().min(1).max(1000),
+	body: z.string().trim().min(1).max(COMMUNITY_COMMENT_BODY_MAX_LENGTH),
 	parentCommentId: z.string().uuid().optional(),
 	password: z.string().trim().max(30).optional(),
 });
@@ -394,7 +406,7 @@ const createCommentInput = postIdInput.extend({
 // 수집 글 댓글 입력. 우리 글 댓글과 같은 필드에 대상만 topicId로 갈린다(잠금이 없어
 // password는 언제나 비회원 소유권 비밀번호 한 가지 뜻이다).
 const createCrawledCommentInput = z.object({
-	body: z.string().trim().min(1).max(1000),
+	body: z.string().trim().min(1).max(COMMUNITY_COMMENT_BODY_MAX_LENGTH),
 	parentCommentId: z.string().uuid().optional(),
 	password: z.string().trim().max(30).optional(),
 	topicId: z.string().uuid(),
@@ -407,7 +419,7 @@ const deleteCommentInput = z.object({
 });
 
 const updateCommentInput = z.object({
-	body: z.string().trim().min(1).max(1000),
+	body: z.string().trim().min(1).max(COMMUNITY_COMMENT_BODY_MAX_LENGTH),
 	commentId: z.string().uuid(),
 	password: z.string().trim().max(30).optional(),
 });
@@ -484,6 +496,7 @@ const visiblePostAuthorImage = (
 // 같은 키·순서로 마주 서야 해서 여기에 둔다. isCrawled는 union 정렬 키로만 쓰이고
 // 응답(toPublicSummary)에는 나가지 않는다.
 const postSummarySelection = {
+	wasEdited: sql<boolean>`false`.as("was_edited"),
 	authorGender: communityPost.authorGender,
 	authorName: communityPost.authorDisplayName,
 	authorRole: communityPost.authorRole,
@@ -519,11 +532,14 @@ const postSummarySelection = {
 // 컬럼을 맞추므로 postSummarySelection과 **키 순서까지** 같아야 한다(bambi-job-feed.ts와 같은 원칙).
 // 없는 값은 리터럴로 채운다 — 수집 글엔 작성자 계정·잠금·추천·광고가 없다.
 const crawledCommunityFeedSelection = {
-	authorGender: sql<CommunityPostColumns["authorGender"]>`null`,
+	wasEdited: sql<boolean>`${crawledCommunityTopic.editedAt} is not null`,
+	authorGender: sql<
+		CommunityPostColumns["authorGender"]
+	>`case when ${crawledCommunityTopic.boardKey} = ${SECRET_BOARD} then 'female'::bambi_gender else null end`,
 	// 작성자 자리에 원본 게시판명을 노출한다(설계 D4 — "밤문화이야기"). 개인 필명이 아니다.
 	// board_name은 nullable이라 coalesce로 채운다 — UNION 상대(순수 author_display_name)가
 	// NOT NULL이고, 값이 비어도 화면에 빈 작성자가 서면 안 된다.
-	authorName: sql<string>`coalesce(${crawledCommunityTopic.boardName}, ${CRAWLED_AUTHOR_NAME})`,
+	authorName: sql<string>`case when ${crawledCommunityTopic.boardKey} = ${SECRET_BOARD} then ${SECRET_AUTHOR_NAME} when ${crawledCommunityTopic.editedAt} is not null then ${CRAWLED_EDITED_AUTHOR_NAME} else coalesce(${crawledCommunityTopic.boardName}, ${CRAWLED_AUTHOR_NAME}) end`,
 	// 수집 글엔 우리 계정 유형 스냅샷이 없어 런타임 값은 null이다. UNION 상대가 NOT NULL enum
 	// 이라 타입만 맞춰 두고 값은 null 그대로 둔다 — 화면은 authorRole이 아니라 source로
 	// 수집 여부를 갈라야 한다(업소 배지가 수집 글에 붙으면 안 된다).
@@ -533,39 +549,42 @@ const crawledCommunityFeedSelection = {
 	authorUserId: sql<string>`''`,
 	// 게시판 enum은 순수 쪽 컬럼 타입을 그대로 쓴다(z 스키마의 "best"는 저장 게시판이 아니라
 	// 가상 큐레이션이라 UNION 타입에 섞이면 안 된다).
-	board: sql<CommunityPostColumns["board"]>`'work_talk'`,
+	board: crawledCommunityTopic.boardKey,
 	// 원본 수집 댓글 수 + 우리 회원·비회원이 남긴 published 댓글 수. 상세 getCrawledTopic과
 	// 같은 합산이라 목록 행과 상세가 어긋나지 않는다. 상관 스칼라 서브쿼리는 0084 인덱스
 	// (crawled_topic_id, status, created_at)를 타는 카운트라 union 투영에 조인 없이 붙는다.
 	// 외부 참조는 raw로 수식한다 — drizzle이 프로젝션 안 보간 컬럼의 테이블 수식을 벗겨
 	// ${crawledCommunityTopic.id}가 "id"로 렌더되고, 서브쿼리 스코프에선 comment 자신의
 	// id로 해석돼 상관이 끊긴다(카운트가 조용히 0이 되는 버그를 실제로 냈다).
-	commentCount: sql<number>`coalesce(${crawledCommunityTopic.commentCount}, 0) + (select count(*) from ${communityComment} where ${communityComment.crawledTopicId} = "crawled_community_topic"."id" and ${communityComment.status} = ${"published"})::int`,
+	commentCount: sql<number>`coalesce(jsonb_array_length(${crawledCommunityTopic.comments}), ${crawledCommunityTopic.commentCount}, 0) + (select count(*) from ${communityComment} where ${communityComment.crawledTopicId} = "crawled_community_topic"."id" and ${communityComment.status} = ${"published"})::int`,
 	// 원 게시일을 작성일 자리에 쓴다. where의 30일 컷오프가 null을 걸러내므로 결과에선
 	// non-null이고, UNION 상대(created_at NOT NULL)와 타입이 맞는다.
-	createdAt: sql<Date>`${crawledCommunityTopic.sourcePostedAt}`,
+	createdAt: crawledDisplayDate,
 	id: crawledCommunityTopic.id,
-	isLocked: sql<boolean>`false`,
+	isLocked: sql<boolean>`${crawledCommunityTopic.boardKey} = ${LEGAL_BOARD}`,
 	isEvent: sql<boolean>`false`,
 	isPromotion: sql<boolean>`false`,
 	likeCount: sql<number>`0`,
-	title: crawledCommunityTopic.title,
+	title: crawledDisplayTitle,
 	// 수집 글엔 갱신 시각이 없어 원 게시일을 그대로 쓴다(UNION 위치 맞춤).
-	updatedAt: sql<Date>`${crawledCommunityTopic.sourcePostedAt}`,
+	updatedAt: crawledDisplayDate,
 	// 수집 글은 본문 이미지를 우리가 호스팅하지 않아 썸네일이 없다(UNION 위치만 맞춘다).
-	thumbnailUrl: sql<string | null>`null`,
+	thumbnailUrl: sql<
+		string | null
+	>`substring(${crawledCommunityTopic.editedBody} from '"src":"([^"]*)"')`,
 	viewCount: sql<number>`coalesce(${crawledCommunityTopic.viewCount}, 0)`,
 	source: sql<CommunityFeedSource>`'crawled'`,
-	isNotice: sql<number>`1`,
-	isCrawled: sql<number>`1`,
+	isNotice: sql<number>`case when ${crawledCommunityTopic.boardKey} = ${NOTICE_BOARD} then 0 else 1 end`,
+	isCrawled: sql<number>`case when ${crawledCommunityTopic.activityAt} is not null then 0 else 1 end`,
 };
 
 // 수집 글 노출 자격. 목록 union·총 건수·상세가 같은 기준을 써야 한 곳만 좁혀지는 상태가
 // 생기지 않는다(운영자가 내린 글이 총 건수에만 남아 마지막 페이지가 비는 식).
 // removed_at은 운영자가 글을 내린 시각이며, 재수집이 이 칸을 건드리지 않으므로 톰스톤으로
 // 버틴다(bambi-crawl-ingest.ts runCommunityPass).
-const crawledTopicFeedFilters = (windowStart: Date): SQL[] => [
-	gte(crawledCommunityTopic.sourcePostedAt, windowStart),
+const crawledTopicFeedFilters = (windowStart: Date, board: string): SQL[] => [
+	eq(crawledCommunityTopic.boardKey, board),
+	gte(crawledDisplayDate, windowStart.toISOString()),
 	isNull(crawledCommunityTopic.removedAt),
 ];
 
@@ -728,8 +747,8 @@ const buildCrawledSearchFilters = (q?: string): SQL[] => {
 	}
 	const pattern = likePattern(q);
 	const combined = or(
-		ilike(crawledCommunityTopic.title, pattern),
-		ilike(crawledCommunityTopic.body, pattern)
+		ilike(crawledDisplayTitle, pattern),
+		ilike(crawledDisplayBodyText, pattern)
 	);
 	return combined ? [combined] : [];
 };
@@ -802,14 +821,25 @@ const loadAuthorBadges = (rows: { authorUserId: null | string }[]) =>
 
 // authorUserId는 마스킹·bypass 계산엔 필요하지만 익명성 보호를 위해 클라이언트
 // 응답에서는 제외한다(명시적 화이트리스트 매핑). 등급(이름·색)은 신원이 아니라 노출 OK.
+const summaryGrade = (
+	summary: PostSummaryRow,
+	badges?: Map<string, GradeBadge>,
+	crawledGrade?: GradeBadge | null
+) => {
+	if (summary.source === "crawled" && summary.wasEdited) {
+		return crawledGrade ?? null;
+	}
+	return summary.authorUserId
+		? (badges?.get(summary.authorUserId) ?? null)
+		: null;
+};
 const toPublicSummary = (
 	summary: PostSummaryRow,
-	gradeBadges?: Map<string, GradeBadge>
+	gradeBadges?: Map<string, GradeBadge>,
+	crawledGrade?: GradeBadge | null
 ) => ({
 	// 게스트·수집 글(authorUserId null)은 등급 없음(null).
-	authorGrade: summary.authorUserId
-		? (gradeBadges?.get(summary.authorUserId) ?? null)
-		: null,
+	authorGrade: summaryGrade(summary, gradeBadges, crawledGrade),
 	authorGender: summary.authorGender,
 	authorName: summary.authorName,
 	authorRole: summary.authorRole,
@@ -830,20 +860,22 @@ const toPublicSummary = (
 	viewCount: summary.viewCount,
 });
 
-// 순수 work_talk + 수집 커뮤니티 글을 한 쿼리로 합쳐 페이지네이션한다. 애플리케이션에서
+// 선택 게시판의 순수 글 + 수집 커뮤니티 글을 한 쿼리로 합쳐 페이지네이션한다. 애플리케이션에서
 // 두 배열을 합치는 대신 UNION ALL을 쓰는 이유는 정렬·limit·offset을 DB에서 끝내야 수집
 // 테이블이 커져도 무너지지 않기 때문이다(bambi-job-feed.listJobFeed와 같은 판단). ALL인
 // 이유는 두 원천에 같은 행이 있을 수 없어 DISTINCT가 불필요해서다. 정렬은 공고와 같은
 // 우선순위 규칙 — 1순위 순수(is_crawled 0), 2순위 수집(1), 각 구간 내 최신순.
 // nativeFilters·crawledFilters는 각 원천 where에 그대로 얹는다(검색어를 순수·수집 양쪽에
 // 함께 걸 때 쓴다). overview는 인자 없이 전체를 섞는다.
-const selectWorkTalkFeedUnion = ({
+const selectBoardFeedUnion = ({
+	board,
 	limit,
 	offset,
 	windowStart,
 	nativeFilters = [],
 	crawledFilters = [],
 }: {
+	board: string;
 	limit: number;
 	offset: number;
 	windowStart: Date;
@@ -854,18 +886,15 @@ const selectWorkTalkFeedUnion = ({
 		db
 			.select(postSummarySelection)
 			.from(communityPost)
-			.where(
-				and(
-					...buildBoardFilters(CRAWLED_COMMUNITY_BOARD, windowStart),
-					...nativeFilters
-				)
-			),
+			.where(and(...buildBoardFilters(board, windowStart), ...nativeFilters)),
 		db
 			.select(crawledCommunityFeedSelection)
 			.from(crawledCommunityTopic)
 			// 수집 글은 원 게시일 30일 이내만 노출한다(순수 work_talk엔 컷오프가 없지만, 남의
 			// 게시판에서 긁어 온 글은 신선한 것만 섞는다). null 게시일은 이 조건이 자연히 걸러낸다.
-			.where(and(...crawledTopicFeedFilters(windowStart), ...crawledFilters))
+			.where(
+				and(...crawledTopicFeedFilters(windowStart, board), ...crawledFilters)
+			)
 	)
 		.orderBy(sql`is_notice asc, is_crawled asc, created_at desc, id desc`)
 		.limit(limit)
@@ -897,12 +926,15 @@ const getBestBoardIcon = async (): Promise<string | null> => {
 // 필터를 더해 목록 union과 같은 집합만 센다(검색 시 합산이 부풀지 않게).
 const countCrawledCommunityTopics = async (
 	windowStart: Date,
+	board: string,
 	extraFilters: SQL[] = []
 ): Promise<number> => {
 	const [row] = await db
 		.select({ value: count() })
 		.from(crawledCommunityTopic)
-		.where(and(...crawledTopicFeedFilters(windowStart), ...extraFilters));
+		.where(
+			and(...crawledTopicFeedFilters(windowStart, board), ...extraFilters)
+		);
 	return row?.value ?? 0;
 };
 
@@ -1376,9 +1408,9 @@ export const communityRouter = {
 			// 수집 글은 광고·업소·내 글(양성) 필터를 본질적으로 만족할 수 없어 그중 하나라도
 			// 켜지면 순수 글만 남기고 수집 union을 끈다. 검색어(q)는 예외 — 수집 글도 검색
 			// 대상이라 q만 있을 때는 수집을 섞고, 검색을 순수·수집 양쪽 where에 함께 건다.
-			// work_talk·스위치 ON일 때만 섞는다.
+			// 실제 목적 게시판·스위치 ON일 때 섞는다(가상 베스트 제외).
 			const includeCrawled =
-				input.board === CRAWLED_COMMUNITY_BOARD &&
+				input.board !== BEST_BOARD &&
 				!input.mine &&
 				!input.showPromotion &&
 				!input.showEmployer &&
@@ -1388,7 +1420,8 @@ export const communityRouter = {
 				// includeCrawled면 mine·양성 필터가 모두 꺼져 listFilters엔 검색어 필터만 남는다.
 				const crawledSearchFilters = buildCrawledSearchFilters(input.q);
 				const [items, [nativeTotal], crawledTotal] = await Promise.all([
-					selectWorkTalkFeedUnion({
+					selectBoardFeedUnion({
+						board: input.board,
 						limit: PAGE_SIZE,
 						offset,
 						windowStart,
@@ -1400,18 +1433,25 @@ export const communityRouter = {
 						.from(communityPost)
 						.where(
 							and(
-								...buildBoardFilters(CRAWLED_COMMUNITY_BOARD, windowStart),
+								...buildBoardFilters(input.board, windowStart),
 								...listFilters
 							)
 						),
-					countCrawledCommunityTopics(windowStart, crawledSearchFilters),
+					countCrawledCommunityTopics(
+						windowStart,
+						input.board,
+						crawledSearchFilters
+					),
 				]);
 
 				const crawledMasked = maskLockedSummaries(items, profile);
-				const crawledBadges = await loadAuthorBadges(crawledMasked);
+				const [crawledBadges, editorGrade] = await Promise.all([
+					loadAuthorBadges(crawledMasked),
+					loadCrawledEditorGrade(),
+				]);
 				return {
 					items: crawledMasked.map((item) =>
-						toPublicSummary(item, crawledBadges)
+						toPublicSummary(item, crawledBadges, editorGrade)
 					),
 					page: input.page,
 					pageSize: PAGE_SIZE,
@@ -1456,7 +1496,7 @@ export const communityRouter = {
 			const profile = await findCommunityMember(context.session);
 
 			const windowStart = bestWindowStart();
-			// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
+			// 각 실제 게시판 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
 			const [communityFeedOn, bestIcon, boards, homeLayout] = await Promise.all(
 				[
 					isCrawledCommunityFeedEnabled(),
@@ -1534,12 +1574,11 @@ export const communityRouter = {
 
 			const postsPerBoard = await Promise.all(
 				previews.map((board) =>
-					board.key === CRAWLED_COMMUNITY_BOARD && communityFeedOn
-						? selectWorkTalkFeedUnion({
+					board.key !== BEST_BOARD && communityFeedOn
+						? selectBoardFeedUnion({
+								board: board.key,
 								limit: OVERVIEW_LIMIT,
-								nativeFilters: [
-									eq(communityPost.board, CRAWLED_COMMUNITY_BOARD),
-								],
+								nativeFilters: [eq(communityPost.board, board.key)],
 								offset: 0,
 								windowStart,
 							})
@@ -1554,6 +1593,9 @@ export const communityRouter = {
 				)
 			);
 
+			const editorGrade = communityFeedOn
+				? await loadCrawledEditorGrade()
+				: null;
 			return {
 				boards: previews.map((board, index) => ({
 					...board,
@@ -1562,7 +1604,7 @@ export const communityRouter = {
 					// 홈 미리보기(요약)는 등급 뱃지를 싣지 않는다 — 게시판마다 배치 조회를 더하지
 					// 않는다. 등급은 목록·상세에서만 노출한다.
 					posts: maskLockedSummaries(postsPerBoard[index] ?? [], profile).map(
-						(post) => toPublicSummary(post)
+						(post) => toPublicSummary(post, undefined, editorGrade)
 					),
 				})),
 			};
@@ -1600,7 +1642,7 @@ export const communityRouter = {
 				currentCreatedAt = current.createdAt;
 			} else {
 				if (
-					input.board !== CRAWLED_COMMUNITY_BOARD ||
+					input.board === BEST_BOARD ||
 					!(await isCrawledCommunityFeedEnabled())
 				) {
 					throw new ORPCError("NOT_FOUND", {
@@ -1608,12 +1650,12 @@ export const communityRouter = {
 					});
 				}
 				const [current] = await db
-					.select({ createdAt: crawledCommunityTopic.sourcePostedAt })
+					.select({ createdAt: crawledDisplayDate })
 					.from(crawledCommunityTopic)
 					.where(
 						and(
 							eq(crawledCommunityTopic.id, input.currentId),
-							...crawledTopicFeedFilters(windowStart)
+							...crawledTopicFeedFilters(windowStart, input.board)
 						)
 					)
 					.limit(1);
@@ -1671,7 +1713,7 @@ export const communityRouter = {
 
 			const includeCrawled =
 				!input.publicView &&
-				input.board === CRAWLED_COMMUNITY_BOARD &&
+				input.board !== BEST_BOARD &&
 				(await isCrawledCommunityFeedEnabled());
 			const selectCrawledCandidate = async (
 				direction: NavigationDirection
@@ -1682,33 +1724,30 @@ export const communityRouter = {
 				const compareCreatedAt = direction === "previous" ? lt : gt;
 				const compareId = direction === "previous" ? lt : gt;
 				const boundary = or(
-					compareCreatedAt(
-						crawledCommunityTopic.sourcePostedAt,
-						currentCreatedAt
-					),
+					compareCreatedAt(crawledDisplayDate, currentCreatedAt.toISOString()),
 					and(
-						eq(crawledCommunityTopic.sourcePostedAt, currentCreatedAt),
+						eq(crawledDisplayDate, currentCreatedAt.toISOString()),
 						compareId(crawledCommunityTopic.id, input.currentId)
 					)
 				) as SQL;
 				const [candidate] = await db
 					.select({
-						createdAt: crawledCommunityTopic.sourcePostedAt,
+						createdAt: crawledDisplayDate,
 						id: crawledCommunityTopic.id,
-						title: crawledCommunityTopic.title,
+						title: crawledDisplayTitle,
 					})
 					.from(crawledCommunityTopic)
 					.where(
 						and(
-							...crawledTopicFeedFilters(windowStart),
+							...crawledTopicFeedFilters(windowStart, input.board),
 							ne(crawledCommunityTopic.id, input.currentId),
 							boundary
 						)
 					)
 					.orderBy(
 						direction === "previous"
-							? desc(crawledCommunityTopic.sourcePostedAt)
-							: asc(crawledCommunityTopic.sourcePostedAt),
+							? desc(crawledDisplayDate)
+							: asc(crawledDisplayDate),
 						direction === "previous"
 							? desc(crawledCommunityTopic.id)
 							: asc(crawledCommunityTopic.id)
@@ -1716,11 +1755,18 @@ export const communityRouter = {
 					.limit(1);
 				return candidate?.createdAt
 					? {
-							boardKey: CRAWLED_COMMUNITY_BOARD,
+							boardKey: input.board,
 							createdAt: candidate.createdAt,
 							id: candidate.id,
 							source: "crawled",
-							title: candidate.title,
+							title:
+								input.board === LEGAL_BOARD &&
+								!canBypassLock(
+									{ board: input.board, authorUserId: null },
+									profile
+								)
+									? LOCKED_TITLE
+									: candidate.title,
 						}
 					: null;
 			};
@@ -2008,76 +2054,54 @@ export const communityRouter = {
 	getCrawledTopic: publicProcedure
 		.input(z.object({ topicId: z.uuid() }))
 		.handler(async ({ context, input }) => {
-			// 목록(listPosts)에서 이미 보이는 글이라 상세 게이트도 같은 액터 축으로 연다.
-			// 액터는 아래 댓글 권한(canEdit/canDelete) 판정에도 그대로 쓴다.
-			const actor = await resolveCommunityActor(context);
-			// 스위치 OFF면 존재를 숨긴다 — 노출을 내린 글은 상세도 열리지 않아야 한다.
 			if (!(await isCrawledCommunityFeedEnabled())) {
 				throw new ORPCError("NOT_FOUND", {
 					message: "게시글을 찾을 수 없습니다.",
 				});
 			}
-
-			const [topic] = await db
-				.select({
-					boardName: crawledCommunityTopic.boardName,
-					body: crawledCommunityTopic.body,
-					commentCount: crawledCommunityTopic.commentCount,
-					comments: crawledCommunityTopic.comments,
-					id: crawledCommunityTopic.id,
-					sourcePostedAt: crawledCommunityTopic.sourcePostedAt,
-					title: crawledCommunityTopic.title,
-					viewCount: crawledCommunityTopic.viewCount,
-				})
-				.from(crawledCommunityTopic)
-				.where(
-					and(
-						eq(crawledCommunityTopic.id, input.topicId),
-						// 운영자가 내린 글은 상세도 열리지 않는다. 목록에서만 빼면 링크를 아는
-						// 사람에게는 계속 열려 있어 "삭제"가 아니라 "숨김"이 된다.
-						isNull(crawledCommunityTopic.removedAt)
-					)
-				)
-				.limit(1);
-
-			if (!topic) {
-				throw new ORPCError("NOT_FOUND", {
-					message: "게시글을 찾을 수 없습니다.",
-				});
-			}
-
-			// 우리 회원·비회원이 이 글에 남긴 댓글. 우리 글 댓글과 같은 노출 규칙
-			// (published + 살아 있는 대댓글의 삭제 부모)과 같은 권한 정책을 쓴다.
-			const rows = await selectVisibleCommentRows(
-				eq(communityComment.crawledTopicId, topic.id)
+			const { topic, board, actor, locked } = await loadCrawledTopicForReader(
+				context,
+				input.topicId
 			);
-			const commentBadges = await loadAuthorBadges(rows);
-
+			const grade = await loadCrawledEditorGrade();
+			const rows = locked
+				? []
+				: await selectVisibleCommentRows(
+						eq(communityComment.crawledTopicId, topic.id)
+					);
+			const badges = await loadAuthorBadges(rows);
+			const secret = isSecretBoard(topic.boardKey);
+			const authorName = topic.editedAt
+				? CRAWLED_EDITED_AUTHOR_NAME
+				: (topic.boardName ?? CRAWLED_AUTHOR_NAME);
 			return {
-				boardName: topic.boardName,
-				// 본문·수집 댓글은 수집 시점에 이미 마스킹·정규화된 값이라 그대로 내린다.
-				body: topic.body ?? "",
-				// 원본에 달려 있던 댓글 수 + 우리 쪽 노출 댓글 수. 목록 행도 같은 합산을 쓰므로
-				// (crawledCommunityFeedSelection의 상관 서브쿼리) 목록과 상세가 일치한다.
-				commentCount:
-					(topic.commentCount ?? 0) +
-					rows.filter((row) => row.status === "published").length,
-				// 우리 댓글(작성·수정·삭제 가능). 화면은 원본 댓글 뒤에 이어 붙인다.
-				comments: toCommentItems(
-					rows,
-					commentPolicyForActor(actor),
-					commentBadges
-				),
 				id: topic.id,
-				// 원본에 달려 있던 댓글(익명·읽기 전용). null(아직 미수집)은 빈 목록으로 접어
-				// 화면이 분기 없이 렌더한다.
-				sourceComments: topic.comments ?? [],
-				sourcePostedAt: topic.sourcePostedAt,
-				title: topic.title,
+				boardKey: topic.boardKey,
+				boardSlug: board.slug,
+				boardLabel: board.label,
+				boardName: topic.boardName,
+				title: locked ? LOCKED_TITLE : (topic.editedTitle ?? topic.title),
+				body: locked ? "" : (topic.editedBody ?? topic.body ?? ""),
+				bodyFormat: topic.editedBody ? ("tiptap" as const) : ("text" as const),
+				locked,
+				canEdit: actor.kind === "member" && actor.profile.role === "admin",
+				revision: topic.editRevision,
+				canComment: !locked && board.isWritable,
+				authorName: secret ? SECRET_AUTHOR_NAME : authorName,
+				authorGender: secret ? ("female" as const) : null,
+				authorGrade: topic.editedAt ? grade : null,
+				sourcePostedAt: topic.activityAt ?? topic.sourcePostedAt,
 				viewCount: topic.viewCount ?? 0,
+				commentCount: locked
+					? 0
+					: (topic.comments?.length ?? topic.commentCount ?? 0) +
+						rows.filter((row) => row.status === "published").length,
+				sourceComments: locked
+					? []
+					: await loadCrawledSourceComments(topic, grade),
+				comments: toCommentItems(rows, commentPolicyForActor(actor), badges),
 			};
 		}),
-
 	createMediaUpload: protectedProcedure
 		.input(createMediaUploadInput)
 		.handler(async ({ context, input }) => {
@@ -2782,40 +2806,24 @@ export const communityRouter = {
 	createCrawledComment: publicProcedure
 		.input(createCrawledCommentInput)
 		.handler(async ({ context, input }) => {
-			const actor = await resolveCommunityActor(context);
-
-			// 스위치 OFF·운영자가 내린 글에는 쓸 수 없다 — 상세와 같은 노출 게이트다.
 			if (!(await isCrawledCommunityFeedEnabled())) {
-				throw new ORPCError("NOT_FOUND", {
-					message: "게시글을 찾을 수 없습니다.",
-				});
+				throw new ORPCError("NOT_FOUND");
 			}
-			const [topic] = await db
-				.select({ id: crawledCommunityTopic.id })
-				.from(crawledCommunityTopic)
-				.where(
-					and(
-						eq(crawledCommunityTopic.id, input.topicId),
-						isNull(crawledCommunityTopic.removedAt)
-					)
-				)
-				.limit(1);
-
-			if (!topic) {
-				throw new ORPCError("NOT_FOUND", {
-					message: "게시글을 찾을 수 없습니다.",
-				});
+			const { topic, locked } = await loadCrawledTopicForReader(
+				context,
+				input.topicId
+			);
+			if (locked) {
+				throw new ORPCError("FORBIDDEN", { message: "비밀글입니다." });
 			}
-
-			// 수집 글은 밤문화 이야기 게시판에 합류하므로 비회원 참여 여부·법률자문 격리도
-			// 그 게시판 기준으로 판정한다(잠금은 없다 — 수집 글에 비밀글 개념이 없다).
-			let guestPassword: null | string = null;
-			if (actor.kind === "guest") {
-				await assertBoard(CRAWLED_COMMUNITY_BOARD, { forWrite: true });
-				guestPassword = requireGuestPassword(input.password);
-			} else {
-				assertLegalAdvisorBoardScope(actor.profile, CRAWLED_COMMUNITY_BOARD);
-			}
+			await assertBoard(topic.boardKey, { forWrite: true });
+			const actor = await resolveCommunityActorForBoard(
+				context,
+				topic.boardKey
+			);
+			await assertSecretActorIdentity(actor, topic.boardKey);
+			const guestPassword =
+				actor.kind === "guest" ? requireGuestPassword(input.password) : null;
 			await assertNoBannedWords([input.body]);
 
 			const parentAuthorUserId = await loadCommentParentAuthor(
@@ -2841,6 +2849,7 @@ export const communityRouter = {
 					authorUserId: actorUserId(actor),
 					body: input.body,
 					crawledTopicId: input.topicId,
+					authorGender: secretActorGender(actor, topic.boardKey),
 					parentCommentId: input.parentCommentId ?? null,
 					passwordHash: guestPassword
 						? hashCommunityPassword(guestPassword)
@@ -2871,7 +2880,6 @@ export const communityRouter = {
 	deleteComment: publicProcedure
 		.input(deleteCommentInput)
 		.handler(async ({ context, input }) => {
-			const actor = await resolveCommunityActor(context);
 			const [comment] = await db
 				.select()
 				.from(communityComment)
@@ -2883,6 +2891,9 @@ export const communityRouter = {
 					message: "댓글을 찾을 수 없습니다.",
 				});
 			}
+			const actor = comment.crawledTopicId
+				? await resolveCrawledCommentActor(context, comment.crawledTopicId)
+				: await resolveCommunityActor(context);
 			if (actor.kind === "guest") {
 				assertGuestOwnership(comment, input.password);
 			} else if (
@@ -2937,7 +2948,6 @@ export const communityRouter = {
 	updateComment: publicProcedure
 		.input(updateCommentInput)
 		.handler(async ({ context, input }) => {
-			const actor = await resolveCommunityActor(context);
 			const [comment] = await db
 				.select()
 				.from(communityComment)
@@ -2949,6 +2959,9 @@ export const communityRouter = {
 					message: "댓글을 찾을 수 없습니다.",
 				});
 			}
+			const actor = comment.crawledTopicId
+				? await resolveCrawledCommentActor(context, comment.crawledTopicId)
+				: await resolveCommunityActor(context);
 			if (actor.kind === "guest") {
 				assertGuestOwnership(comment, input.password);
 			} else if (comment.authorUserId !== actor.profile.userId) {
