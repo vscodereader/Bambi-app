@@ -5,6 +5,7 @@ import {
 import { Text, View } from "react-native";
 
 import { CrawledJobDetailImages } from "@/src/components/crawled-job-detail-images";
+import { HighlightedText } from "@/src/components/highlighted-text";
 import { publicObjectUri } from "@/src/lib/bambi-native";
 
 const BULLET_ITEM_SEPARATOR = /\n+/;
@@ -22,11 +23,17 @@ interface JobDetailMedia {
 
 // 웹 DescriptionBlock의 노드 타입별 렌더를 native View/Text로 이식한다. 강조(callout)는 웹의
 // coral-50/coral-800 분홍 박스를 브랜드 코랄인 --accent 토큰(bg-accent/10)으로 옮긴다.
-function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
+function DescriptionBlock({
+	block,
+	terms,
+}: {
+	block: JobDescriptionBlock;
+	terms?: readonly string[];
+}) {
 	if (block.type === "heading") {
 		return (
 			<Text className="font-bold text-foreground text-lg" selectable>
-				{block.text}
+				<HighlightedText terms={terms} text={block.text} />
 			</Text>
 		);
 	}
@@ -52,7 +59,7 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 							className="flex-1 text-base text-foreground leading-6"
 							selectable
 						>
-							{item.text}
+							<HighlightedText terms={terms} text={item.text} />
 						</Text>
 					</View>
 				))}
@@ -64,7 +71,7 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 		return (
 			<View className="rounded-lg border border-accent/20 bg-accent/10 p-3">
 				<Text className="text-base text-foreground leading-6" selectable>
-					{block.text}
+					<HighlightedText terms={terms} text={block.text} />
 				</Text>
 			</View>
 		);
@@ -72,7 +79,7 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 
 	return (
 		<Text className="text-base text-foreground leading-6" selectable>
-			{block.text}
+			<HighlightedText terms={terms} text={block.text} />
 		</Text>
 	);
 }
@@ -86,12 +93,14 @@ export function JobDescriptionSection({
 	detail,
 	gcsPublicBaseUrl,
 	title,
+	highlightTerms,
 }: {
 	description: string;
 	descriptionBlocks: JobDescriptionBlock[];
 	detail: readonly JobDetailMedia[];
 	gcsPublicBaseUrl: string | undefined;
 	title: string;
+	highlightTerms?: readonly string[];
 }) {
 	const content = resolveJobDescriptionContent({
 		description,
@@ -139,11 +148,11 @@ export function JobDescriptionSection({
 			</Text>
 			{content.showDescription ? (
 				<Text className="text-base text-foreground leading-6" selectable>
-					{content.description}
+					<HighlightedText terms={highlightTerms} text={content.description} />
 				</Text>
 			) : null}
 			{content.blocks.map((block) => (
-				<DescriptionBlock block={block} key={block.id} />
+				<DescriptionBlock block={block} key={block.id} terms={highlightTerms} />
 			))}
 			<CrawledJobDetailImages document={imageDocument} title={title} />
 		</View>
