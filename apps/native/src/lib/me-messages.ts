@@ -1,10 +1,10 @@
 interface TiptapMark {
-	attrs?: { href?: unknown };
+	attrs?: { href?: unknown; fontSize?: unknown };
 	type?: unknown;
 }
 
 interface TiptapNode {
-	attrs?: { alt?: unknown; src?: unknown };
+	attrs?: { alt?: unknown; src?: unknown; level?: unknown };
 	content?: unknown[];
 	marks?: unknown[];
 	text?: unknown;
@@ -14,20 +14,23 @@ interface TiptapNode {
 /** 문단 한 줄 안의 텍스트 조각. 마크는 스타일 플래그로만 남긴다(렌더는 message-body.tsx). */
 export interface MessageInline {
 	bold?: boolean;
+	fontSize?: number;
 	href?: string;
 	italic?: boolean;
+	strike?: boolean;
 	text: string;
 }
 
 /**
- * 쪽지 본문을 그리기 위한 최소 블록 집합. 웹 뷰어(Tiptap)의 노드를 1:1로 옮기지 않는다 —
- * 운영자 쪽지는 문단·리스트·링크·이미지가 사실상 전부라, 나머지(heading·blockquote·
- * codeBlock…)는 문단으로 눌러 그린다.
+ * 쪽지·운영자 편집 미리보기의 네이티브 표시 블록. 제목·인용·코드도 구분한다.
  */
-export type MessageBlock =
+export type MessageBlock = (
 	| { alt: string; src: string; type: "image" }
 	| { inlines: MessageInline[]; marker: string; type: "listItem" }
-	| { inlines: MessageInline[]; type: "paragraph" };
+	| { inlines: MessageInline[]; level: number; type: "heading" }
+	| { inlines: MessageInline[]; type: "codeBlock" }
+	| { inlines: MessageInline[]; type: "paragraph" }
+) & { quoted?: boolean };
 
 const SAFE_LINK_SCHEMES = new Set(["http:", "https:", "mailto:", "tel:"]);
 const LINK_SCHEME_PATTERN = /^[a-z][a-z\d+.-]*:/i;
@@ -48,6 +51,14 @@ export const isSafeLinkHref = (href: string): boolean => {
 	return scheme !== undefined && SAFE_LINK_SCHEMES.has(scheme.toLowerCase());
 };
 
+const pixelFontSize = (value: unknown): number | undefined => {
+	if (typeof value !== "string" || !value.endsWith("px")) {
+		return;
+	}
+	const parsed = Number(value.slice(0, -2));
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+};
+
 const markedInline = (text: string, marks: unknown): MessageInline => {
 	const inline: MessageInline = { text };
 
@@ -56,6 +67,10 @@ const markedInline = (text: string, marks: unknown): MessageInline => {
 			inline.bold = true;
 		} else if (mark?.type === "italic") {
 			inline.italic = true;
+		} else if (mark?.type === "strike") {
+			inline.strike = true;
+		} else if (mark?.type === "textStyle") {
+			inline.fontSize = pixelFontSize(mark.attrs?.fontSize);
 		} else if (mark?.type === "link") {
 			const href = mark.attrs?.href;
 
@@ -94,29 +109,39 @@ const collectInlines = (nodes: TiptapNode[], inlines: MessageInline[]) => {
  * 있으면 컨테이너로 보고 재귀한다(웹 public-post-body의 "모르는 노드는 자식만 흘려보낸다"와
  * 같은 계약: 에디터 확장이 늘어도 본문이 통째로 사라지지 않는다).
  */
+const appendImageBlock = (node: TiptapNode, blocks: MessageBlock[]) => {
+	const src = node.attrs?.src;
+	if (typeof src !== "string") {
+		return;
+	}
+	blocks.push({
+		type: "image",
+		src,
+		alt: typeof node.attrs?.alt === "string" ? node.attrs.alt : "",
+	});
+};
+
 const walkBlock = (
 	node: TiptapNode,
 	blocks: MessageBlock[],
 	marker: string
 ) => {
 	if (node.type === "image") {
-		const src = node.attrs?.src;
-		const alt = node.attrs?.alt;
-
-		if (typeof src === "string") {
-			blocks.push({
-				alt: typeof alt === "string" ? alt : "",
-				src,
-				type: "image",
-			});
-		}
-
+		appendImageBlock(node, blocks);
 		return;
 	}
 
 	const content = Array.isArray(node.content)
 		? (node.content as TiptapNode[])
 		: null;
+	if (node.type === "blockquote") {
+		const quoted: MessageBlock[] = [];
+		for (const child of content ?? []) {
+			walkBlock(child, quoted, marker);
+		}
+		blocks.push(...quoted.map((block) => ({ ...block, quoted: true })));
+		return;
+	}
 
 	// 중첩 리스트는 깊이를 접어 같은 마커로 평탄화한다(들여쓰기는 이연). 재귀 분기라 자식은
 	// 반드시 실제 content만 본다 — content 없는 리스트 노드에 아래 `[node]` 폴백을 쓰면
@@ -147,6 +172,18 @@ const walkBlock = (
 	collectInlines(kids, inlines);
 
 	if (inlines.length === 0) {
+		return;
+	}
+	if (node.type === "heading") {
+		blocks.push({
+			inlines,
+			type: "heading",
+			level: typeof node.attrs?.level === "number" ? node.attrs.level : 1,
+		});
+		return;
+	}
+	if (node.type === "codeBlock") {
+		blocks.push({ inlines, type: "codeBlock" });
 		return;
 	}
 

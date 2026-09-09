@@ -223,7 +223,7 @@ describe("parseDirectMessageBody", () => {
 		});
 
 		expect(parseDirectMessageBody(body)).toEqual([
-			{ type: "paragraph", inlines: [{ text: "제목입니다" }] },
+			{ type: "heading", level: 2, inlines: [{ text: "제목입니다" }] },
 			{ type: "paragraph", inlines: [{ text: "안내" }] },
 		]);
 	});
