@@ -17,7 +17,7 @@ import {
 	varchar,
 } from "drizzle-orm/pg-core";
 
-import { organization, team, user } from "./auth";
+import { organization, session, team, user } from "./auth";
 
 // guest는 계정이 없는 비회원 작성자(성인인증 통과 게스트 토큰)를 가리키는 스냅샷 값이며
 // user.role로는 저장되지 않는다 — 수다방 글·댓글의 author_role에만 쓰인다.
@@ -36,6 +36,11 @@ export const accountStatus = pgEnum("account_status", [
 	"active",
 	"warned",
 	"suspended",
+]);
+
+export const userPresencePlatform = pgEnum("user_presence_platform", [
+	"web",
+	"native",
 ]);
 
 export const mainPopupContentType = pgEnum("main_popup_content_type", [
@@ -827,6 +832,7 @@ export const crawledJobPost = pgTable(
 export interface CrawledCommunityCommentRecord {
 	authorName: string | null;
 	body: string;
+	id?: string;
 	sourcePostedAt: string | null;
 }
 
@@ -838,6 +844,18 @@ export const crawledCommunityTopic = pgTable(
 	"crawled_community_topic",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
+		boardKey: text("board_key")
+			.notNull()
+			.references(() => communityBoard.key),
+		editedTitle: text("edited_title"),
+		editedBody: text("edited_body"),
+		editedBodyText: text("edited_body_text"),
+		editedAt: timestamp("edited_at"),
+		editedByUserId: text("edited_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		activityAt: timestamp("activity_at"),
+		editRevision: integer("edit_revision").default(0).notNull(),
 		sourceSite: crawlSourceSite("source_site").notNull(),
 		sourceExternalId: text("source_external_id").notNull(),
 		sourceUrl: text("source_url").notNull(),
@@ -868,13 +886,34 @@ export const crawledCommunityTopic = pgTable(
 	(table) => [
 		uniqueIndex("crawled_community_topic_source_uidx").on(
 			table.sourceSite,
-			table.sourceExternalId
+			table.sourceExternalId,
+			table.boardKey
+		),
+		index("crawled_community_topic_board_idx").on(
+			table.boardKey,
+			table.activityAt
 		),
 		index("crawled_community_topic_seen_idx").on(
 			table.sourceSite,
 			table.lastSeenAt
 		),
 	]
+);
+
+export const crawledCommunityCommentEdit = pgTable(
+	"crawled_community_comment_edit",
+	{
+		topicId: uuid("topic_id")
+			.notNull()
+			.references(() => crawledCommunityTopic.id, { onDelete: "cascade" }),
+		sourceCommentId: text("source_comment_id").notNull(),
+		editedBody: text("edited_body").notNull(),
+		editedAt: timestamp("edited_at").notNull(),
+		editedByUserId: text("edited_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+	},
+	(table) => [primaryKey({ columns: [table.topicId, table.sourceCommentId] })]
 );
 
 // 수집 회차 기록. DOM 크롤링의 운영 비용은 대부분 셀렉터가 소리 없이 깨지는 데서 나오므로,
@@ -887,6 +926,7 @@ export const crawlRun = pgTable(
 		// 이 회차가 무엇을 긁었는지. 사이트만 남기면 "퀸알바 회차"가 공고인지 게시판인지
 		// 구분되지 않아, 회차 목록이 파손 신호를 읽는 창구 역할을 못 한다.
 		contentType: crawlContentType("content_type").default("job_post").notNull(),
+		boardKey: text("board_key"),
 		status: crawlRunStatus("status").default("running").notNull(),
 		startedAt: timestamp("started_at").defaultNow().notNull(),
 		finishedAt: timestamp("finished_at"),
@@ -1413,172 +1453,219 @@ export const adProductDiscountCampaign = pgTable(
 // 사이트 전역 설정(단일 행). 지금은 푸터에 노출하는 사업자 정보를 담고, 이후 다른
 // 사이트 설정(무통장입금 계좌 안내 등)이 생기면 컬럼을 추가한다. 도메인을 푸터로 좁히지
 // 않으려고 이름을 site_settings로 둔다. 값이 없으면(null) 코드의 폴백 상수를 쓴다.
-export const bambiSiteSettings = pgTable("bambi_site_settings", {
-	// 단일 행 강제용 고정 키. 조회·수정 모두 이 키 하나만 다룬다.
-	id: text("id").default("default").primaryKey(),
-	// 푸터 서비스 소개 문구
-	footerIntro: text("footer_intro"),
-	// 운영 주체(상호)
-	operator: text("operator"),
-	// 대표자
-	ceo: text("ceo"),
-	// 사업자등록번호
-	bizRegNo: text("biz_reg_no"),
-	// 사업장 주소
-	address: text("address"),
-	// 고객문의 이메일
-	email: text("email"),
-	// 고객센터 전화(TEL). 푸터에 노출. null이면 코드 폴백(BAMBI_COMPANY.tel).
-	tel: text("tel"),
-	// 광고 슬롯 자리표시에 노출하는 광고 등록 문의 전화. 고객센터 전화(tel)와 다를 수 있어
-	// 별도 컬럼이다. null이면 tel → BAMBI_COMPANY.tel 순으로 폴백한다.
-	adInquiryTel: text("ad_inquiry_tel"),
-	// 무통장입금 안내 계좌 목록. 운영자가 사이트 설정에서 관리하고, 공고 결제 안내에 노출된다.
-	// 미설정이면 빈 배열 → 안내 화면은 고객센터 문의 문구로 폴백한다.
-	bankAccounts: jsonb("bank_accounts")
-		.$type<{ accountNumber: string; bank: string; holder: string }[]>()
-		.default([])
-		.notNull(),
-	// 법정 최저시급과 그 기준 연도. 공고 상세의 급여 옆에 나란히 붙여, 제시 급여가 최저시급
-	// 대비 어느 수준인지를 구직자가 그 자리에서 판단할 수 있게 한다. 매년 바뀌고 다음 해 값이
-	// 8월에 미리 고시되므로 연도도 함께 저장한다(현재 연도로 유추하면 연말에 틀린다).
-	// null이면 코드 기본값(DEFAULT_MINIMUM_WAGE)으로 폴백한다.
-	minimumWageYear: integer("minimum_wage_year"),
-	minimumWageHourly: integer("minimum_wage_hourly"),
-	// 회원 탈퇴 후 개인정보 보존기간(일). 운영자 사이트 설정에서 편집한다.
-	// null이면 코드 기본값(DEFAULT_WITHDRAWAL_RETENTION_DAYS=30)으로 폴백한다.
-	withdrawalRetentionDays: integer("withdrawal_retention_days"),
-	// 파기 배치 자동 실행 시각(KST 0~23시). null이면 코드 기본값
-	// (DEFAULT_WITHDRAWAL_PURGE_HOUR=4)으로 폴백한다.
-	withdrawalPurgeHour: integer("withdrawal_purge_hour"),
-	// 파기 배치 마지막 실행 시각(자동·수동 공통). 스케줄러가 "오늘 설정 시각 이후 이미 돌았는지"를
-	// 이 값으로 판정한다 — 프로세스 메모리가 아니라 DB라 서버를 재시작하거나 인스턴스가 늘어도
-	// 하루 한 번이 유지되고, 운영자 화면의 "마지막 실행" 표시도 같은 값을 본다.
-	withdrawalPurgeLastRunAt: timestamp("withdrawal_purge_last_run_at"),
-	// 광고 배너 로테이션 주기(분). 운영자 사이트 설정에서 편집한다. 활성 광고 칸이 이 주기마다
-	// 한 칸씩 전진한다. null이면 코드 기본값(DEFAULT_AD_ROTATION_MINUTES=60)으로 폴백한다.
-	adBannerRotationMinutes: integer("ad_banner_rotation_minutes"),
-	// 급구 채용 섹션 숨김. 코드에서 섹션을 지우지 않고 운영자 토글로 뺀 값 — 기본 true라
-	// 마이그레이션 직후 즉시 숨겨지고(기존 단일 행에도 채워짐), 운영자가 끄면(false) 다시 노출된다.
-	urgentSectionHidden: boolean("urgent_section_hidden").default(true).notNull(),
-	// 스페셜 리스팅 광고의 정원 = 렌더 슬롯 수(고정 인벤토리, 로테이션 없음). 자리가 차면 신규
-	// 승인은 대기열로 밀린다. null이면 코드 기본값(DEFAULT_SPECIAL_CAPACITY=12)으로 폴백한다.
-	specialCapacity: integer("special_capacity"),
-	// 추천 리스팅 광고의 정원 = 렌더 슬롯 수. 위 스페셜과 동일 규칙이며 null이면 코드 기본값
-	// (DEFAULT_RECOMMENDED_CAPACITY=20)으로 폴백한다.
-	recommendedCapacity: integer("recommended_capacity"),
-	// 회원이 보유할 수 있는 누적 포인트 상한(cap). 운영자가 등급 관리에서 설정한다. null이면
-	// 상한 없음(무제한 적립). 값이 있으면 게시판 활동 적립이 이 값을 넘지 못하게 잘려 들어간다.
-	// 저장 가드(API): 최고 등급 기준 포인트보다 낮게는 저장할 수 없다 — 그 등급이 도달 불가가 되므로.
-	maxMemberPoints: integer("max_member_points"),
-	// 포인트 정책은 운영자가 저장한 뒤 새 거래부터 적용한다.
-	signupPoints: integer("signup_points").default(1000).notNull(),
-	attendancePoints: integer("attendance_points").default(10).notNull(),
-	// null/0이면 공고 등록 결제에서 포인트 사용을 중단한다.
-	jobPaymentMinPoints: integer("job_payment_min_points"),
-	// null이면 결제 예정 금액까지 사용할 수 있다.
-	jobPaymentMaxPoints: integer("job_payment_max_points"),
-	// 후기 저장 성공 시 지급할 포인트와 다른 구직자 후기 한 건 열람 비용.
-	reviewWritePoints: integer("review_write_points").default(0).notNull(),
-	reviewViewPoints: integer("review_view_points").default(10).notNull(),
-	// 댓글 포인트 보너스(랜덤 당첨). 켜지면 댓글 적립 시 확률에 따라 추가 포인트를 얹는다.
-	// 당첨액은 댓글 생성 시 확정(community_comment.bonus_points)돼 숨김·복구에도 불변이다.
-	commentBonusEnabled: boolean("comment_bonus_enabled")
-		.default(false)
-		.notNull(),
-	// 당첨 확률(%)·당첨 시 지급 구간(min~max 균등). 운영자가 사이트 설정에서 편집한다.
-	commentBonusChancePercent: integer("comment_bonus_chance_percent")
-		.default(10)
-		.notNull(),
-	commentBonusMinPoints: integer("comment_bonus_min_points")
-		.default(5)
-		.notNull(),
-	commentBonusMaxPoints: integer("comment_bonus_max_points")
-		.default(50)
-		.notNull(),
-	// 구 단일 포인트 광고 금액. 유형별 컬럼 이관 근거로만 남기고 신규 경로에서는 읽지 않는다.
-	pointJobRewardPoints: integer("point_job_reward_points"),
-	premiumPointJobRewardPoints: integer("premium_point_job_reward_points"),
-	specialPointJobRewardPoints: integer("special_point_job_reward_points"),
-	recommendedPointJobRewardPoints: integer(
-		"recommended_point_job_reward_points"
-	),
-	// 유형별 광고 교체 간격이자 개인 재지급 쿨타임. null이면 운영자 미설정 상태다.
-	premiumPointJobRotationHours: integer("premium_point_job_rotation_hours"),
-	specialPointJobRotationHours: integer("special_point_job_rotation_hours"),
-	recommendedPointJobRotationHours: integer(
-		"recommended_point_job_rotation_hours"
-	),
-	// 베스트글(추천수 큐레이션 가상 게시판) 아이콘의 lucide 이름. 베스트는 community_board 행이
-	// 없는 가상 게시판이라 게시판 아이콘 컬럼 대신 여기 저장한다. null이면 미지정(기존 코럴
-	// 액센트 바 유지) — 값 검증은 API 쪽 COMMUNITY_BOARD_ICONS enum(zod)이 맡는다.
-	bestBoardIcon: text("best_board_icon"),
-	// 개인정보 처리방침에 노출하는 위탁사·관리부서 연락처. 운영자 사이트 설정에서 편집한다.
-	// null이면 프론트가 코드 폴백(BAMBI_PROCESSORS 이름 / BAMBI_COMPANY.privacyOfficer)을 쓴다.
-	privacyPaymentProcessor: text("privacy_payment_processor"),
-	// 개인정보 보호책임자 성명(개인정보 보호법 제31조 공개 대상).
-	privacyOfficerName: text("privacy_officer_name"),
-	// 문자(SMS) 발송 기능이 없어 수탁자 표에서 SMS 행을 걷어냈다. 컬럼은 마이그레이션
-	// 없이 남겨두고 읽지 않는다 — SMS 위탁이 생기면 다시 노출한다.
-	privacySmsProvider: text("privacy_sms_provider"),
-	privacyContactPhone: text("privacy_contact_phone"),
-	privacyContactEmail: text("privacy_contact_email"),
-	// 수집 스케줄러 스위치. 스케줄러 job은 항상 등록해두고 매 틱 이 값을 읽는다 —
-	// toad-scheduler의 job.stop()은 프로세스 메모리 상태라 서버를 재시작하거나 인스턴스가
-	// 늘면 상태가 갈리지만, DB 플래그는 어디서 켜도 모든 인스턴스에 즉시 반영된다.
-	// 기본이 false라 배포만으로는 저절로 돌지 않는다(운영자가 명시적으로 켠다). 이 값은
-	// 주기 실행만 통제하고, 운영자의 「즉시 수집」은 꺼져 있어도 항상 돈다 — 수동 실행까지
-	// 막으면 스케줄러를 켜지 않고는 파서를 확인할 방법이 없어진다.
-	crawlEnabled: boolean("crawl_enabled").default(false).notNull(),
-	// 수집 대상 사이트. 현재는 퀸알바만 수집한다(여우알바는 대상에서 내렸다). enum 값과
-	// 과거 회차 기록은 남겨두므로 되살릴 때 마이그레이션이 필요 없다.
-	crawlSourceSite: crawlSourceSite("crawl_source_site")
-		.default("queenalba")
-		.notNull(),
-	// 수집 데이터 종류(공고/커뮤니티). 사이트와 함께 (사이트×종류) 조합을 이루고, 파서가
-	// 구현된 조합만 실제로 돈다.
-	crawlContentType: crawlContentType("crawl_content_type")
-		.default("job_post")
-		.notNull(),
-	// 수집 주기(시간). null이면 코드 기본값(DEFAULT_CRAWL_INTERVAL_HOURS)으로 폴백한다.
-	crawlIntervalHours: integer("crawl_interval_hours"),
-	// 마지막 수집 시각. 틱 간격보다 이 값을 기준으로 판정해 서버 재시작에도 주기가 밀리지 않는다.
-	crawlLastRunAt: timestamp("crawl_last_run_at"),
-	// 수집 공고를 광고 배너 슬롯에 채울지. 수집 여부와 별개의 스위치다 — 긁어 두는 것과
-	// 남의 업소 이미지를 우리 광고 자리에 거는 것은 판단이 다르고, 문제가 생기면 수집을
-	// 멈추지 않고 노출만 즉시 내려야 한다. 기본이 false라 배포만으로는 노출되지 않는다.
-	crawledAdBannerEnabled: boolean("crawled_ad_banner_enabled")
-		.default(false)
-		.notNull(),
-	// 수집 공고를 공고 목록에 섞을지. 위와 같은 이유로 배너와 따로 끈다 — 배너 한 칸이
-	// 문제여도 목록은 살려 두거나, 그 반대를 택할 수 있어야 한다.
-	crawledJobFeedEnabled: boolean("crawled_job_feed_enabled")
-		.default(false)
-		.notNull(),
-	// 수집 커뮤니티 글을 커뮤니티 목록에 섞을지. 위 공고 스위치와 같은 이유로 수집과 노출을
-	// 따로 끈다 — 긁어 두는 것과 남의 글을 우리 커뮤니티에 세우는 것은 판단이 다르고, 문제가
-	// 생기면 수집을 멈추지 않고 노출만 즉시 내려야 한다. 기본이 false라 배포만으로는 켜지지 않는다.
-	crawledCommunityFeedEnabled: boolean("crawled_community_feed_enabled")
-		.default(false)
-		.notNull(),
-	// 섹션별 수집 공고 노출 상한. 수집할 때(배너 리다이렉터 해석 요청 절약)와 조회할 때(과거
-	// 회차가 남긴 초과 라벨 방어) 같은 값을 쓴다. null이면 코드 기본값(DEFAULT_CRAWLED_LIMITS)
-	// 으로 폴백한다 — 컬럼 default를 박으면 기본값을 조정할 때마다 마이그레이션이 필요해진다.
-	crawledAdBannerLimit: integer("crawled_ad_banner_limit"),
-	crawledSpecialLimit: integer("crawled_special_limit"),
-	crawledUrgentLimit: integer("crawled_urgent_limit"),
-	crawledRecommendedLimit: integer("crawled_recommended_limit"),
-	// 한 회차에 게시판 목록에서 모을 커뮤니티 글 수 상한. 위 네 값이 "노출 자리 개수"라면 이건
-	// "수집 규모"다 — 최신순 앞에서 이 개수만큼만 담고, 채우면 남은 목록 페이지를 받지 않는다.
-	// 같은 이유로 null이면 코드 기본값(DEFAULT_CRAWLED_LIMITS.community)으로 폴백한다.
-	crawledCommunityLimit: integer("crawled_community_limit"),
-	// 문의 채팅 위젯 홈 탭의 공지 배너 문구. null/빈 값이면 배너를 그리지 않는다.
-	supportChatNotice: text("support_chat_notice"),
-	updatedAt: timestamp("updated_at")
-		.defaultNow()
-		.$onUpdate(() => /* @__PURE__ */ new Date())
-		.notNull(),
-});
+export const userPresenceConnection = pgTable(
+	"bambi_user_presence_connection",
+	{
+		id: uuid("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		sessionId: text("session_id")
+			.notNull()
+			.references(() => session.id, { onDelete: "cascade" }),
+		platform: userPresencePlatform("platform").notNull(),
+		connectedAt: timestamp("connected_at").defaultNow().notNull(),
+		leaseExpiresAt: timestamp("lease_expires_at").notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("user_presence_connection_user_id_idx").on(table.userId),
+		index("user_presence_connection_session_id_idx").on(table.sessionId),
+		index("user_presence_connection_lease_expires_at_idx").on(
+			table.leaseExpiresAt
+		),
+	]
+);
+
+export const bambiSiteSettings = pgTable(
+	"bambi_site_settings",
+	{
+		// 단일 행 강제용 고정 키. 조회·수정 모두 이 키 하나만 다룬다.
+		id: text("id").default("default").primaryKey(),
+		// 푸터 서비스 소개 문구
+		footerIntro: text("footer_intro"),
+		// 운영 주체(상호)
+		operator: text("operator"),
+		// 대표자
+		ceo: text("ceo"),
+		// 사업자등록번호
+		bizRegNo: text("biz_reg_no"),
+		// 사업장 주소
+		address: text("address"),
+		// 고객문의 이메일
+		email: text("email"),
+		// 고객센터 전화(TEL). 푸터에 노출. null이면 코드 폴백(BAMBI_COMPANY.tel).
+		tel: text("tel"),
+		// 광고 슬롯 자리표시에 노출하는 광고 등록 문의 전화. 고객센터 전화(tel)와 다를 수 있어
+		// 별도 컬럼이다. null이면 tel → BAMBI_COMPANY.tel 순으로 폴백한다.
+		adInquiryTel: text("ad_inquiry_tel"),
+		// 무통장입금 안내 계좌 목록. 운영자가 사이트 설정에서 관리하고, 공고 결제 안내에 노출된다.
+		// 미설정이면 빈 배열 → 안내 화면은 고객센터 문의 문구로 폴백한다.
+		bankAccounts: jsonb("bank_accounts")
+			.$type<{ accountNumber: string; bank: string; holder: string }[]>()
+			.default([])
+			.notNull(),
+		// 법정 최저시급과 그 기준 연도. 공고 상세의 급여 옆에 나란히 붙여, 제시 급여가 최저시급
+		// 대비 어느 수준인지를 구직자가 그 자리에서 판단할 수 있게 한다. 매년 바뀌고 다음 해 값이
+		// 8월에 미리 고시되므로 연도도 함께 저장한다(현재 연도로 유추하면 연말에 틀린다).
+		// null이면 코드 기본값(DEFAULT_MINIMUM_WAGE)으로 폴백한다.
+		minimumWageYear: integer("minimum_wage_year"),
+		minimumWageHourly: integer("minimum_wage_hourly"),
+		// 회원 탈퇴 후 개인정보 보존기간(일). 운영자 사이트 설정에서 편집한다.
+		// null이면 코드 기본값(DEFAULT_WITHDRAWAL_RETENTION_DAYS=30)으로 폴백한다.
+		withdrawalRetentionDays: integer("withdrawal_retention_days"),
+		// 파기 배치 자동 실행 시각(KST 0~23시). null이면 코드 기본값
+		// (DEFAULT_WITHDRAWAL_PURGE_HOUR=4)으로 폴백한다.
+		withdrawalPurgeHour: integer("withdrawal_purge_hour"),
+		// 파기 배치 마지막 실행 시각(자동·수동 공통). 스케줄러가 "오늘 설정 시각 이후 이미 돌았는지"를
+		// 이 값으로 판정한다 — 프로세스 메모리가 아니라 DB라 서버를 재시작하거나 인스턴스가 늘어도
+		// 하루 한 번이 유지되고, 운영자 화면의 "마지막 실행" 표시도 같은 값을 본다.
+		withdrawalPurgeLastRunAt: timestamp("withdrawal_purge_last_run_at"),
+		// 광고 배너 로테이션 주기(분). 운영자 사이트 설정에서 편집한다. 활성 광고 칸이 이 주기마다
+		// 한 칸씩 전진한다. null이면 코드 기본값(DEFAULT_AD_ROTATION_MINUTES=60)으로 폴백한다.
+		adBannerRotationMinutes: integer("ad_banner_rotation_minutes"),
+		// 급구 채용 섹션 숨김. 코드에서 섹션을 지우지 않고 운영자 토글로 뺀 값 — 기본 true라
+		// 마이그레이션 직후 즉시 숨겨지고(기존 단일 행에도 채워짐), 운영자가 끄면(false) 다시 노출된다.
+		urgentSectionHidden: boolean("urgent_section_hidden")
+			.default(true)
+			.notNull(),
+		// 스페셜 리스팅 광고의 정원 = 렌더 슬롯 수(고정 인벤토리, 로테이션 없음). 자리가 차면 신규
+		// 승인은 대기열로 밀린다. null이면 코드 기본값(DEFAULT_SPECIAL_CAPACITY=12)으로 폴백한다.
+		specialCapacity: integer("special_capacity"),
+		// 추천 리스팅 광고의 정원 = 렌더 슬롯 수. 위 스페셜과 동일 규칙이며 null이면 코드 기본값
+		// (DEFAULT_RECOMMENDED_CAPACITY=20)으로 폴백한다.
+		recommendedCapacity: integer("recommended_capacity"),
+		// 마지막 인정 활동 후 온라인으로 볼 시간(분). null이면 공용 기본값 20분을 쓴다.
+		// 운영자 사용자 관리 화면에서 편집하며 저장 즉시 모든 사용자 상태를 다시 계산한다.
+		userOfflineAfterMinutes: integer("user_offline_after_minutes"),
+		// 회원이 보유할 수 있는 누적 포인트 상한(cap). 운영자가 등급 관리에서 설정한다. null이면
+		// 상한 없음(무제한 적립). 값이 있으면 게시판 활동 적립이 이 값을 넘지 못하게 잘려 들어간다.
+		// 저장 가드(API): 최고 등급 기준 포인트보다 낮게는 저장할 수 없다 — 그 등급이 도달 불가가 되므로.
+		maxMemberPoints: integer("max_member_points"),
+		// 포인트 정책은 운영자가 저장한 뒤 새 거래부터 적용한다.
+		signupPoints: integer("signup_points").default(1000).notNull(),
+		attendancePoints: integer("attendance_points").default(10).notNull(),
+		// null/0이면 공고 등록 결제에서 포인트 사용을 중단한다.
+		jobPaymentMinPoints: integer("job_payment_min_points"),
+		// null이면 결제 예정 금액까지 사용할 수 있다.
+		jobPaymentMaxPoints: integer("job_payment_max_points"),
+		// 후기 저장 성공 시 지급할 포인트와 다른 구직자 후기 한 건 열람 비용.
+		reviewWritePoints: integer("review_write_points").default(0).notNull(),
+		reviewViewPoints: integer("review_view_points").default(10).notNull(),
+		// 댓글 포인트 보너스(랜덤 당첨). 켜지면 댓글 적립 시 확률에 따라 추가 포인트를 얹는다.
+		// 당첨액은 댓글 생성 시 확정(community_comment.bonus_points)돼 숨김·복구에도 불변이다.
+		commentBonusEnabled: boolean("comment_bonus_enabled")
+			.default(false)
+			.notNull(),
+		// 당첨 확률(%)·당첨 시 지급 구간(min~max 균등). 운영자가 사이트 설정에서 편집한다.
+		commentBonusChancePercent: integer("comment_bonus_chance_percent")
+			.default(10)
+			.notNull(),
+		commentBonusMinPoints: integer("comment_bonus_min_points")
+			.default(5)
+			.notNull(),
+		commentBonusMaxPoints: integer("comment_bonus_max_points")
+			.default(50)
+			.notNull(),
+		// 구 단일 포인트 광고 금액. 유형별 컬럼 이관 근거로만 남기고 신규 경로에서는 읽지 않는다.
+		pointJobRewardPoints: integer("point_job_reward_points"),
+		premiumPointJobRewardPoints: integer("premium_point_job_reward_points"),
+		specialPointJobRewardPoints: integer("special_point_job_reward_points"),
+		recommendedPointJobRewardPoints: integer(
+			"recommended_point_job_reward_points"
+		),
+		// 유형별 광고 교체 간격이자 개인 재지급 쿨타임. null이면 운영자 미설정 상태다.
+		premiumPointJobRotationHours: integer("premium_point_job_rotation_hours"),
+		specialPointJobRotationHours: integer("special_point_job_rotation_hours"),
+		recommendedPointJobRotationHours: integer(
+			"recommended_point_job_rotation_hours"
+		),
+		// 베스트글(추천수 큐레이션 가상 게시판) 아이콘의 lucide 이름. 베스트는 community_board 행이
+		// 없는 가상 게시판이라 게시판 아이콘 컬럼 대신 여기 저장한다. null이면 미지정(기존 코럴
+		// 액센트 바 유지) — 값 검증은 API 쪽 COMMUNITY_BOARD_ICONS enum(zod)이 맡는다.
+		bestBoardIcon: text("best_board_icon"),
+		// 개인정보 처리방침에 노출하는 위탁사·관리부서 연락처. 운영자 사이트 설정에서 편집한다.
+		// null이면 프론트가 코드 폴백(BAMBI_PROCESSORS 이름 / BAMBI_COMPANY.privacyOfficer)을 쓴다.
+		privacyPaymentProcessor: text("privacy_payment_processor"),
+		// 개인정보 보호책임자 성명(개인정보 보호법 제31조 공개 대상).
+		privacyOfficerName: text("privacy_officer_name"),
+		// 문자(SMS) 발송 기능이 없어 수탁자 표에서 SMS 행을 걷어냈다. 컬럼은 마이그레이션
+		// 없이 남겨두고 읽지 않는다 — SMS 위탁이 생기면 다시 노출한다.
+		privacySmsProvider: text("privacy_sms_provider"),
+		privacyContactPhone: text("privacy_contact_phone"),
+		privacyContactEmail: text("privacy_contact_email"),
+		// 수집 스케줄러 스위치. 스케줄러 job은 항상 등록해두고 매 틱 이 값을 읽는다 —
+		// toad-scheduler의 job.stop()은 프로세스 메모리 상태라 서버를 재시작하거나 인스턴스가
+		// 늘면 상태가 갈리지만, DB 플래그는 어디서 켜도 모든 인스턴스에 즉시 반영된다.
+		// 기본이 false라 배포만으로는 저절로 돌지 않는다(운영자가 명시적으로 켠다). 이 값은
+		// 주기 실행만 통제하고, 운영자의 「즉시 수집」은 꺼져 있어도 항상 돈다 — 수동 실행까지
+		// 막으면 스케줄러를 켜지 않고는 파서를 확인할 방법이 없어진다.
+		crawlEnabled: boolean("crawl_enabled").default(false).notNull(),
+		crawlCommunityBoardKey: text("crawl_community_board_key").references(
+			() => communityBoard.key
+		),
+		crawledCommunityEditorGradeId: uuid(
+			"crawled_community_editor_grade_id"
+		).references((): AnyPgColumn => bambiMemberGrade.id),
+		// 수집 대상 사이트. 현재는 퀸알바만 수집한다(여우알바는 대상에서 내렸다). enum 값과
+		// 과거 회차 기록은 남겨두므로 되살릴 때 마이그레이션이 필요 없다.
+		crawlSourceSite: crawlSourceSite("crawl_source_site")
+			.default("queenalba")
+			.notNull(),
+		// 수집 데이터 종류(공고/커뮤니티). 사이트와 함께 (사이트×종류) 조합을 이루고, 파서가
+		// 구현된 조합만 실제로 돈다.
+		crawlContentType: crawlContentType("crawl_content_type")
+			.default("job_post")
+			.notNull(),
+		// 수집 주기(시간). null이면 코드 기본값(DEFAULT_CRAWL_INTERVAL_HOURS)으로 폴백한다.
+		crawlIntervalHours: integer("crawl_interval_hours"),
+		// 마지막 수집 시각. 틱 간격보다 이 값을 기준으로 판정해 서버 재시작에도 주기가 밀리지 않는다.
+		crawlLastRunAt: timestamp("crawl_last_run_at"),
+		// 수집 공고를 광고 배너 슬롯에 채울지. 수집 여부와 별개의 스위치다 — 긁어 두는 것과
+		// 남의 업소 이미지를 우리 광고 자리에 거는 것은 판단이 다르고, 문제가 생기면 수집을
+		// 멈추지 않고 노출만 즉시 내려야 한다. 기본이 false라 배포만으로는 노출되지 않는다.
+		crawledAdBannerEnabled: boolean("crawled_ad_banner_enabled")
+			.default(false)
+			.notNull(),
+		// 수집 공고를 공고 목록에 섞을지. 위와 같은 이유로 배너와 따로 끈다 — 배너 한 칸이
+		// 문제여도 목록은 살려 두거나, 그 반대를 택할 수 있어야 한다.
+		crawledJobFeedEnabled: boolean("crawled_job_feed_enabled")
+			.default(false)
+			.notNull(),
+		// 수집 커뮤니티 글을 커뮤니티 목록에 섞을지. 위 공고 스위치와 같은 이유로 수집과 노출을
+		// 따로 끈다 — 긁어 두는 것과 남의 글을 우리 커뮤니티에 세우는 것은 판단이 다르고, 문제가
+		// 생기면 수집을 멈추지 않고 노출만 즉시 내려야 한다. 기본이 false라 배포만으로는 켜지지 않는다.
+		crawledCommunityFeedEnabled: boolean("crawled_community_feed_enabled")
+			.default(false)
+			.notNull(),
+		// 섹션별 수집 공고 노출 상한. 수집할 때(배너 리다이렉터 해석 요청 절약)와 조회할 때(과거
+		// 회차가 남긴 초과 라벨 방어) 같은 값을 쓴다. null이면 코드 기본값(DEFAULT_CRAWLED_LIMITS)
+		// 으로 폴백한다 — 컬럼 default를 박으면 기본값을 조정할 때마다 마이그레이션이 필요해진다.
+		crawledAdBannerLimit: integer("crawled_ad_banner_limit"),
+		crawledSpecialLimit: integer("crawled_special_limit"),
+		crawledUrgentLimit: integer("crawled_urgent_limit"),
+		crawledRecommendedLimit: integer("crawled_recommended_limit"),
+		// 한 회차에 게시판 목록에서 모을 커뮤니티 글 수 상한. 위 네 값이 "노출 자리 개수"라면 이건
+		// "수집 규모"다 — 최신순 앞에서 이 개수만큼만 담고, 채우면 남은 목록 페이지를 받지 않는다.
+		// 같은 이유로 null이면 코드 기본값(DEFAULT_CRAWLED_LIMITS.community)으로 폴백한다.
+		crawledCommunityLimit: integer("crawled_community_limit"),
+		// 문의 채팅 위젯 홈 탭의 공지 배너 문구. null/빈 값이면 배너를 그리지 않는다.
+		supportChatNotice: text("support_chat_notice"),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		check(
+			"bambi_site_settings_user_offline_after_minutes_check",
+			sql`${table.userOfflineAfterMinutes} IS NULL OR ${table.userOfflineAfterMinutes} > 0`
+		),
+	]
+);
 
 export const jobPerformanceEvent = pgTable(
 	"job_performance_event",
