@@ -1,10 +1,14 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import {
+	USER_ACTIVITY_HEADER,
+	USER_ACTIVITY_HEADER_VALUE,
+} from "@bambi-app/api/services/bambi-user-presence";
 import { env } from "@bambi-app/env/native";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryClient } from "@tanstack/react-query";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
 import { authClient } from "@/lib/auth-client";
 
@@ -20,12 +24,17 @@ export const link = new RPCLink({
 			credentials: Platform.OS === "web" ? "include" : "omit",
 		});
 	},
-	headers() {
+	headers(_options, path) {
 		if (Platform.OS === "web") {
 			return {};
 		}
 
 		const headers = new Map<string, string>();
+		const isPresenceLifecycleRequest =
+			path[0] === "bambi" && path[1] === "presence";
+		if (AppState.currentState === "active" && !isPresenceLifecycleRequest) {
+			headers.set(USER_ACTIVITY_HEADER, USER_ACTIVITY_HEADER_VALUE);
+		}
 		const cookies = authClient.getCookie();
 
 		if (cookies) {

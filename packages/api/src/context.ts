@@ -14,6 +14,11 @@ import {
 	SUPPORT_CHAT_HEADER,
 	verifySupportChatToken,
 } from "./services/bambi-support-chat-token";
+import {
+	USER_ACTIVITY_HEADER,
+	USER_ACTIVITY_HEADER_VALUE,
+} from "./services/bambi-user-presence";
+import { recordUserActivity } from "./services/bambi-user-presence-db";
 import { parseTrustedProxyHops, resolveClientIp } from "./services/client-ip";
 
 // 프로덕션 api 서버는 글로벌 외부 ALB 뒤에 있어 x-forwarded-for가
@@ -93,10 +98,16 @@ export async function createContext(req: IncomingHttpHeaders) {
 	const session = await auth.api.getSession({
 		headers: fromNodeHeaders(req),
 	});
+	const hasUserActivity =
+		headerValue(req, USER_ACTIVITY_HEADER) === USER_ACTIVITY_HEADER_VALUE;
+	if (session?.user && hasUserActivity) {
+		await recordUserActivity(session.user.id).catch(() => false);
+	}
 	return {
 		auth: null,
 		clientIp: clientIpFromHeaders(req),
 		guest: await resolveGuest(req),
+		hasUserActivity,
 		session,
 		supportChat: await resolveSupportChat(req),
 	};
