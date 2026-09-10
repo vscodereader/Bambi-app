@@ -95,7 +95,6 @@ const assertNoActiveChatReport = async (roomId: string): Promise<void> => {
 		);
 	}
 };
-
 const getErrorPayload = (error: unknown): ChatErrorEvent => {
 	if (error instanceof ChatRealtimeError) {
 		return { code: error.code, message: error.message };
@@ -218,6 +217,12 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 	});
 
 	const realtimeTransport: ChatRealtimeTransport = {
+		emit(event, payload) {
+			const args = [payload] as Parameters<
+				ChatRealtimeServerToClientEvents[typeof event]
+			>;
+			io.emit(event, ...args);
+		},
 		to(room) {
 			return {
 				emit(event, payload) {

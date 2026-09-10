@@ -18,18 +18,25 @@ import {
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
 import { ErrorState } from "@/src/components/bambi-screen";
+import {
+	ChatActionConfirmation,
+	type ChatActionTarget,
+} from "@/src/components/chat/chat-action-confirmation";
+import { ChatAvailabilityBadges } from "@/src/components/chat/chat-availability-badges";
 import { ChatBlockNotice } from "@/src/components/chat/chat-block-notice";
 import { ChatComposer } from "@/src/components/chat/chat-composer";
 import { ChatDateChip } from "@/src/components/chat/chat-date-chip";
 import { ChatMessageBubble } from "@/src/components/chat/chat-message-bubble";
 import { ChatNewMessagePill } from "@/src/components/chat/chat-new-message-pill";
 import { ChatRoomHeader } from "@/src/components/chat/chat-room-header";
+import { ChatRoomInfoSheet } from "@/src/components/chat/chat-room-info-sheet";
 import { ChatRoomMenu } from "@/src/components/chat/chat-room-menu";
 import { ChatSystemCard } from "@/src/components/chat/chat-system-card";
 import { ChatTypingIndicator } from "@/src/components/chat/chat-typing-indicator";
 import { MemberOnly } from "@/src/components/member-only";
 import { JobReportDialog } from "@/src/components/report-dialog";
 import { getChatCounterpartUserId } from "@/src/lib/chat/chat-audience";
+import { chatActionDecision } from "@/src/lib/chat/chat-availability";
 import { chatMutationErrorMessage } from "@/src/lib/chat/chat-errors";
 import {
 	type ChatTimelineMessage,
@@ -155,7 +162,10 @@ function ChatRoomInner() {
 	const [isAtBottom, setIsAtBottom] = useState(true);
 	const [hasUnseenNew, setHasUnseenNew] = useState(false);
 	const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+	const [chatActionTarget, setChatActionTarget] =
+		useState<ChatActionTarget | null>(null);
 	const [isReportOpen, setIsReportOpen] = useState(false);
+	const [isInfoOpen, setIsInfoOpen] = useState(false);
 	const listRef =
 		useRef<FlatList<AnnotatedChatMessage<ChatTimelineMessage>>>(null);
 
@@ -329,6 +339,28 @@ function ChatRoomInner() {
 		counterpartWithdrawn: room.counterpartWithdrawn,
 	});
 	const isBusy = respondContact.isPending || setInterviewStatus.isPending;
+	const decideChatAction = (confirmed: boolean) => {
+		if (!chatActionTarget || isBusy) {
+			return;
+		}
+		const target = chatActionTarget;
+		if (target.kind === "contact") {
+			const decision = chatActionDecision("contact", confirmed);
+			respondContact.mutate(
+				{ decision, messageId: target.id },
+				{ onSuccess: () => setChatActionTarget(null) }
+			);
+			return;
+		}
+		const status = chatActionDecision("interview", confirmed);
+		setInterviewStatus.mutate(
+			{
+				interviewScheduleId: target.id,
+				status,
+			},
+			{ onSuccess: () => setChatActionTarget(null) }
+		);
+	};
 
 	const renderItem = ({ item }: { item: (typeof inverted)[number] }) => {
 		const { dateLabel, isGroupEnd, isGroupStart, message } = item;
@@ -339,12 +371,20 @@ function ChatRoomInner() {
 				currentUserId={room.currentUserId}
 				isBusy={isBusy}
 				message={message}
-				onRespondContact={(messageId, decision) =>
-					respondContact.mutate({ decision, messageId })
-				}
-				onSetInterviewStatus={(interviewScheduleId, status) =>
-					setInterviewStatus.mutate({ interviewScheduleId, status })
-				}
+				onRespondContact={(messageId, decision) => {
+					if (decision === "reveal") {
+						setChatActionTarget({ id: messageId, kind: "contact" });
+					} else {
+						respondContact.mutate({ decision, messageId });
+					}
+				}}
+				onSetInterviewStatus={(interviewScheduleId, status) => {
+					if (status === "confirmed") {
+						setChatActionTarget({ id: interviewScheduleId, kind: "interview" });
+					} else {
+						setInterviewStatus.mutate({ interviewScheduleId, status });
+					}
+				}}
 				schedules={room.schedules}
 			/>
 		) : (
@@ -382,14 +422,37 @@ function ChatRoomInner() {
 				jobTitle={room.jobPost?.title ?? null}
 				onBack={() => router.back()}
 				right={
-					<ChatRoomMenu
-						onBlock={() => setConfirmAction("block")}
-						onLeave={() => setConfirmAction("leave")}
-						onReport={() => setIsReportOpen(true)}
-					/>
+					<View className="flex-row items-center gap-2">
+						<Button
+							onPress={() => setIsInfoOpen(true)}
+							size="sm"
+							variant="secondary"
+						>
+							<Button.Label>정보</Button.Label>
+						</Button>
+						<ChatRoomMenu
+							onBlock={() => setConfirmAction("block")}
+							onLeave={() => setConfirmAction("leave")}
+							onReport={() => setIsReportOpen(true)}
+						/>
+					</View>
 				}
 				statusLine={statusLine}
 			/>
+			<View className="px-4 py-2">
+				<ChatAvailabilityBadges
+					counterpartIsOnline={room.counterpartIsOnline}
+					counterpartResponseBucket={room.counterpartResponseBucket}
+					counterpartWithdrawn={room.counterpartWithdrawn}
+					isBlocked={room.room.isBlocked}
+					showRealtimeBadge={
+						room.viewerIsOnline &&
+						room.counterpartIsOnline &&
+						realtime.isConnected
+					}
+					viewerIsOnline={room.viewerIsOnline}
+				/>
+			</View>
 			<KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
 				<View className="flex-1">
 					<FlatList
@@ -462,6 +525,17 @@ function ChatRoomInner() {
 				onOpenChange={setIsReportOpen}
 				targetId={id}
 				targetType="chat_room"
+			/>
+			<ChatActionConfirmation
+				isPending={isBusy}
+				onClose={() => setChatActionTarget(null)}
+				onDecision={decideChatAction}
+				target={chatActionTarget}
+			/>
+			<ChatRoomInfoSheet
+				onOpenChange={setIsInfoOpen}
+				open={isInfoOpen}
+				room={room}
 			/>
 
 			<Dialog

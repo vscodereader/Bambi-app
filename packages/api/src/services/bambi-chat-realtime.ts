@@ -31,6 +31,16 @@ export interface ChatRoomUpdatedEvent {
 	roomId: string;
 }
 
+export interface ChatParticipantPresenceEvent {
+	isOnline: boolean;
+	presenceRefreshAt: null | string;
+	userId: string;
+}
+
+export interface ChatPresenceResyncEvent {
+	reason: "listener_reconnected" | "policy_changed";
+}
+
 export interface ChatErrorEvent {
 	code: "BAD_REQUEST" | "FORBIDDEN" | "NOT_FOUND" | "UNAUTHORIZED";
 	message: string;
@@ -41,6 +51,10 @@ export interface ChatRealtimeServerToClientEvents {
 	"chat:list:updated": (payload: ChatListUpdatedEvent) => void;
 	"chat:message:created": (payload: ChatMessageCreatedEvent) => void;
 	"chat:message:read": (payload: ChatMessageReadEvent) => void;
+	"chat:participant:presence": (payload: ChatParticipantPresenceEvent) => void;
+	"chat:participant:presence:resync": (
+		payload: ChatPresenceResyncEvent
+	) => void;
 	"chat:room:updated": (payload: ChatRoomUpdatedEvent) => void;
 	"chat:typing:started": (payload: ChatTypingEvent) => void;
 	"chat:typing:stopped": (payload: ChatTypingEvent) => void;
@@ -55,6 +69,10 @@ export interface ChatRealtimeRoomEmitter {
 }
 
 export interface ChatRealtimeTransport {
+	emit?<EventName extends keyof ChatRealtimeServerToClientEvents>(
+		event: EventName,
+		payload: Parameters<ChatRealtimeServerToClientEvents[EventName]>[0]
+	): void;
 	to(room: string): ChatRealtimeRoomEmitter;
 }
 
@@ -88,7 +106,6 @@ export const getChatRoomIdFromSocketRoom = (
 
 	return roomId === "" ? null : roomId;
 };
-
 export const getUserSocketRoom = (userId: string): string => `user:${userId}`;
 
 export const configureBambiChatRealtime = (
@@ -236,4 +253,21 @@ export const emitChatListUpdated = (
 			?.to(getUserSocketRoom(userId))
 			.emit("chat:list:updated", payload);
 	}
+};
+
+export const emitChatParticipantPresence = (
+	userIds: string[],
+	payload: ChatParticipantPresenceEvent
+): void => {
+	for (const userId of new Set(userIds)) {
+		realtimeServer
+			?.to(getUserSocketRoom(userId))
+			.emit("chat:participant:presence", payload);
+	}
+};
+
+export const emitChatPresenceResync = (
+	payload: ChatPresenceResyncEvent
+): void => {
+	realtimeServer?.emit?.("chat:participant:presence:resync", payload);
 };

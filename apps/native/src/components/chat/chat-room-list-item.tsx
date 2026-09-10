@@ -1,6 +1,7 @@
 import { Avatar, Chip, cn, ListGroup } from "heroui-native";
 import { Text, View } from "react-native";
 
+import { ChatAvailabilityBadges } from "@/src/components/chat/chat-availability-badges";
 import { formatChatListTime } from "@/src/lib/chat/chat-time";
 import type { ChatRoomListItem as ChatRoomListItemData } from "@/src/lib/chat/chat-types";
 
@@ -62,6 +63,13 @@ export function ChatRoomListItem({
 						{room.jobTitle}
 					</Text>
 				) : null}
+				<ChatAvailabilityBadges
+					counterpartIsOnline={room.counterpartIsOnline}
+					counterpartResponseBucket={room.counterpartResponseBucket}
+					counterpartWithdrawn={room.counterpartWithdrawn}
+					isBlocked={room.isBlocked}
+					viewerIsOnline={room.viewerIsOnline}
+				/>
 				<ListGroup.ItemDescription
 					className={cn(
 						room.unreadCount > 0 && "font-semibold text-foreground"

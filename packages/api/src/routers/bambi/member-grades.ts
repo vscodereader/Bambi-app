@@ -172,7 +172,6 @@ const commentMilestonesRouter = {
 		return { id: input.id };
 	}),
 };
-
 export const memberGradesRouter = {
 	// 댓글 마일스톤 CRUD(운영자). 등급과 같은 화면에서 관리한다.
 	commentMilestones: commentMilestonesRouter,
@@ -326,6 +325,17 @@ export const memberGradesRouter = {
 				.select({ count: sql<number>`count(*)::int` })
 				.from(bambiMemberGrade)
 				.where(eq(bambiMemberGrade.minPoints, 0));
+			const [reference] = await tx
+				.select({ id: bambiSiteSettings.id })
+				.from(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.crawledCommunityEditorGradeId, input.id))
+				.limit(1);
+			if (reference) {
+				throw new ORPCError("CONFLICT", {
+					message:
+						"수집 글 편집에 사용하는 등급입니다. 크롤러 설정에서 다른 등급을 선택한 뒤 삭제해 주세요.",
+				});
+			}
 			if (!assertGradeDeletable(grade, countRow?.count ?? 0)) {
 				throw new ORPCError("BAD_REQUEST", {
 					message: "기본 등급(0포인트)은 최소 하나 남아 있어야 합니다.",

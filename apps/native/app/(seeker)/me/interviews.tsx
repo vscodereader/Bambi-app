@@ -21,7 +21,12 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import {
+	ChatActionConfirmation,
+	type ChatActionTarget,
+} from "@/src/components/chat/chat-action-confirmation";
 import { MemberOnly } from "@/src/components/member-only";
+import { chatActionDecision } from "@/src/lib/chat/chat-availability";
 import {
 	canCancelInterview,
 	canRespondToInterview,
@@ -453,6 +458,9 @@ function InterviewCard({
 // 완료 처리는 서버 canSetInterviewStatus가 구인자 전용이라(chats.ts:293) 이 (seeker) 스택에
 // 두지 않는다. 정렬(진행중 먼저 → 완료 뒤)은 서버가 정하므로 다시 세우지 않는다.
 function SeekerMeInterviewsInner() {
+	const [confirmation, setConfirmation] = useState<ChatActionTarget | null>(
+		null
+	);
 	const session = authClient.useSession();
 	const sessionUserId = session.data?.user?.id;
 	const query = useQuery(
@@ -491,6 +499,23 @@ function SeekerMeInterviewsInner() {
 				title="예정된 면접"
 			/>
 			{renderBody()}
+			<ChatActionConfirmation
+				isPending={setStatus.isPending}
+				onClose={() => setConfirmation(null)}
+				onDecision={(confirmed) => {
+					if (!confirmation) {
+						return;
+					}
+					setStatus.mutate(
+						{
+							interviewScheduleId: confirmation.id,
+							status: chatActionDecision("interview", confirmed),
+						},
+						{ onSuccess: () => setConfirmation(null) }
+					);
+				}}
+				target={confirmation}
+			/>
 		</BambiScreen>
 	);
 
@@ -539,12 +564,16 @@ function SeekerMeInterviewsInner() {
 						interview={interview}
 						isResponding={setStatus.isPending}
 						key={interview.id}
-						onRespond={(status) =>
+						onRespond={(status) => {
+							if (status === "confirmed") {
+								setConfirmation({ id: interview.id, kind: "interview" });
+								return;
+							}
 							setStatus.mutate({
 								interviewScheduleId: interview.id,
 								status,
-							})
-						}
+							});
+						}}
 						viewerUserId={sessionUserId}
 					/>
 				))}

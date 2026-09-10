@@ -41,7 +41,6 @@ async function createProfileForRole(
 		await client.bambi.onboarding.createJobSeekerProfile(payload);
 	}
 }
-
 // signUp.email 한 번 호출. 성공이면 null, 실패면 오류 문구.
 async function runSignUp(values: SignupSubmitValues): Promise<null | string> {
 	let errorText: null | string = null;
@@ -67,7 +66,6 @@ async function runSignUp(values: SignupSubmitValues): Promise<null | string> {
 	);
 	return signedUp ? null : (errorText ?? "회원가입에 실패했어요.");
 }
-
 // 프로필 생성 실패 시 문구와 1단계 복귀 여부. BAD_REQUEST는 인증 건 만료 —
 // 재인증만 하면 풀리므로 되돌린다(계정이 이미 만들어진 재제출이면 그 사실을 알린다).
 // CONFLICT(타 계정 CI 충돌)는 재인증해도 같은 사람이라 못 풀리므로 되돌리지 않는다.
@@ -177,6 +175,7 @@ export function useSignup() {
 			// onboarding으로 되돌아가 재인증해도 또 CONFLICT다). doneRef를 먼저 세워야
 			// 이탈 가드(beforeRemove)가 이 이동을 막지 않는다.
 			if (errorCode(error) === "CONFLICT") {
+				await client.bambi.presence.disconnectSession().catch(() => undefined);
 				await authClient.signOut().catch(() => undefined);
 				queryClient.clear();
 				doneRef.current = true;

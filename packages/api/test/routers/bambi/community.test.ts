@@ -13,7 +13,6 @@ import { resetRateLimits } from "@/services/rate-limit";
 dotenv.config({
 	path: "../../apps/server/.env",
 });
-
 const [
 	{ db },
 	authSchema,
@@ -2343,6 +2342,7 @@ const insertCrawledTopic = async (
 ): Promise<string> => {
 	const id = randomUUID();
 	await db.insert(crawledCommunityTopic).values({
+		boardKey: "work_talk",
 		body: "수집 본문입니다.",
 		boardName: "밤문화이야기",
 		commentCount: 2,

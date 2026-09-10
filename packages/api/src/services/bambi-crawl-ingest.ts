@@ -17,7 +17,6 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
-
 import {
 	type CrawlClient,
 	createCrawlClient,
@@ -73,7 +72,9 @@ import {
 	queenalbaMainUrl,
 	readQueenalbaBannerTargetId,
 } from "./bambi-crawl-queenalba-main";
+import { requireCrawlBoard } from "./bambi-crawled-community";
 import { type CrawledLimits, readCrawledLimits } from "./bambi-crawled-limits";
+import { SITE_SETTINGS_ROW_ID } from "./bambi-point-settings";
 import { loadRegionIndex, matchRegionCodes } from "./bambi-region";
 
 // 목록에서 수집기가 쓰는 최소 규약. 사이트별 목록 파서가 더 많은 필드를 채워도 상관없다 —
@@ -136,7 +137,6 @@ const JOB_ADAPTERS: Readonly<Record<CrawlSourceSite, JobSiteAdapter>> = {
 		site: "queenalba",
 	},
 };
-
 // 퀸알바 성인인증 세션 쿠키. .env를 거치지 않고 여기 값을 바로 바꿔 쓸 수 있게 둔다.
 // 브라우저 개발자도구 → Network → queenalba.net 요청 → Request Headers의 Cookie 한 줄을
 // 통째로 붙여넣는다(이름 하나만 골라 넣으면 게이트가 열리지 않는다).
@@ -390,11 +390,13 @@ export interface CrawlTickResult {
 // readSettings는 사이트·데이터 종류까지 읽어야 하지만, isCrawlDue는 그 둘을 보지 않는다
 // (주기 판정만). CrawlSettings에 넣으면 정책 테스트의 객체 리터럴이 전부 깨지므로 확장 타입으로 둔다.
 type CrawlTickSettings = CrawlSettings & {
+	crawlCommunityBoardKey: string | null;
 	crawlContentType: CrawlContentType;
 	crawlSourceSite: CrawlSourceSite;
 };
 
 export interface CrawlTickOptions {
+	boardKey?: string;
 	// 운영자가 화면에서 고른 수집 데이터. 「즉시 수집」은 저장 버튼과 분리돼 있어, 고르기만 하고
 	// 저장하지 않은 종류로도 이 회차를 돌린다. 이 회차에만 적용하고 설정 row는 건드리지 않는다 —
 	// 여기서 저장까지 해버리면 한 번 눌러본 종류로 스케줄러가 계속 돌게 된다.
@@ -433,6 +435,7 @@ type DetailOutcome =
 const readSettings = async (): Promise<CrawlTickSettings> => {
 	const [row] = await db
 		.select({
+			crawlCommunityBoardKey: bambiSiteSettings.crawlCommunityBoardKey,
 			crawlContentType: bambiSiteSettings.crawlContentType,
 			crawlEnabled: bambiSiteSettings.crawlEnabled,
 			crawlIntervalHours: bambiSiteSettings.crawlIntervalHours,
@@ -440,10 +443,11 @@ const readSettings = async (): Promise<CrawlTickSettings> => {
 			crawlSourceSite: bambiSiteSettings.crawlSourceSite,
 		})
 		.from(bambiSiteSettings)
-		.where(eq(bambiSiteSettings.id, "default"));
+		.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID));
 
 	return (
 		row ?? {
+			crawlCommunityBoardKey: null,
 			crawlContentType: "job_post",
 			crawlEnabled: false,
 			crawlIntervalHours: null,
@@ -457,7 +461,7 @@ const touchLastRunAt = (now: Date) =>
 	db
 		.update(bambiSiteSettings)
 		.set({ crawlLastRunAt: now })
-		.where(eq(bambiSiteSettings.id, "default"));
+		.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID));
 
 // 목록에서 본 ID의 생존 표시를 갱신한다. 파라미터 개수 상한에 걸리지 않도록 나눠 보낸다.
 const MARK_SEEN_CHUNK = 500;
@@ -861,12 +865,14 @@ const reapStaleRuns = (now: Date) =>
 const startRun = async (
 	site: CrawlSourceSite,
 	contentType: CrawlContentType,
-	now: Date
+	now: Date,
+	boardKey: string | null
 ): Promise<{ id: string } | null> => {
 	const [run] = await db
 		.insert(crawlRun)
 		.values({
 			contentType,
+			boardKey,
 			sourceSite: site,
 			startedAt: now,
 			status: "running",
@@ -939,13 +945,12 @@ export const collectCommunityTopics = async (
 	return { pagesFetched, topics: [...byExternalId.values()].slice(0, limit) };
 };
 
-// 게시판 수집 한 회차. 공고와 달리 상세 패스가 없다 — 본문은 개별 작성자의 저작물이라
-// 저장하지 않고 제목·반응 지표만 남기므로(crawled_community_topic), 목록만 훑으면 끝난다.
-// 만료 처리도 없다: 지나간 주제도 "무엇이 반응을 얻었는가"의 기록으로 그대로 쓸모가 있다.
+// 선택 게시판에 목록을 upsert한 뒤 누락된 원본 본문·댓글만 채운다. 관리자 편집값은 건드리지 않는다.
 const runCommunityPass = async (
 	client: CrawlClient,
 	site: CrawlSourceSite,
-	now: Date
+	now: Date,
+	boardKey: string
 ): Promise<{
 	detailsFetched: number;
 	itemsNew: number;
@@ -997,7 +1002,12 @@ const runCommunityPass = async (
 			sourceExternalId: crawledCommunityTopic.sourceExternalId,
 		})
 		.from(crawledCommunityTopic)
-		.where(eq(crawledCommunityTopic.sourceSite, site));
+		.where(
+			and(
+				eq(crawledCommunityTopic.sourceSite, site),
+				eq(crawledCommunityTopic.boardKey, boardKey)
+			)
+		);
 	const known = new Map(existing.map((row) => [row.sourceExternalId, row]));
 
 	for (const topic of topics) {
@@ -1019,6 +1029,7 @@ const runCommunityPass = async (
 		await db
 			.insert(crawledCommunityTopic)
 			.values({
+				boardKey,
 				...listValues,
 				sourceExternalId: topic.sourceExternalId,
 				sourceSite: site,
@@ -1028,6 +1039,7 @@ const runCommunityPass = async (
 				target: [
 					crawledCommunityTopic.sourceSite,
 					crawledCommunityTopic.sourceExternalId,
+					crawledCommunityTopic.boardKey,
 				],
 			});
 	}
@@ -1076,17 +1088,18 @@ const runCommunityPass = async (
 			await db
 				.update(crawledCommunityTopic)
 				.set({
-					body: detail.body,
+					body: sql`coalesce(${crawledCommunityTopic.body}, ${detail.body})`,
 					// 실제로 수집한 댓글 수로 동기화한다 — 목록의 제목 뒤 [21] 표기보다 정확하고,
 					// commentCount를 comments.length와 한 곳에서 함께 써야 둘이 어긋나지 않는다.
 					commentCount: detail.comments.length,
-					comments: detail.comments,
+					comments: sql`coalesce(${crawledCommunityTopic.comments}, ${JSON.stringify(detail.comments)}::jsonb)`,
 					viewCount: detail.viewCount,
 				})
 				.where(
 					and(
 						eq(crawledCommunityTopic.sourceSite, site),
-						eq(crawledCommunityTopic.sourceExternalId, topic.sourceExternalId)
+						eq(crawledCommunityTopic.sourceExternalId, topic.sourceExternalId),
+						eq(crawledCommunityTopic.boardKey, boardKey)
 					)
 				);
 			detailsFetched += 1;
@@ -1112,10 +1125,11 @@ const finishCommunityRun = async (
 	client: CrawlClient,
 	site: CrawlSourceSite,
 	now: Date,
-	runId: string
+	runId: string,
+	boardKey: string
 ): Promise<CrawlTickResult> => {
 	try {
-		const pass = await runCommunityPass(client, site, now);
+		const pass = await runCommunityPass(client, site, now, boardKey);
 		const trustworthy = pass.itemsSeen > 0;
 
 		await db
@@ -1196,7 +1210,13 @@ export const runCrawlTick = async (
 
 	await reapStaleRuns(now);
 
-	const run = await startRun(site, contentType, now);
+	const board =
+		contentType === "community"
+			? await requireCrawlBoard(
+					options.boardKey ?? settings.crawlCommunityBoardKey
+				)
+			: null;
+	const run = await startRun(site, contentType, now, board?.key ?? null);
 
 	// 진행 중 회차가 이미 있다. 부분 유니크 인덱스가 두 번째 INSERT를 막은 것이라,
 	// 애플리케이션 검사만 있을 때 남는 경쟁 창이 여기서는 없다.
@@ -1204,8 +1224,8 @@ export const runCrawlTick = async (
 		return emptyResult("already_running");
 	}
 
-	if (contentType === "community") {
-		return await finishCommunityRun(client, site, now, run.id);
+	if (board) {
+		return await finishCommunityRun(client, site, now, run.id, board.key);
 	}
 
 	const adapter = JOB_ADAPTERS[site];
