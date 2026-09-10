@@ -64,4 +64,3 @@ CREATE TRIGGER "bambi_presence_policy_changed"
 AFTER INSERT OR UPDATE ON "bambi_site_settings"
 FOR EACH ROW
 EXECUTE FUNCTION "notify_bambi_presence_policy"();
-
