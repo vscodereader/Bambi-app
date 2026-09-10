@@ -2,6 +2,8 @@
 
 원본 `bambi-app`의 코드·Git 이력·브랜치와 개인 개발 기록을 보존한 비공개 저장소임.
 
+- [PSTMACRO 양식으로 정리한 전체 문서](portfolio/NOTION.md)
+
 - [프로젝트 개요·기술별 실제 적용](portfolio/PROJECT.md)
 - [전체 PR 목록](portfolio/PR-INDEX.md)
 - [개인 작업 월별 이력](portfolio/TIMELINE.md)
