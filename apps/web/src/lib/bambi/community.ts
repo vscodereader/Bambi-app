@@ -307,3 +307,9 @@ export const getCommunityPageItems = (
 	}
 	return items;
 };
+
+export const crawledCommunityEditPath = (
+	topicId: string,
+	fromCrawler = false
+): string =>
+	`/moderator/crawler/community/${topicId}/edit${fromCrawler ? "?from=crawler" : ""}`;

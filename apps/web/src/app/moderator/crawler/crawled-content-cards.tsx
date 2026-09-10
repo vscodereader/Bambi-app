@@ -53,10 +53,12 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageControls } from "@/components/bambi/page-controls";
-import { communityCrawledPath } from "@/lib/bambi/community";
+import {
+	communityCrawledPath,
+	crawledCommunityEditPath,
+} from "@/lib/bambi/community";
 import {
 	CRAWLED_JOB_PAGE_SIZE,
 	type CrawledJobStatusFilter,
@@ -608,6 +610,7 @@ export function CrawledJobPostsCard() {
 }
 
 export function CrawledCommunityTopicsCard() {
+	const boardsQuery = useQuery(orpc.bambi.communityBoards.list.queryOptions());
 	const invalidate = useInvalidateCrawled();
 	const [topicFilter, setTopicFilter] = useState<TopicFilter>("all");
 	const [page, setPage] = useState(1);
@@ -657,8 +660,8 @@ export function CrawledCommunityTopicsCard() {
 			<CardContent className="flex flex-col gap-3">
 				<p className="m-0 text-muted-foreground text-xs">
 					공고와 같은 방식으로, 삭제해도 기록은 남고 다음 회차가 되살리지
-					않습니다. 「밤문화 이야기」 게시판과 수다방 미리보기에서 즉시 빠져요.
-					잘못 눌렀다면 상태를 「{CRAWLED_POST_STATUS_LABELS.removed}」로 걸러
+					않습니다. 선택된 게시판과 수다방 미리보기에서 즉시 빠져요. 잘못
+					눌렀다면 상태를 「{CRAWLED_POST_STATUS_LABELS.removed}」로 걸러
 					복구하면 됩니다. 한 페이지에 {PAGE_SIZE}건씩 보여줍니다
 					{listQuery.data ? ` (조건에 맞는 ${total}건)` : ""}.
 				</p>
@@ -691,7 +694,7 @@ export function CrawledCommunityTopicsCard() {
 									<TableRow>
 										<TableHead>제목</TableHead>
 										<TableHead>게시판</TableHead>
-										<TableHead>원 게시일</TableHead>
+										<TableHead>표시일</TableHead>
 										<TableHead className="text-right">댓글</TableHead>
 										<TableHead className="text-right">조회</TableHead>
 										<TableHead>상태</TableHead>
@@ -723,13 +726,15 @@ export function CrawledCommunityTopicsCard() {
 													</Link>
 												)}
 											</TableCell>
-											{/* 게시판명은 상대 사이트가 적어둔 원문 문구다(우리 게시판 enum이 아님). */}
+											{/* 실제 목적 게시판의 현재 라벨을 표시한다. */}
 											<TableCell className="whitespace-nowrap">
-												{topic.boardName ?? "—"}
+												{boardsQuery.data?.find(
+													(board) => board.key === topic.boardKey
+												)?.label ?? "—"}
 											</TableCell>
 											<TableCell className="whitespace-nowrap">
-												{topic.sourcePostedAt
-													? formatCrawlTimestamp(topic.sourcePostedAt)
+												{topic.displayedAt
+													? formatCrawlTimestamp(topic.displayedAt)
 													: "—"}
 											</TableCell>
 											<TableCell className="text-right">
@@ -763,6 +768,22 @@ export function CrawledCommunityTopicsCard() {
 														}
 													/>
 													<DropdownMenuContent align="end" className="w-36">
+														<DropdownMenuItem
+															render={
+																<Link
+																	href={
+																		crawledCommunityEditPath(
+																			topic.id,
+																			true
+																		) as Route
+																	}
+																	rel="noopener noreferrer"
+																	target="_blank"
+																>
+																	편집
+																</Link>
+															}
+														/>
 														{topic.removedAt ? (
 															<DropdownMenuItem
 																disabled={isPending}
@@ -847,8 +868,8 @@ export function CrawledCommunityTopicsCard() {
 						<AlertDialogHeader>
 							<AlertDialogTitle>이 커뮤니티 글을 삭제할까요?</AlertDialogTitle>
 							<AlertDialogDescription>
-								「{pendingRemove?.title}」이(가) 「밤문화 이야기」 게시판과
-								수다방 미리보기에서 바로 빠집니다. 기록은 「
+								「{pendingRemove?.title}」이(가) 선택된 게시판과 수다방
+								미리보기에서 바로 빠집니다. 기록은 「
 								{CRAWLED_POST_STATUS_LABELS.removed}」으로 남으니 잘못 눌렀다면
 								상태를 「{CRAWLED_POST_STATUS_LABELS.removed}」로 걸러 복구하면
 								됩니다.

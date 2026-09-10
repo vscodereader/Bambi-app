@@ -14,9 +14,21 @@ import {
 	DEFAULT_RECOMMENDED_CAPACITY,
 	DEFAULT_SPECIAL_CAPACITY,
 } from "../../services/bambi-premium-capacity";
+import {
+	POSTGRES_INTEGER_MAX,
+	resolveUserOfflineAfterMinutes,
+} from "../../services/bambi-user-presence";
 
 // 단일 행(설정) 고정 키. 조회·수정 모두 이 행 하나만 다룬다.
 const SETTINGS_ROW_ID = "default";
+
+const updatePresencePolicyInput = z.object({
+	offlineAfterMinutes: z
+		.number()
+		.int("분 단위 정수로 입력해 주세요.")
+		.min(1, "1분 이상 입력해 주세요.")
+		.max(POSTGRES_INTEGER_MAX, "저장할 수 있는 범위를 넘었습니다."),
+});
 
 // 공고 상세가 급여 옆에 붙이는 최저시급. 값이 없으면 null → 웹이 DEFAULT_MINIMUM_WAGE로 폴백한다.
 const MINIMUM_WAGE_COLUMNS = {
@@ -358,6 +370,37 @@ const toExposureSectionConfigOutput = (
 });
 
 export const siteSettingsRouter = {
+	getPresencePolicy: adminProcedure.handler(async () => {
+		const [row] = await db
+			.select({
+				offlineAfterMinutes: bambiSiteSettings.userOfflineAfterMinutes,
+			})
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+		return {
+			offlineAfterMinutes: resolveUserOfflineAfterMinutes(
+				row?.offlineAfterMinutes
+			),
+		};
+	}),
+
+	updatePresencePolicy: adminProcedure
+		.input(updatePresencePolicyInput)
+		.handler(async ({ input }) => {
+			await db
+				.insert(bambiSiteSettings)
+				.values({
+					id: SETTINGS_ROW_ID,
+					userOfflineAfterMinutes: input.offlineAfterMinutes,
+				})
+				.onConflictDoUpdate({
+					set: { userOfflineAfterMinutes: input.offlineAfterMinutes },
+					target: bambiSiteSettings.id,
+				});
+			return { offlineAfterMinutes: input.offlineAfterMinutes };
+		}),
+
 	// 푸터 렌더용 공개 조회. 행이 없으면 null(웹이 폴백 처리).
 	getFooter: publicProcedure.handler(async () => {
 		const [row] = await db

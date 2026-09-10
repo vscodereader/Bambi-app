@@ -346,11 +346,12 @@ describe("planDetailSlices", () => {
 
 	it("균등 분할하고 합이 원본 높이와 같다", () => {
 		const plans = planDetailSlices(8000, 3500);
+		const [first, second] = plans;
 
 		expect(plans).toHaveLength(3);
 		expect(plans.reduce((sum, plan) => sum + plan.height, 0)).toBe(8000);
-		expect(plans[0].offsetY).toBe(0);
-		expect(plans[1].offsetY).toBe(plans[0].height);
+		expect(first?.offsetY).toBe(0);
+		expect(second?.offsetY).toBe(first?.height);
 		for (const plan of plans) {
 			expect(plan.height).toBeLessThanOrEqual(3500);
 		}

@@ -5,6 +5,7 @@
 // 복구 가능 여부 판정은 서버(accountRecovery.restoreWithdrawnAccount)와 같은 순수 함수를
 // 공유한다 — 화면이 규칙을 따로 구현하면 버튼은 열려 있는데 서버가 거절하는 상태가 생긴다.
 import { resolveAccountRestoreDecision } from "@bambi-app/api/services/bambi-account-restore";
+import { isUserOnline } from "@bambi-app/api/services/bambi-user-presence";
 import {
 	Accordion,
 	AccordionContent,
@@ -45,14 +46,14 @@ import {
 } from "@bambi-app/ui/components/sheet";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, FileTextIcon, MessageCircle } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChatHistoryContent } from "@/app/moderator/chats/chat-history-dialog";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
@@ -61,6 +62,7 @@ import { JobDetailImage } from "@/components/bambi/job-detail-image";
 import { PageControls } from "@/components/bambi/page-controls";
 import { SecretAuthorMark } from "@/components/bambi/secret-author-mark";
 import { StatusBadge } from "@/components/bambi/status-badge";
+import { UserPresenceIndicator } from "@/components/bambi/user-presence-indicator";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
 	COMMUNITY_BOARDS,
@@ -90,6 +92,10 @@ import type {
 	UserStatus,
 	VisualTone,
 } from "@/lib/bambi/types";
+import {
+	resolveLivePresenceSnapshot,
+	useModeratorPresenceStream,
+} from "@/lib/bambi/use-moderator-presence-stream";
 import { formatDateTime, formatPhone } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 import { BOTTOM_NAV_STACK_OFFSET } from "../bottom-nav-shell";
@@ -109,6 +115,7 @@ import {
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
 import {
+	MODERATION_USERS_QUERY_INPUT,
 	type ModerationBulkAction,
 	type ModerationBulkScope,
 	QUEUE_VERDICT_TOAST,
@@ -3026,6 +3033,29 @@ export function UserDetail({
 	onRevertWarning: (id: string, reason: string) => undefined | Promise<boolean>;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
 }) {
+	const queryClient = useQueryClient();
+	const livePresence = useModeratorPresenceStream();
+	const presenceSnapshot = resolveLivePresenceSnapshot(
+		livePresence.users.get(item.id),
+		item
+	);
+	const isOnline = isUserOnline({
+		...presenceSnapshot,
+		now: new Date(livePresence.now),
+		offlineAfterMinutes: livePresence.policyMinutes ?? item.offlineAfterMinutes,
+	});
+	useEffect(() => {
+		if (livePresence.reconnectRevision <= 1) {
+			return;
+		}
+		queryClient
+			.invalidateQueries({
+				queryKey: orpc.bambi.moderation.listUsers.queryKey({
+					input: MODERATION_USERS_QUERY_INPUT,
+				}),
+			})
+			.catch(() => undefined);
+	}, [livePresence.reconnectRevision, queryClient]);
 	const c = STATUS_CONF[item.status];
 	// 경고/정지 버튼을 누르면 곧바로 적용하지 않고, 공용 사유 작성 시트를 띄워
 	// 기본 문구가 프리필된 사유를 운영자가 확인·수정한 뒤 확정하게 한다.
@@ -3052,6 +3082,7 @@ export function UserDetail({
 							</div>
 						</div>
 						<div className="flex items-center gap-2">
+							<UserPresenceIndicator isOnline={isOnline} withLabel />
 							<Badge dot tone={c.tone}>
 								{c.label}
 							</Badge>
@@ -3076,6 +3107,14 @@ export function UserDetail({
 					</div>
 					<Separator className="hidden md:block" />
 					<ContextSection title="계정 정보">
+						<ContextField
+							label="마지막 활동"
+							value={
+								presenceSnapshot.lastActivityAt
+									? formatDateTime(presenceSnapshot.lastActivityAt)
+									: "마지막 활동 기록 없음"
+							}
+						/>
 						<ContextField
 							label="인증 번호"
 							value={item.phoneNumber ?? "미인증"}

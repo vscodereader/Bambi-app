@@ -26,9 +26,15 @@ function BodyInline({ inline }: { inline: MessageInline }) {
 			className={cn(
 				inline.bold && "font-semibold",
 				inline.italic && "italic",
+				inline.strike && "line-through",
 				href && "text-accent-soft-foreground underline dark:text-accent"
 			)}
 			onPress={href ? () => openLink(href) : undefined}
+			style={
+				inline.fontSize
+					? { fontSize: inline.fontSize, lineHeight: inline.fontSize * 1.5 }
+					: undefined
+			}
 		>
 			{inline.text}
 		</Text>
@@ -108,7 +114,13 @@ export function MessageBody({ body }: { body: string }) {
 
 				return (
 					<Text
-						className="text-foreground text-sm leading-6"
+						className={cn(
+							"text-foreground leading-6",
+							block.quoted && "border-accent border-l-2 pl-3 italic",
+							block.type === "heading" ? "font-bold text-lg" : "text-sm",
+							block.type === "codeBlock" &&
+								"rounded-lg bg-muted/10 p-2 font-mono"
+						)}
 						// biome-ignore lint/suspicious/noArrayIndexKey: 위와 같다
 						key={index}
 						selectable

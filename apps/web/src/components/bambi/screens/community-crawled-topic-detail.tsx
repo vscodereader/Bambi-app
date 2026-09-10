@@ -1,13 +1,10 @@
 "use client";
 
-// 수집 커뮤니티 글 상세 — 외부(퀸알바 "밤문화이야기")에서 수집한 글을 우리 글과 같은 모양으로
-// 보여준다. 화면에 출처 표시는 두지 않는다(제목·본문·조회수·원 게시일·댓글만 남는다).
-// 원본에 달려 있던 댓글은 익명·읽기 전용이고, 그 아래로 우리 회원·비회원이 우리 글과 같은
-// 규칙(대댓글 1단계·비회원 비밀번호·금칙어·도배 방지)으로 댓글을 이어 단다.
-// 글 자체의 좋아요·수정·삭제·신고는 없다 — 우리 회원이 쓴 글이 아니라 귀속 대상이 없다.
+// 게시판별 수집 글 상세. 기존 권한과 댓글 UI를 재사용하며 관리자에게 수집 글·원본 댓글 편집을 제공한다.
 
 import type { AppRouter } from "@bambi-app/api/routers/index";
 import {
+	COMMUNITY_COMMENT_BODY_MAX_LENGTH,
 	COMMUNITY_PASSWORD_MAX_LENGTH,
 	COMMUNITY_PASSWORD_MIN_LENGTH,
 } from "@bambi-app/api/services/bambi-community-post-policy";
@@ -33,24 +30,21 @@ import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import {
 	CommentForm,
 	CommentList,
+	PostBodyViewer,
 } from "@/components/bambi/community-post-detail-parts";
 import { CommunityPostNavigation } from "@/components/bambi/community-post-navigation";
+import { CrawledSourceComments } from "@/components/bambi/crawled-source-comments";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { GradeBadge } from "@/components/bambi/grade-badge";
+import { SecretAuthorMark } from "@/components/bambi/secret-author-mark";
 import {
 	communityBoardPath,
+	crawledCommunityEditPath,
 	formatCommunityDate,
-	getBoardByKey,
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
-// 수집 글은 밤문화 이야기(work_talk) 게시판에 합류하므로 목록으로 돌아가는 버튼도 그 게시판을 가리킨다.
-const CRAWLED_BOARD = getBoardByKey("work_talk");
-
-// 닉네임이 비어 오는 댓글의 폴백. 커뮤니티 기본값("회원")과 달리 수집 원본은 익명 작성이 흔해
-// "익명"으로 표기한다.
-const CRAWLED_COMMENT_AUTHOR_FALLBACK = "익명";
-
-const COMMENT_MAX = 1000;
+const COMMENT_MAX = COMMUNITY_COMMENT_BODY_MAX_LENGTH;
 const PASSWORD_MIN = COMMUNITY_PASSWORD_MIN_LENGTH;
 const PASSWORD_MAX = COMMUNITY_PASSWORD_MAX_LENGTH;
 
@@ -77,15 +71,15 @@ function CrawledTopicSkeleton() {
 	);
 }
 
-function BackButton() {
+function BackButton({ topic }: { topic: CrawledTopicDetail }) {
 	return (
 		<div>
 			<Button
 				nativeButton={false}
 				render={
-					<Link href={communityBoardPath(CRAWLED_BOARD.slug) as Route}>
+					<Link href={communityBoardPath(topic.boardSlug) as Route}>
 						<ChevronLeftIcon data-icon="inline-start" />
-						{CRAWLED_BOARD.label}
+						{topic.boardLabel}
 					</Link>
 				}
 				size="sm"
@@ -96,36 +90,6 @@ function BackButton() {
 }
 
 // 원본에 달려 있던 댓글. 우리 쪽 소유자가 없어 수정·삭제·답글이 없고 순서도 원본 그대로다.
-function SourceComments({
-	comments,
-}: {
-	comments: CrawledTopicDetail["sourceComments"];
-}) {
-	return (
-		<div className="flex flex-col gap-3">
-			{comments.map((comment, index) => (
-				<div
-					className="flex flex-col gap-1"
-					// biome-ignore lint/suspicious/noArrayIndexKey: 수집 댓글은 안정적 id가 없고(원본 파싱 결과) 재정렬 없는 정적 배열이라 순서가 곧 안정 키다.
-					key={index}
-				>
-					<div className="flex items-center justify-between gap-2">
-						<span className="font-semibold text-xs">
-							{comment.authorName ?? CRAWLED_COMMENT_AUTHOR_FALLBACK}
-						</span>
-						{comment.sourcePostedAt ? (
-							<span className="text-muted-foreground text-xs">
-								{formatCommunityDate(comment.sourcePostedAt)}
-							</span>
-						) : null}
-					</div>
-					<p className="m-0 whitespace-pre-line text-sm">{comment.body}</p>
-				</div>
-			))}
-		</div>
-	);
-}
-
 // 비회원 쓰기 비밀번호 입력창. 확인을 누르면 창은 닫히고, 비밀번호가 틀리면(403) 뮤테이션
 // onError 토스트로 알린 뒤 같은 동작을 다시 누르게 한다.
 function GuestPasswordDialog({
@@ -290,11 +254,11 @@ function TopicComments({
 				</p>
 			)}
 			{topic.sourceComments.length > 0 ? (
-				<SourceComments comments={topic.sourceComments} />
+				<CrawledSourceComments topic={topic} />
 			) : null}
 			{topic.comments.length > 0 ? (
 				<CommentList
-					allowReplies
+					allowReplies={topic.canComment}
 					comments={topic.comments}
 					deletePending={deleteMutation.isPending}
 					editingId={editingId}
@@ -316,13 +280,15 @@ function TopicComments({
 					replyTo={replyTo}
 				/>
 			) : null}
-			<CommentForm
-				canSubmit={trimmedComment.length >= 1 && !createMutation.isPending}
-				maxLength={COMMENT_MAX}
-				onChange={setCommentBody}
-				onSubmit={() => submit({ body: trimmedComment, kind: "create" })}
-				value={commentBody}
-			/>
+			{topic.canComment && (
+				<CommentForm
+					canSubmit={trimmedComment.length >= 1 && !createMutation.isPending}
+					maxLength={COMMENT_MAX}
+					onChange={setCommentBody}
+					onSubmit={() => submit({ body: trimmedComment, kind: "create" })}
+					value={commentBody}
+				/>
+			)}
 			<GuestPasswordDialog
 				onCancel={() => setPending(null)}
 				onConfirm={(password) => {
@@ -337,6 +303,23 @@ function TopicComments({
 	);
 }
 
+function CrawledBody({ topic }: { topic: CrawledTopicDetail }) {
+	if (topic.locked) {
+		return (
+			<p className="text-muted-foreground text-sm">
+				이 게시판의 비밀글을 열람할 권한이 필요해요.
+			</p>
+		);
+	}
+	if (topic.bodyFormat === "tiptap") {
+		return <PostBodyViewer body={topic.body} />;
+	}
+	return (
+		<p className="m-0 whitespace-pre-line text-foreground text-sm leading-relaxed">
+			{topic.body}
+		</p>
+	);
+}
 export function CommunityCrawledTopicDetailScreen({
 	topicId,
 }: {
@@ -367,11 +350,32 @@ export function CommunityCrawledTopicDetailScreen({
 
 	return (
 		<div className="flex flex-col gap-4">
-			<BackButton />
+			<div className="flex items-center justify-between gap-2">
+				<BackButton topic={topic} />
+				{topic.canEdit && (
+					<Button
+						nativeButton={false}
+						render={
+							<Link href={crawledCommunityEditPath(topic.id) as Route}>
+								편집
+							</Link>
+						}
+						size="sm"
+						variant="outline"
+					/>
+				)}
+			</div>
 			<div className="flex flex-col gap-2">
 				<h1 className="m-0 font-extrabold text-xl">{topic.title}</h1>
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
-					<span>{topic.boardName}</span>
+					{topic.authorGender ? (
+						<SecretAuthorMark gender={topic.authorGender} />
+					) : (
+						<>
+							<span>{topic.authorName}</span>
+							<GradeBadge grade={topic.authorGrade} />
+						</>
+					)}
 					{topic.sourcePostedAt ? (
 						<span>{formatCommunityDate(topic.sourcePostedAt)}</span>
 					) : null}
@@ -382,14 +386,12 @@ export function CommunityCrawledTopicDetailScreen({
 				</div>
 			</div>
 			<Separator />
-			<p className="m-0 whitespace-pre-line text-foreground text-sm leading-relaxed">
-				{topic.body}
-			</p>
+			<CrawledBody topic={topic} />
 			<Separator />
-			<TopicComments topic={topic} topicId={topicId} />
+			{!topic.locked && <TopicComments topic={topic} topicId={topicId} />}
 			<CommunityPostNavigation
-				boardKey={CRAWLED_BOARD.key}
-				boardSlug={CRAWLED_BOARD.slug}
+				boardKey={topic.boardKey}
+				boardSlug={topic.boardSlug}
 				currentId={topicId}
 				source="crawled"
 			/>

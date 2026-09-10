@@ -509,7 +509,7 @@ function CommentActions({
 }
 
 // 인라인 댓글 수정 폼. 편집 시작 시점의 본문으로 초기화되고 저장/취소를 제공한다.
-function CommentEditForm({
+export function CommentEditForm({
 	initialBody,
 	maxLength,
 	onCancel,
@@ -534,7 +534,13 @@ function CommentEditForm({
 				value={body}
 			/>
 			<div className="flex justify-end gap-2">
-				<Button onClick={onCancel} size="sm" type="button" variant="outline">
+				<Button
+					disabled={pending}
+					onClick={onCancel}
+					size="sm"
+					type="button"
+					variant="outline"
+				>
 					취소
 				</Button>
 				<Button
