@@ -23,6 +23,10 @@ export default function SeekerLayout() {
 			<Stack.Screen name="point-shop" options={{ title: "포인트몰" }} />
 			<Stack.Screen name="notifications" options={{ title: "알림" }} />
 			<Stack.Screen name="jobs/[id]" options={{ title: "공고 상세" }} />
+			<Stack.Screen
+				name="jobs/[id]/chat"
+				options={{ title: "채팅 안전 확인" }}
+			/>
 			{/* 수집 공고는 job_post에 없어 jobs/[id](jobs.getById)로는 NOT_FOUND다. 웹
 			    /seeker/jobs/crawled/[id]와 같이 crawledJobs.getById를 쓰는 전용 상세로 보낸다. */}
 			<Stack.Screen name="jobs/crawled/[id]" options={{ title: "공고 상세" }} />

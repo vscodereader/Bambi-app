@@ -7,6 +7,15 @@ import { eq, sql } from "drizzle-orm";
 
 import { SITE_SETTINGS_ROW_ID } from "./bambi-point-settings";
 
+export const INSUFFICIENT_POINT_BALANCE_MESSAGE = "보유 포인트가 부족합니다.";
+
+export class InsufficientPointBalanceError extends Error {
+	constructor() {
+		super(INSUFFICIENT_POINT_BALANCE_MESSAGE);
+		this.name = "InsufficientPointBalanceError";
+	}
+}
+
 export type PointTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export async function lockMemberPoints(
@@ -101,8 +110,18 @@ export async function adjustMemberPoints(
 	}
 	await lockMemberPoints(tx, args.userId);
 	const balance = await getPointBalanceTx(tx, args.userId);
+	if (args.externalKey) {
+		const [existing] = await tx
+			.select({ id: bambiPointTransaction.id })
+			.from(bambiPointTransaction)
+			.where(eq(bambiPointTransaction.externalKey, args.externalKey))
+			.limit(1);
+		if (existing) {
+			return { applied: 0, balance, transactionId: existing.id };
+		}
+	}
 	if (balance + args.amount < 0) {
-		throw new Error("잔액보다 많이 차감할 수 없습니다.");
+		throw new InsufficientPointBalanceError();
 	}
 	const [inserted] = await tx
 		.insert(bambiPointTransaction)

@@ -19,6 +19,7 @@ import { notifyBambiNotification } from "../../services/bambi-notifications";
 import {
 	adjustMemberPoints,
 	awardMemberPoints,
+	InsufficientPointBalanceError,
 } from "../../services/bambi-point-ledger";
 import {
 	DEFAULT_REVIEW_VIEW_POINTS,
@@ -363,22 +364,30 @@ export const reviewsRouter = {
 			if (membership) {
 				return { body: target.body, rating: target.rating };
 			}
-			await db.transaction(async (tx) => {
-				const [settings] = await tx
-					.select({ points: bambiSiteSettings.reviewViewPoints })
-					.from(bambiSiteSettings)
-					.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
-					.limit(1);
-				const cost = settings?.points ?? DEFAULT_REVIEW_VIEW_POINTS;
-				if (cost > 0) {
-					await adjustMemberPoints(tx, {
-						amount: -cost,
-						description: `후기 열람: ${target.jobPostId}/${target.id}`,
-						reason: "review_view",
-						userId: profile.userId,
-					});
+			try {
+				await db.transaction(async (tx) => {
+					const [settings] = await tx
+						.select({ points: bambiSiteSettings.reviewViewPoints })
+						.from(bambiSiteSettings)
+						.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
+						.limit(1);
+					const cost = settings?.points ?? DEFAULT_REVIEW_VIEW_POINTS;
+					if (cost > 0) {
+						await adjustMemberPoints(tx, {
+							amount: -cost,
+							description: `후기 열람: ${target.jobPostId}/${target.id}`,
+							externalKey: `review-view:${profile.userId}:${target.id}`,
+							reason: "review_view",
+							userId: profile.userId,
+						});
+					}
+				});
+			} catch (error) {
+				if (error instanceof InsufficientPointBalanceError) {
+					throw new ORPCError("BAD_REQUEST", { message: error.message });
 				}
-			});
+				throw error;
+			}
 			return { body: target.body, rating: target.rating };
 		}),
 
