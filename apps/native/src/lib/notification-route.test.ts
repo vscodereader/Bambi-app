@@ -108,10 +108,35 @@ describe("notificationRoute", () => {
 		).toBeNull();
 	});
 
+	it("커뮤니티 알림은 일반 글과 수집 글 상세로 이동한다", () => {
+		expect(
+			notificationRoute(
+				view({
+					metadata: { board: "free", postId: "post-1" },
+					targetType: "community_post",
+				}),
+				"seeker"
+			)
+		).toBe("/(seeker)/community/free/post-1");
+		expect(
+			notificationRoute(
+				view({
+					metadata: { crawledTopicId: "topic-1" },
+					targetType: "community_comment",
+				}),
+				"seeker"
+			)
+		).toBe("/(seeker)/community/crawled/topic-1");
+		expect(
+			notificationRoute(
+				view({ metadata: null, targetType: "community_comment" }),
+				"seeker"
+			)
+		).toBe("/(seeker)/(tabs)/community");
+	});
+
 	it("native 화면이 없는 타입·공유 알림은 null", () => {
 		for (const targetType of [
-			"community_post",
-			"community_comment",
 			"support_inquiry",
 			"support_chat",
 			"unknown_future_type",

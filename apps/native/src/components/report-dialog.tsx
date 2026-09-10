@@ -31,7 +31,11 @@ export function JobReportDialog({
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 	targetId: string;
-	targetType?: "chat_room" | "job_post";
+	targetType?:
+		| "chat_room"
+		| "community_comment"
+		| "community_post"
+		| "job_post";
 }) {
 	const [reason, setReason] = useState<ReportReason | null>(null);
 	const [detail, setDetail] = useState("");

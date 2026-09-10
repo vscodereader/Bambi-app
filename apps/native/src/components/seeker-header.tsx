@@ -91,7 +91,11 @@ export function SeekerStackHeader({
 
 // 웹 모바일 헤더(responsive-shell.tsx)의 네이티브판 — 로고+워드마크 / 검색·포인트몰·알림.
 // Tabs의 커스텀 header로 쓰이므로 상단 안전영역 인셋을 스스로 채운다.
-export function SeekerHomeHeader() {
+export function SeekerHomeHeader({
+	hidePointShop = false,
+}: {
+	hidePointShop?: boolean;
+}) {
 	const insets = useSafeAreaInsets();
 
 	return (
@@ -115,11 +119,13 @@ export function SeekerHomeHeader() {
 						label="공고 검색"
 						name="search-outline"
 					/>
-					<HeaderIconButton
-						href={"/(seeker)/point-shop" as unknown as Href}
-						label="포인트몰"
-						name="storefront-outline"
-					/>
+					{hidePointShop ? null : (
+						<HeaderIconButton
+							href={"/(seeker)/point-shop" as unknown as Href}
+							label="포인트몰"
+							name="storefront-outline"
+						/>
+					)}
 					<NotificationBell
 						href={"/(seeker)/notifications" as unknown as Href}
 					/>

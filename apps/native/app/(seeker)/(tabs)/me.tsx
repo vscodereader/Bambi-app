@@ -323,7 +323,7 @@ function MeMenuGroup({
 	);
 }
 
-function MeMenu() {
+function MeMenu({ canUsePoints }: { canUsePoints: boolean }) {
 	// 쪽지함 안읽음 배지 — 웹 MyPageNav과 같은 계약(알림 벨과 별개 카운트, 99+ 캡).
 	const unreadQuery = useQuery(
 		orpc.bambi.directMessages.unreadCount.queryOptions()
@@ -343,7 +343,13 @@ function MeMenu() {
 	return (
 		<>
 			<MeMenuGroup
-				items={MY_PAGE_ITEMS}
+				items={
+					canUsePoints
+						? MY_PAGE_ITEMS
+						: MY_PAGE_ITEMS.filter(
+								(item) => item.href !== ("/(seeker)/me/attendance" as Href)
+							)
+				}
 				suffixFor={(href) =>
 					href === MESSAGES_HREF && unreadCount > 0
 						? {
@@ -359,18 +365,28 @@ function MeMenu() {
 						: null
 				}
 			/>
-			<MeMenuGroup items={SHORTCUT_ITEMS} />
+			<MeMenuGroup
+				items={
+					canUsePoints
+						? SHORTCUT_ITEMS
+						: SHORTCUT_ITEMS.filter(
+								(item) => item.href !== ("/(seeker)/point-shop" as Href)
+							)
+				}
+			/>
 		</>
 	);
 }
 
 function SeekerMeInner() {
+	const mine = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
+	const canUsePoints = mine.data?.bambiProfile?.role !== "legal_advisor";
 	return (
 		<BambiScreen>
 			<BambiHeader description="내 계정과 활동을 관리합니다." title="내 정보" />
 			<ProfileCard />
-			<PointsSummaryCard />
-			<MeMenu />
+			{canUsePoints ? <PointsSummaryCard /> : null}
+			<MeMenu canUsePoints={canUsePoints} />
 			<View className="items-start">
 				<LogoutButton />
 			</View>
