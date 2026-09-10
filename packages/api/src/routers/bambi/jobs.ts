@@ -339,6 +339,9 @@ const listInput = z.object({
 	regionCode: z.string().length(10).optional(),
 	districtCode: z.string().length(10).optional(),
 	minPayAmount: z.number().int().positive().optional(),
+	onlyBeginnerFriendly: z.boolean().default(false),
+	onlyToday: z.boolean().default(false),
+	onlyVerified: z.boolean().default(false),
 	limit: z.number().int().min(1).max(50).default(20),
 	// 전체 공고(organic) "더보기" 커서 — 응답의 nextOrganicOffset을 그대로 돌려보낸다.
 	// 생략하면 첫 페이지(유료 섹션 3종 포함)이고, 주면 전체 공고만 이어 받는다.
@@ -1437,6 +1440,12 @@ export const jobsRouter = {
 					jobPost.payUnit
 				)
 			);
+		}
+		if (input.onlyBeginnerFriendly) {
+			filters.push(eq(jobPost.beginnerFriendly, true));
+		}
+		if (input.onlyToday) {
+			filters.push(eq(jobPost.instantInterview, true));
 		}
 
 		const exposureSelection = {

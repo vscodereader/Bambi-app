@@ -13,6 +13,7 @@ import {
 } from "@/src/components/bambi-screen";
 import { GradeBadge } from "@/src/components/grade-badge";
 import { MemberOnly } from "@/src/components/member-only";
+import { UseBenefitDialog } from "@/src/components/seeker/use-benefit-dialog";
 import {
 	buildMonthWeeks,
 	formatPointAmount,
@@ -232,6 +233,8 @@ function SectionHeading({
 // 호출해도 실제 요청은 1회다(웹과 동일).
 function MyBenefitsCard() {
 	const query = useQuery(orpc.bambi.pointShop.myOrders.queryOptions());
+	const mine = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
+	const canUseBenefits = mine.data?.bambiProfile?.role === "employer";
 	// 필드명을 손으로 재선언하지 않는다 — myOrders는 output 스키마가 없는 raw select라
 	// 서버가 select를 바꾸면 여기 추론도 함께 따라와야 드리프트가 드러난다.
 	const benefits = (query.data ?? []).filter(
@@ -300,6 +303,12 @@ function MyBenefitsCard() {
 										? `${formatPointDate(order.usableUntil)}까지`
 										: "무기한"}
 								</Text>
+							)}
+							{expired || !canUseBenefits ? null : (
+								<UseBenefitDialog
+									itemName={order.itemName}
+									orderId={order.id}
+								/>
 							)}
 						</View>
 					</View>

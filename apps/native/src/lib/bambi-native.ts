@@ -460,6 +460,7 @@ export interface NativeSeekerJob {
 	payAmount: null | number;
 	// 크롤 공고가 섞여 내려오는 목록이라 단위가 비어 있을 수 있다.
 	payUnit: null | string;
+	performance?: { detailViews: number; impressions: number } | null;
 	promotionLabel: null | string;
 	region: string;
 	// "crawled"면 jobs.getById가 job_post만 조회해 상세가 NOT_FOUND다 — 링크를 걸지 않는다.
