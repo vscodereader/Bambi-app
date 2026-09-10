@@ -5,7 +5,7 @@ import { useThemeColor } from "heroui-native";
 import type { ComponentProps } from "react";
 import type { ColorValue } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { FeatureCoachmark } from "@/src/components/onboarding/feature-coachmark";
 import { SeekerHomeHeader } from "@/src/components/seeker-header";
 import {
 	getNativeRoleTab,
@@ -83,82 +83,88 @@ export default function SeekerTabsLayout() {
 	const roleTabIcons = roleTab ? ROLE_TAB_ICONS[roleTab.href] : null;
 
 	return (
-		<Tabs
-			screenOptions={{
-				header: () => <SeekerHomeHeader />,
-				tabBarActiveTintColor: accentColor,
-				tabBarInactiveTintColor: mutedColor,
-				tabBarStyle: {
-					backgroundColor,
-					borderTopColor: borderColor,
-					// height를 재정의하면 라이브러리의 인셋 처리도 함께 고정해 줘야 한다 —
-					// 안 그러면 콘텐츠 높이가 기기별 인셋만큼 들쭉날쭉해진다.
-					height: TAB_BAR_CONTENT_HEIGHT + insets.bottom,
-					paddingBottom: insets.bottom,
-					paddingTop: 6,
-				},
-			}}
-		>
-			<Tabs.Screen
-				name="index"
-				options={{
-					tabBarIcon: tabIcon("search", "search-outline"),
-					title: "탐색",
-				}}
-			/>
-			<Tabs.Screen
-				name="chats"
-				options={{
-					tabBarBadge: resolveTabBadge(chatUnreadCount),
-					tabBarBadgeStyle: {
-						backgroundColor: accentColor,
-						color: accentForegroundColor,
-						fontSize: 11,
+		<>
+			<FeatureCoachmark />
+			<Tabs
+				screenOptions={{
+					header: () => <SeekerHomeHeader />,
+					tabBarActiveTintColor: accentColor,
+					tabBarInactiveTintColor: mutedColor,
+					tabBarStyle: {
+						backgroundColor,
+						borderTopColor: borderColor,
+						// height를 재정의하면 라이브러리의 인셋 처리도 함께 고정해 줘야 한다 —
+						// 안 그러면 콘텐츠 높이가 기기별 인셋만큼 들쭉날쭉해진다.
+						height: TAB_BAR_CONTENT_HEIGHT + insets.bottom,
+						paddingBottom: insets.bottom,
+						paddingTop: 6,
 					},
-					tabBarIcon: tabIcon(
-						"chatbubble-ellipses",
-						"chatbubble-ellipses-outline"
-					),
-					title: "채팅",
 				}}
-			/>
-			<Tabs.Screen
-				name="community"
-				options={{
-					tabBarIcon: tabIcon("chatbubbles", "chatbubbles-outline"),
-					title: "수다방",
-				}}
-			/>
-			{/* 수다방과 내 정보 사이의 역할 탭. 구직자·비회원에게는 href:null로 숨긴다.
+			>
+				<Tabs.Screen
+					name="index"
+					options={{
+						tabBarIcon: tabIcon("search", "search-outline"),
+						title: "탐색",
+					}}
+				/>
+				<Tabs.Screen
+					name="chats"
+					options={{
+						tabBarBadge: resolveTabBadge(chatUnreadCount),
+						tabBarBadgeStyle: {
+							backgroundColor: accentColor,
+							color: accentForegroundColor,
+							fontSize: 11,
+						},
+						tabBarIcon: tabIcon(
+							"chatbubble-ellipses",
+							"chatbubble-ellipses-outline"
+						),
+						title: "채팅",
+					}}
+				/>
+				<Tabs.Screen
+					name="community"
+					options={{
+						tabBarIcon: tabIcon("chatbubbles", "chatbubbles-outline"),
+						title: "수다방",
+					}}
+				/>
+				{/* 수다방과 내 정보 사이의 역할 탭. 구직자·비회원에게는 href:null로 숨긴다.
 			    탭을 누르면 화면을 여는 대신 역할 영역을 push한다 — 구직자 탭 상태를 그대로
 			    두어야 뒤로 가기로 원래 보던 탭에 돌아온다(웹 mobile-tab-bar와 같은 축). */}
-			<Tabs.Screen
-				listeners={{
-					tabPress: (event) => {
-						if (!roleTab) {
-							return;
-						}
-						event.preventDefault();
-						router.push(roleTab.href as Href);
-					},
-				}}
-				name="role"
-				options={
-					roleTab && roleTabIcons
-						? {
-								tabBarIcon: tabIcon(roleTabIcons.active, roleTabIcons.inactive),
-								title: roleTab.title,
+				<Tabs.Screen
+					listeners={{
+						tabPress: (event) => {
+							if (!roleTab) {
+								return;
 							}
-						: { href: null }
-				}
-			/>
-			<Tabs.Screen
-				name="me"
-				options={{
-					tabBarIcon: tabIcon("person", "person-outline"),
-					title: "내 정보",
-				}}
-			/>
-		</Tabs>
+							event.preventDefault();
+							router.push(roleTab.href as Href);
+						},
+					}}
+					name="role"
+					options={
+						roleTab && roleTabIcons
+							? {
+									tabBarIcon: tabIcon(
+										roleTabIcons.active,
+										roleTabIcons.inactive
+									),
+									title: roleTab.title,
+								}
+							: { href: null }
+					}
+				/>
+				<Tabs.Screen
+					name="me"
+					options={{
+						tabBarIcon: tabIcon("person", "person-outline"),
+						title: "내 정보",
+					}}
+				/>
+			</Tabs>
+		</>
 	);
 }

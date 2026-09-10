@@ -568,6 +568,20 @@ function SeekerAccountSettingsInner() {
 						isPhoneVerified={isPhoneVerified}
 						phoneNumber={profile.phoneNumber}
 					/>
+					<Surface className="gap-3 rounded-lg p-4" variant="secondary">
+						<Text className="font-semibold text-base text-foreground">
+							이용 안내
+						</Text>
+						<Text className="text-muted text-sm">
+							구직자 기능과 공통 안전 기능을 다시 확인할 수 있어요.
+						</Text>
+						<Button
+							onPress={() => router.push("/feature-guide" as Href)}
+							variant="secondary"
+						>
+							<Button.Label>구직자 이용 안내</Button.Label>
+						</Button>
+					</Surface>
 				</>
 			) : (
 				<NoProfileCard
