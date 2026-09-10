@@ -1,0 +1,92 @@
+# 본인 PR 작성 월별 이력
+
+## 2026-08
+
+- 2026-08-04 · [fix: 수다방 내비게이션·이름 정책·채팅 안 읽음 집계 정비](prs/71.md) · MERGED · vscodereader
+- 2026-08-05 · [feat: 운영자 수집 공고 상세 이미지 편집 추가](prs/82.md) · MERGED · vscodereader
+- 2026-08-05 · [fix: 구직자 면접·모바일 배포 검수 오류 수정](prs/86.md) · CLOSED · vscodereader
+- 2026-08-06 · [feat: 팝업 대상 노출·이벤트 공지·기간 할인 운영 확장 (#97)](prs/98.md) · MERGED · vscodereader
+- 2026-08-07 · [fix: 모바일 배포 QA 보완 및 사업자 인증 서류·SEO 확장 (#99)](prs/100.md) · MERGED · vscodereader
+- 2026-08-07 · [fix: 모바일 팝업 이미지 크기 조절 — 실제 이미지·선택 영역 실시간 반영](prs/111.md) · MERGED · vscodereader
+- 2026-08-10 · [fix: 모바일 채팅 첨부 레이아웃·구인 관리 카드 UX 개선](prs/121.md) · MERGED · vscodereader
+- 2026-08-10 · [feat: GA4 프로모션·핵심 행동 계측 확장 + 배너 편집 UX 개선](prs/123.md) · MERGED · vscodereader
+- 2026-08-11 · [fix: 전체공고 48건 배치·끌어올리기 현황 UX 개선](prs/130.md) · MERGED · vscodereader
+- 2026-08-11 · [feat: 기존 공개 영역 SEO·공공 구직정보 보강](prs/135.md) · MERGED · vscodereader
+- 2026-08-11 · [fix: 성과 분석 게재 구분 뱃지 가독성 개선](prs/140.md) · MERGED · vscodereader
+- 2026-08-12 · [fix: 테스트 사이트 공고·결제관리 QA 결함 개선](prs/147.md) · MERGED · vscodereader
+- 2026-08-12 · [fix: 채팅 첨부 UI와 동시 전송 순서 개선](prs/149.md) · MERGED · vscodereader
+- 2026-08-12 · [feat: 사업자 인증 변경사항 미제출 및 재심사 흐름 개선](prs/152.md) · MERGED · vscodereader
+- 2026-08-12 · [fix: 모바일 면접·사업자 인증·스크롤 QA 개선](prs/154.md) · MERGED · vscodereader
+- 2026-08-12 · [fix: 구직자 공고 카드 정보 순서 개선](prs/156.md) · MERGED · vscodereader
+- 2026-08-13 · [feat: 회원 프로필·신고 처리·커뮤니티 익명·팝업 관리 통합](prs/168.md) · MERGED · vscodereader
+- 2026-08-13 · [fix: 운영자 채팅·커뮤니티 QA 문제 개선](prs/172.md) · MERGED · vscodereader
+- 2026-08-14 · [fix: 댓글 제한 빈 영역 및 로그인 전 팝업 노출 개선](prs/175.md) · MERGED · vscodereader
+- 2026-08-14 · [fix: 신고 처리 사유와 팝업 노출 흐름 개선](prs/180.md) · MERGED · vscodereader
+- 2026-08-14 · [fix: 최초 사업자 인증 심사 중 서류 첨부 허용](prs/183.md) · MERGED · vscodereader
+- 2026-08-14 · [fix: 프로필·신고 조치와 사업자 인증 흐름 개선](prs/188.md) · MERGED · vscodereader
+- 2026-08-18 · [feat: 운영자 수집 공고 페이지 복귀·일괄 삭제 UX 개선](prs/195.md) · MERGED · vscodereader
+- 2026-08-18 · [feat: 신고·경고 운영 흐름과 페이지네이션 개선](prs/197.md) · MERGED · vscodereader
+- 2026-08-19 · [fix: 계정 제재와 운영자 QA 동작 개선](prs/206.md) · MERGED · vscodereader
+- 2026-08-19 · [feat: 포인트 관리·공고 결제 사용과 회원 포인트 내역 개선](prs/210.md) · MERGED · vscodereader
+- 2026-08-20 · [feat: 비밀글·후기 포인트·콘텐츠 이력 통합](prs/218.md) · MERGED · vscodereader
+- 2026-08-20 · [fix: 게시판 홈 배치 Biome 예외 주석 제거](prs/221.md) · MERGED · vscodereader
+- 2026-08-20 · [fix: 비밀글 열람·공고 결제·글 관리 UI 안정화](prs/227.md) · MERGED · vscodereader
+- 2026-08-21 · [feat: 공지 다중 게시판 노출·유형별 포인트 광고 보상 통합](prs/233.md) · MERGED · vscodereader
+- 2026-08-21 · [feat: 포인트몰 동적 진열·랜덤 뽑기·아이템 보상 통합](prs/235.md) · OPEN · vscodereader
+- 2026-08-25 · [feat: 메인·수다방 게시판 배치 분리 및 글 상세 이전·다음 탐색](prs/246.md) · MERGED · vscodereader
+- 2026-08-26 · [feat: 웹 전역 수동 다크모드와 UI 대비 정리](prs/250.md) · OPEN · vscodereader
+- 2026-08-26 · [fix: 공고 상세설명 보존·운영자 본문 이미지 검수 개선](prs/254.md) · MERGED · vscodereader
+- 2026-08-26 · [fix: 사용자 선택 열·검색 버튼·신고창·검수 카드 비색상 레이아웃 정리](prs/260.md) · MERGED · vscodereader
+- 2026-08-28 · [feat: 공개 채용·커뮤니티 광고 rail·큐레이션 UI 개선](prs/268.md) · MERGED · vscodereader
+- 2026-08-28 · [fix: 공고 결제 포인트 사용 시 회원 등급 유지](prs/270.md) · MERGED · vscodereader
+- 2026-08-28 · [fix: 회원 등급 뱃지 아이콘 잘림 해소](prs/272.md) · MERGED · vscodereader
+- 2026-08-31 · [feat: 운영자 가계정 생성·역할별 기능 검증 및 로컬 미디어 정합성](prs/275.md) · MERGED · vscodereader
+
+## 2026-09
+
+- 2026-09-02 · [feat(web): 역할별 반응형 온보딩·코치마크·코드 미리보기](prs/279.md) · MERGED · vscodereader
+- 2026-09-03 · [feat(web): 연락처 공개·면접 확정 전 확인창 추가](prs/289.md) · MERGED · vscodereader
+- 2026-09-04 · [feat: 사용자 온라인 접속 상태·실시간 운영자 표시](prs/291.md) · MERGED · vscodereader
+- 2026-09-04 · [feat: 수집 커뮤니티 게시판별 저장·관리자 글·댓글 편집](prs/294.md) · MERGED · vscodereader
+- 2026-09-04 · [fix: 채팅 상대 접속·평균 응답시간 및 공고 메타데이터 뱃지](prs/301.md) · MERGED · vscodereader
+- 2026-09-07 · [fix(web): 승인 완료 업소 재승인 방지·사업자 서류 행 통일](prs/304.md) · MERGED · vscodereader
+- 2026-09-08 · [fix(web): 비회원 본인인증을 회원가입에서 재사용](prs/308.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 콘솔 공통 셸·다이얼로그·SAF 파일 저장 기반](prs/333.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 공고 검수 상세·감지 문구 강조](prs/334.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 신고 상세·대상 후속 조치 구현](prs/335.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 사용자 상세·접속 상태·계정 조치 확장](prs/336.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 쪽지 리치 편집·대상 발송 구현](prs/337.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 공고 수정·노출 기간·삭제 관리 구현](prs/338.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 채팅 열람·차단·첨부 저장 구현](prs/339.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 업소·팀 합류·면접 관리 화면 추가](prs/340.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 출석·회원 등급·포인트 정책 관리 구현](prs/341.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 광고 상품·결제·포인트몰 관리 구현](prs/342.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 게시물·댓글 일괄 조치 구현](prs/343.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 수다방 게시판 CRUD·배치 관리 구현](prs/344.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 FAQ 리치 편집·공개 관리 구현](prs/345.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 문의 채팅 답변·잠금·종료 관리 구현](prs/346.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 금칙어 검색·CSV 일괄 관리 구현](prs/347.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 후기 상태 검수 화면 추가](prs/348.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 팝업 리치 편집·이미지 가공·순서 미리보기 구현](prs/349.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 사이트 설정 섹션별 저장 구현](prs/350.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 매뉴얼 목차·표·링크 열람 구현](prs/351.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 크롤링·수집 콘텐츠·이미지 편집 구현](prs/352.md) · CLOSED · vscodereader
+- 2026-09-09 · [feat(native): 운영자 공고 검수 상세·감지 문구 강조](prs/353.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 신고 상세·대상 후속 조치 구현](prs/354.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 사용자 상세·접속 상태·계정 조치 확장](prs/355.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 쪽지 리치 편집·대상 발송 구현](prs/356.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 공고 수정·노출 기간·삭제 관리 구현](prs/357.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 채팅 열람·차단·첨부 저장 구현](prs/358.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 업소·팀 합류·면접 관리 화면 추가](prs/359.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 출석·회원 등급·포인트 정책 관리 구현](prs/360.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 광고 상품·결제·포인트몰 관리 구현](prs/361.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 게시물·댓글 일괄 조치 구현](prs/362.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 수다방 게시판 CRUD·배치 관리 구현](prs/363.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 FAQ 리치 편집·공개 관리 구현](prs/364.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 문의 채팅 답변·잠금·종료 관리 구현](prs/365.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 금칙어 검색·CSV 일괄 관리 구현](prs/366.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 후기 상태 검수 화면 추가](prs/367.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 팝업 리치 편집·이미지 가공·순서 미리보기 구현](prs/368.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 사이트 설정 섹션별 저장 구현](prs/369.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 매뉴얼 목차·표·링크 열람 구현](prs/370.md) · OPEN · vscodereader
+- 2026-09-09 · [feat(native): 운영자 크롤링·수집 콘텐츠·이미지 편집 구현](prs/371.md) · OPEN · vscodereader
