@@ -6,6 +6,8 @@ export const SUPPORT_CHAT_COOKIE_MAX_AGE = 60 * 60 * 24 * 180;
 // 쿠키는 host-only라 다른 호스트인 api 서버에 안 실린다 — 게스트 토큰과 같은 방식으로
 // 클라이언트가 이 헤더에 옮겨 보낸다(web utils/orpc).
 export const SUPPORT_CHAT_HEADER = "x-bambi-support-chat";
+export const SUPPORT_CHAT_ISSUE_LIMIT = 5;
+export const SUPPORT_CHAT_ISSUE_WINDOW_MS = 60_000;
 
 /**
  * 익명 문의 신원 토큰. 게스트 토큰(bambi_guest)과 같은 시크릿으로 서명하지만 필드명이

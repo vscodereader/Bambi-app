@@ -25,6 +25,8 @@ const SEEKER_ROUTES: Record<string, string> = {
 	point_shop_order: "/(seeker)/me/attendance",
 	point_transaction: "/(seeker)/me/attendance",
 	report: "/(seeker)/me/reports",
+	support_inquiry: "/(seeker)/support/inquiries",
+	support_chat: "/(seeker)/support/chat",
 };
 
 const EMPLOYER_ROUTES: Record<string, string> = {
@@ -75,6 +77,14 @@ export function notificationRoute(
 			return chatRoute(item, role);
 		case "review":
 			return reviewRoute(item, role);
+		case "support_inquiry":
+			return role === "seeker"
+				? `/(seeker)/support/inquiries/${item.targetId}`
+				: null;
+		case "support_chat":
+			return role === "seeker"
+				? `/(seeker)/support/chat/${item.targetId}`
+				: null;
 		case "job_post":
 			return role === "employer" ? jobPostRoute(item) : null;
 		default:

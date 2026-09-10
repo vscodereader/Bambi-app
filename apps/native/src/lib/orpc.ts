@@ -9,6 +9,7 @@ import { Platform } from "react-native";
 import { authClient } from "@/lib/auth-client";
 
 import { readGuestToken } from "./guest-store";
+import { readSupportChatToken } from "./support/support-chat-store";
 
 export const queryClient = new QueryClient();
 
@@ -36,6 +37,10 @@ export const link = new RPCLink({
 			const guestToken = readGuestToken();
 			if (guestToken) {
 				headers.set("x-bambi-guest", guestToken);
+			}
+			const supportChatToken = readSupportChatToken();
+			if (supportChatToken) {
+				headers.set("x-bambi-support-chat", supportChatToken);
 			}
 		}
 

@@ -13,6 +13,7 @@ import { orpcPlugin } from "./plugins/orpc";
 import { pointShopExpiryPlugin } from "./plugins/point-shop-expiry";
 import { realtimePlugin } from "./plugins/realtime";
 import { ssePlugin } from "./plugins/sse";
+import { supportChatSessionPlugin } from "./plugins/support-chat-session";
 import { withdrawalPurgePlugin } from "./plugins/withdrawal-purge";
 
 const fastify = Fastify({
@@ -23,6 +24,7 @@ fastify.register(observabilityPlugin);
 fastify.register(corsPlugin);
 fastify.register(realtimePlugin);
 fastify.register(ssePlugin);
+fastify.register(supportChatSessionPlugin);
 fastify.register(orpcPlugin);
 fastify.register(authBridgePlugin);
 fastify.register(aiPlugin);
