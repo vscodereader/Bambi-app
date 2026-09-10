@@ -60,6 +60,18 @@ const reviewRoute = (
 	return role === "seeker" && jobPostId ? `/(seeker)/jobs/${jobPostId}` : null;
 };
 
+const communityRoute = (item: BambiNotificationView): null | string => {
+	const crawledTopicId = readString(item.metadata, "crawledTopicId");
+	if (crawledTopicId) {
+		return `/(seeker)/community/crawled/${crawledTopicId}`;
+	}
+	const postId = readString(item.metadata, "postId") ?? item.targetId;
+	const board = readString(item.metadata, "board");
+	return board && postId
+		? `/(seeker)/community/${board}/${postId}`
+		: "/(seeker)/(tabs)/community";
+};
+
 export function notificationRoute(
 	item: BambiNotificationView,
 	role: NotificationRole
@@ -75,6 +87,9 @@ export function notificationRoute(
 			return chatRoute(item, role);
 		case "review":
 			return reviewRoute(item, role);
+		case "community_post":
+		case "community_comment":
+			return role === "seeker" ? communityRoute(item) : null;
 		case "job_post":
 			return role === "employer" ? jobPostRoute(item) : null;
 		default:

@@ -17,9 +17,11 @@ const LOGIN_HREF = "/login" as Href;
 // 여기서는 화면 컨텐츠만 교체한다.
 export function MemberOnly({
 	allowCommunityGuest = false,
+	allowVerifiedGuest = false,
 	children,
 }: {
 	allowCommunityGuest?: boolean;
+	allowVerifiedGuest?: boolean;
 	children: ReactNode;
 }) {
 	const { guest, state } = useVisitor();
@@ -35,6 +37,9 @@ export function MemberOnly({
 	}
 	// state === "guest" — 여성 인증 게스트만 커뮤니티 화면을 그대로 본다(웹 proxy.ts와 같은 축).
 	if (allowCommunityGuest && isCommunityGuest(guest)) {
+		return <>{children}</>;
+	}
+	if (allowVerifiedGuest && guest?.gid) {
 		return <>{children}</>;
 	}
 	return <GuestBlockedCard allowCommunityGuest={allowCommunityGuest} />;

@@ -85,7 +85,13 @@ export default function SeekerTabsLayout() {
 	return (
 		<Tabs
 			screenOptions={{
-				header: () => <SeekerHomeHeader />,
+				header: () => (
+					<SeekerHomeHeader
+						hidePointShop={
+							mineQuery.data?.bambiProfile?.role === "legal_advisor"
+						}
+					/>
+				),
 				tabBarActiveTintColor: accentColor,
 				tabBarInactiveTintColor: mutedColor,
 				tabBarStyle: {

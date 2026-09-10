@@ -32,6 +32,7 @@ import {
 	View,
 } from "react-native";
 import { StateCard } from "@/src/components/bambi-screen";
+import { HomeCommunitySection } from "@/src/components/community/home-community-section";
 import { JobListCard } from "@/src/components/job-list-card";
 import {
 	buildSeekerJobSections,
@@ -175,6 +176,7 @@ function SeekerListHeader({
 				/>
 			) : null}
 			<IndustryChipRail industry={industry} onSelect={onSelectIndustry} />
+			<HomeCommunitySection />
 		</View>
 	);
 }
