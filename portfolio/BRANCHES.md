@@ -426,3 +426,14 @@
 | `refs/heads/wip-snapshot/feat/native-seeker-marketplace-points` | `dd9021986282b14e97cd110a7f846f6601cbef76` |
 | `refs/heads/wip-snapshot/feat/native-seeker-support` | `d3099c50b4af94e96368af85d610964e8c04578c` |
 | `refs/heads/wip-snapshot/temp/graphify-latest` | `db95fb121f6ece2e572dfde76953f62e651f2059` |
+
+
+## 2026-09-10 후속 보존 브랜치
+
+- `feat/native-seeker-community` 및 `archive/pr-379` — `fe75ea7315c455e37e74cb9de4184be5836d85c5`
+- `feat/native-seeker-support` 및 `archive/pr-380` — `5d877f55e3e28fcb6e269adda13c3a572fc3b79d`
+- `feat/native-seeker-marketplace-points` 및 `archive/pr-381` — `450f26404c9f26c1bfe15a17eeff6ecdadf6a53e`
+- `feat/native-seeker-job-detail` 및 `archive/pr-382` — `efae17f25140f74d535ea347f5fcda974bd9ac1b`
+- `feat/native-seeker-chat-parity` 및 `archive/pr-383` — `b9e88fa7d7d2655c795cc6085386ee9599049c1e`
+- `feat/native-seeker-account-experience` 및 `archive/pr-384` — `af0ec13cf6f92ae4818f397f1aea14a4c5bc6e37`
+- `feat/native-push-notifications` 및 `archive/pr-385` — `3bacf5e33bc3447f9de60651916e7f7f00a4e41a`

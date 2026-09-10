@@ -10,7 +10,7 @@ Bambi는 **구직자·구인자·운영자를 연결하는 채용·커뮤니티 
 1. **웹 서비스 기능 확장** — 이미지 편집, 사업자 인증·검수, 신고·제재, 커뮤니티와 광고·포인트 흐름을 구현·보완함.
 2. **실시간 채팅 안정화** — 첨부·전송 순서·면접 확인, 사용자 접속 상태와 평균 응답 시간 표시를 개선함.
 3. **네이티브 운영자 기능 확장** — 공통 기반과 19개 기능 PR을 작성함. 현재 검토 대기 상태임.
-4. **네이티브 구직자 기능 확장** — 진행 중 7개 브랜치 중 6개는 코드 변경, 푸시 알림 1개는 설계 상태로 확인함.
+4. **네이티브 구직자 기능 확장** — 신규 PR #379~#384로 구직자 기능 6개를 제출함. #385는 원격 푸시 구현 보류 문서이며, 7개 모두 mobile 대상 검토 대기임.
 
 ## 기술 구성
 - **웹**: React·Next.js·TypeScript·Tailwind CSS·공용 UI
@@ -102,7 +102,7 @@ Bambi는 **구직자·구인자·운영자를 연결하는 채용·커뮤니티 
 <details>
 <summary>운영자 앱 — 공통 기반과 19개 기능 PR</summary>
 	공통 기반 #333은 `mobile` 대상이며 다음 기능 PR은 `feat/native-admin-foundation`을 대상으로 작성됨. 공통 기반 검토 후 기능별 통합을 진행하는 구조임.
-	
+
 	- #353 공고 검수 상세·감지 문구 강조
 	- #354 신고 상세·대상 후속 조치
 	- #355 사용자 상세·접속 상태·계정 조치
@@ -122,38 +122,261 @@ Bambi는 **구직자·구인자·운영자를 연결하는 채용·커뮤니티 
 	- #369 사이트 설정 섹션별 저장
 	- #370 운영자 매뉴얼 목차·표·링크 열람
 	- #371 크롤링·수집 콘텐츠·이미지 편집
-	
+
 	이전 PR #334~#352는 닫힌 기록이며 대체 PR #353~#371과 중복된 독립 완료 기능으로 세지 않음. 사용자 작업 대화에서 커밋 본문 형식 수정 후 새 PR로 재작성한 경위를 확인함.
-	
+
 	구직자 관련 로컬 브랜치인 `native-seeker-account-experience`, `native-seeker-chat-parity`, `native-seeker-community`, `native-seeker-job-detail`, `native-seeker-marketplace-points`, `native-seeker-support`와 `native-push-notifications`, 이미지 복구 작업은 worktree별 실제 변경과 함께 부록에 기록함. 이름만 존재하고 변경이 없는 브랜치는 완료 기능으로 세지 않음.
 </details>
 <details>
-<summary>구직자 앱 — 진행 중 7개 브랜치와 검증 결과</summary>
-	2026-09-10 로컬 worktree 스냅샷 기준임. 아래 파일 수는 미커밋 변경·추가 목록의 크기이며 기능 수나 테스트 통과 수가 아님.
-	
-	1. `feat/native-push-notifications`: 설계 문서 1개. 앱 권한·토큰 등록·서버 발송·수신 이동·badge를 설계했으며 구현 완료로 분류하지 않음.
-	2. `feat/native-seeker-account-experience`: 14개 파일. 계정 경고·정지 배너, 가입 후 이용 안내, 사용자 메인 팝업과 설정 흐름의 코드가 있음.
-	3. `feat/native-seeker-chat-parity`: 59개 파일. presence·평균 응답 시간, 채팅 목록·방 정보, 면접 확정 확인을 웹의 최신 계약에 맞추는 코드가 있음.
-	4. `feat/native-seeker-community`: 83개 파일. 수다방 홈·목록·상세·작성, 게스트·비밀글 접근, 역할별 정책과 알림 경로를 다룸.
-	5. `feat/native-seeker-job-detail`: 9개 파일. 공고 상세·후기와 포인트 열람, 차단 상태, 채팅 시작 전 안전 확인을 다룸.
-	6. `feat/native-seeker-marketplace-points`: 31개 파일. 광고 노출·HIT 표시·상세 필터·포인트 공고·보유 혜택 사용을 다룸.
-	7. `feat/native-seeker-support`: 47개 파일. 고객센터·회원 문의·회원/비회원 상담 채팅과 알림·가이드를 다룸. 계획서에는 API 검증 26개 assertion 통과와 별개로 공유 개발 DB의 기존 FK 때문에 종료 정리가 실패했다는 기록이 있어 전체 테스트 성공으로 표현하지 않음.
-	
-	각 브랜치의 원래 HEAD, 변경 경로 전체와 복원용 `wip-snapshot/` 브랜치는 `WORK-IN-PROGRESS.md`에 기록함. 진행 중 코드의 보존은 검토·병합·배포 완료를 뜻하지 않음.
-	
-	### 진행 중 기능의 검증 기록과 남은 항목
-	
-	아래는 각 worktree 설계서 마지막의 2026-09-10 기록임. 이번 문서화에서 재실행한 수치가 아니며 DB 실패 원인은 해당 작업자가 기록한 진단으로 구분함.
-	
-	- 계정: native 타입 검사, 관련 8개 테스트, 전체 native 388개 테스트 통과 기록이 있음.
-	- 채팅: native·server 타입 검사, native 채팅 22개·전체 383개, API 관련 25개 테스트 통과 기록이 있음. API 전체 타입 검사에는 기존 undefined 오류 3개가 남아 있음.
-	- 커뮤니티: native 전체 395개, 관련 21개, API 순수 테스트 37개 통과 기록이 있음. DB router는 49개 중 10개 실패하며 계획서는 board_key 제약과 schema drift를 원인으로 기록함.
-	- 공고 상세: native 전체 382개와 관련 32개 통과 기록이 있음. API reviews DB suite는 5개 중 4개 실패하며 공유 DB fixture 잔존으로 진단되어 격리 DB 재검증이 필요함.
-	- 공고 탐색·포인트: 관련 native 8개·API 순수 50개 통과 기록이 있음. API 타입 오류 3개와 DB job feed 15개 중 5개 실패가 남아 있음.
-	- 문의: native 전체 393개·관련 19개 통과 기록이 있음. API 기능 assertion 26개 통과와 종료 정리 실패를 구분함.
-	- 푸시: 설계 상태이므로 토큰 발급·실제 기기 수신·badge 통과 결과를 기재하지 않음.
-	
-	Android 실제 기기, 접근성·큰 글자·뒤로가기·키보드 및 격리 DB 검증은 각 계획서의 남은 확인 항목에 맞춰 진행해야 함.
+<summary>구직자 앱 — 신규 PR #379~#385와 검증 결과</summary>
+	**최신 상태**: 2026-09-10, 모두 mobile 대상 Open임. #379~#384는 기능 구현·검토 대기, #385는 구현 보류 조건을 정리한 문서 PR임.
+	**검증 구분**: 아래는 PR 작성자가 기록한 Android AVD·자동 테스트 결과이며 이번 문서화에서 재실행한 결과가 아님.
+	<details>
+	<summary>#379 feat(native): 구직자 수다방 전체 기능 연결</summary>
+		[원본 PR](https://github.com/beyondsoft-kr/bambi-app/pull/379) · **OPEN** · `feat/native-seeker-community` → `mobile`
+		Closes #372
+
+		### 요약
+
+		mobile의 수다방 준비 화면을 게시판 탐색·글·댓글 상호작용과 게스트·법률자문·수집 게시글을 지원하는 Expo SDK 56 화면으로 교체합니다.
+
+		- 설계·검증: `docs/superpowers/plans/2026-09-10-native-seeker-community-design.md`
+
+		### 주요 변경
+
+		- 홈 수다방 미리보기와 게시판 허브·검색·필터·페이지네이션 구현
+		- 게시글 문서 편집·이미지 업로드와 생성·상세·수정·삭제 연결
+		- 댓글·답글 CRUD, 추천·신고, 비밀글·익명·게스트 작성 지원
+		- 법률자문·남성·미인증·정지 계정의 게시판 권한 적용
+		- 수집 게시글 상세와 커뮤니티 알림 착지 경로 추가
+		- 일반 구직자의 공지 작성 노출과 미인증 계정 범용 오류를 Android AVD QA에서 수정
+
+		### 검증
+
+		- Android Studio AVD / Expo Go: 홈 미리보기, 게시판, 검색, 글 CRUD, 추천, 댓글·답글, 신고, 남성·미인증 권한 확인
+		- `pnpm --filter native test`: 39 files / 395 tests 통과
+		- `pnpm --filter native check-types` 통과
+		- `pnpm check` 통과
+		- `git diff --check` 통과
+
+		### 주의사항
+
+		- DB migration과 신규 native 의존성은 없습니다.
+		- 공유 개발 DB 기반 community 통합 테스트 일부는 기존 `board_key`·픽스처 잔존과 충돌하며 상세 결과를 설계서에 기록했습니다.
+		- 이 PR은 최신 `origin/mobile`에서 독립 분기했으며 다른 구직자 PR에 의존하지 않습니다.
+	</details>
+	<details>
+	<summary>#380 feat(native): 구직자 고객센터와 상담 채팅 연결</summary>
+		[원본 PR](https://github.com/beyondsoft-kr/bambi-app/pull/380) · **OPEN** · `feat/native-seeker-support` → `mobile`
+		Closes #373
+
+		### 요약
+
+		구직자 mobile에 FAQ, 문의 글과 추가 답변, 회원·비회원 1:1 상담 채팅을 추가합니다. 최신 develop의 support 계약과 문구를 공유하고 UI만 Expo SDK 56, HeroUI Native, Uniwind로 구현했습니다.
+
+		- 설계·검증: `docs/superpowers/plans/2026-09-10-native-seeker-support-design.md`
+
+		### 주요 변경
+
+		- 고객센터 홈과 FAQ 목록·펼침 구현
+		- 문의 작성·목록·상세·추가 답변과 상태 표시 연결
+		- 회원 상담방 목록·상세·메시지·읽음 처리 구현
+		- 비회원 HMAC 상담 세션 endpoint와 SecureStore 토큰 수명주기 추가
+		- 문의 문서 편집·이미지 업로드와 markdown 이용 가이드 지원
+		- 문의·문의 채팅 알림의 native 착지 경로 추가
+
+		### 검증
+
+		- Android Studio AVD / Expo Go: 문의 작성·목록·상세·추가 답변, 회원 상담, 비회원 상담 메시지 왕복 확인
+		- `pnpm --filter native test`: 39 files / 393 tests 통과
+		- `pnpm --filter native check-types` 통과
+		- `pnpm check` 통과
+		- `git diff --check` 통과
+
+		### 주의사항
+
+		- `expo-asset`, `expo-file-system` SDK 56 호환 의존성과 lockfile 변경이 포함됩니다.
+		- DB migration은 없습니다.
+		- 개발 DB에 공개 FAQ가 없어 AVD에서는 빈 상태를 확인했고 FAQ 변환·표시 규칙은 자동 테스트로 검증했습니다.
+		- 이 PR은 최신 `origin/mobile`에서 독립 분기했으며 다른 구직자 PR에 의존하지 않습니다.
+	</details>
+	<details>
+	<summary>#381 feat(native): 구직자 공고 탐색과 포인트 기능 확장</summary>
+		[원본 PR](https://github.com/beyondsoft-kr/bambi-app/pull/381) · **OPEN** · `feat/native-seeker-marketplace-points` → `mobile`
+		Closes #374
+
+		### 요약
+
+		구직자 mobile 홈에 최신 develop의 프리미엄 배너, 고급 공고 필터, HIT와 포인트 공고 보상 흐름을 연결합니다.
+
+		- 설계·검증: `docs/superpowers/plans/2026-09-10-native-seeker-marketplace-points-design.md`
+
+		### 주요 변경
+
+		- 프리미엄 배너 3개 슬롯과 실제 소재·문의 폴백·링크 처리
+		- 지역·세부지역·업종·최소 시급·인증·당일면접·초보 필터와 초기화 구현
+		- 순수·수집 공고 API에 선택 boolean 필터 연결
+		- 유료 공고 성과 기준 HIT 표시와 대상 제외 정책 적용
+		- 포인트 공고 보상 상태·수령·중복·쿨다운 처리
+		- 보유 혜택의 적용 가능 공고 선택과 최종 확인 흐름 연결
+
+		### 검증
+
+		- Android Studio AVD / Expo Go: 배너 실제 소재·빈 슬롯 폴백 확인
+		- 고급 필터 적용 결과 57→2건, 초기화 후 2→57건 확인
+		- 포인트몰 0P와 50,000P 상품의 잔액 부족 상태 확인
+		- `pnpm --filter native test`: 39 files / 384 tests 통과
+		- `pnpm --filter native check-types` 통과
+		- `pnpm check` 통과
+		- `git diff --check` 통과
+
+		### 주의사항
+
+		- DB migration과 신규 의존성은 없습니다.
+		- 개발 DB에 HIT·공고 보상 대상 데이터가 없어 해당 경계·중복 수령·쿨다운은 자동 테스트로 검증했습니다.
+		- 공고 조회 API 입력이 확장되지만 기존 호출은 기본값으로 동일하게 동작합니다.
+		- 이 PR은 최신 `origin/mobile`에서 독립 분기했으며 다른 구직자 PR에 의존하지 않습니다.
+	</details>
+	<details>
+	<summary>#382 feat(native): 구직자 공고 상세와 후기 열람 안전 흐름 연결</summary>
+		[원본 PR](https://github.com/beyondsoft-kr/bambi-app/pull/382) · **OPEN** · `feat/native-seeker-job-detail` → `mobile`
+		Closes #375
+
+		### 요약
+
+		구직자 공고 상세에 인증 연락처, 채팅 사전 안전 확인, 후기 목록과 포인트 열람을 추가하고 후기 차감의 잔액 부족·중복 요청을 안전하게 처리합니다.
+
+		- 설계·검증: `docs/superpowers/plans/2026-09-10-native-seeker-job-detail-design.md`
+
+		### 주요 변경
+
+		- 공고 메타데이터·등록자·후기 평균과 건수 표시
+		- 인증 구인자 전화번호 노출과 Android 전화 앱 연결
+		- 로그인·구직자 프로필·휴대폰 인증·공고 상태의 채팅 사전 확인 화면 추가
+		- 후기 목록·페이지네이션·익명 표시와 내 후기 무료 열람 구현
+		- 타인 후기 포인트 확인창과 본문 잠금 해제 연결
+		- 원장 잔액 부족을 사용자 BAD_REQUEST 문구로 변환
+		- 사용자·후기별 external key와 음수 거래 중복 검사로 재차감 방지
+
+		### 검증
+
+		- Android Studio AVD / Expo Go: 인증 연락처·전화 앱, 사전 확인 4단계, 채팅방 생성 확인
+		- 익명 후기·별점·10P 확인창과 0P 잔액 부족 문구 확인
+		- 첫 열람 후 0P, 앱 재실행 뒤 같은 후기 재열람 후에도 0P 유지 확인
+		- `pnpm --filter native test`: 39 files / 384 tests 통과
+		- `pnpm --filter native check-types` 통과
+		- 변경 파일 Ultracite와 `git diff --check` 통과
+
+		### 주의사항
+
+		- DB migration과 신규 의존성은 없습니다.
+		- API 후기 DB 테스트는 공유 개발 DB의 면접 상태·후기 unique 잔존·공고 인증 시드 충돌로 5건 중 1건 통과했습니다. 수정된 잔액 부족과 중복 열람 경로는 AVD에서 실제 API 왕복으로 재검증했습니다.
+		- 이 PR은 최신 `origin/mobile`에서 독립 분기했으며 다른 구직자 PR에 의존하지 않습니다.
+	</details>
+	<details>
+	<summary>#383 feat(native): 구직자 채팅 상태와 면접 정보 동등성 구현</summary>
+		[원본 PR](https://github.com/beyondsoft-kr/bambi-app/pull/383) · **OPEN** · `feat/native-seeker-chat-parity` → `mobile`
+		Closes #376
+
+		### 요약
+
+		구직자 mobile 채팅에 최신 develop의 상대 접속 상태·평균 응답시간, 면접 확인 정책과 공고·면접 정보 패널을 연결합니다.
+
+		- 설계·검증: `docs/superpowers/plans/2026-09-10-native-seeker-chat-parity-design.md`
+
+		### 주요 변경
+
+		- 사용자 presence lifecycle과 server SSE·Socket.IO 상태 전파 구현
+		- 온라인·오프라인·실시간 연결·평균 응답시간 표시
+		- 차단·탈퇴·나간 방에서 presence와 응답 정보 차단
+		- 면접 및 연락처 공개에 공통 확인창 적용
+		- 확인·거절·우상단 닫기·Android back과 중복 실행 방지 정책 반영
+		- 공고·면접 정보 패널과 공고 이동·인증 연락처 구현
+		- 사용자 presence, 수집 게시판 편집 정본, 채팅 응답 활동 migrations 0115~0117 포함
+
+		### 검증
+
+		- Android Studio AVD / Expo Go: 빈 방 숨김, 메시지 송신, 읽지 않음, 오프라인·대화 가능·실시간 연결 확인
+		- 정보 패널의 공고·면접·연락처와 면접 거절·확정 확인
+		- `pnpm --filter native test`: 38 files / 384 tests 통과
+		- presence·응답시간 서비스: 2 files / 13 tests 통과
+		- `pnpm --filter native check-types` 통과
+		- `pnpm --filter @bambi-app/db exec drizzle-kit check` 통과
+		- `pnpm check`, `git diff --check` 통과
+
+		### 주의사항
+
+		- 운영 DB에 Drizzle migration 0115, 0116, 0117을 순서대로 적용해야 합니다. `db:push`는 사용하지 않습니다.
+		- server realtime/presence와 lockfile 변경이 포함됩니다.
+		- 이 PR은 최신 `origin/mobile`에서 독립 분기했으며 다른 구직자 PR에 의존하지 않습니다.
+	</details>
+	<details>
+	<summary>#384 feat(native): 구직자 계정 상태와 이용 안내 경험 구현</summary>
+		[원본 PR](https://github.com/beyondsoft-kr/bambi-app/pull/384) · **OPEN** · `feat/native-seeker-account-experience` → `mobile`
+		Closes #377
+
+		### 요약
+
+		구직자 mobile에 계정 경고·정지 안내, 5단계 이용 안내와 3단계 코치마크, 사용자용 메인 팝업을 추가합니다.
+
+		- 설계·검증: `docs/superpowers/plans/2026-09-10-native-seeker-account-experience-design.md`
+
+		### 주요 변경
+
+		- 경고 배너 닫기·제재별 재노출과 정지 사유·이의 신청 안내 구현
+		- 닫을 수 없는 정지 배너와 제한 상태 우선 표시
+		- 5단계 이용 안내의 이전·다음·스와이프·건너뛰기·완료 구현
+		- 완료 뒤 3단계 기능 코치마크와 설정의 다시 보기 연결
+		- 메인 팝업 역할·화면·기간·순서·닫기·링크·24시간 숨김 구현
+		- SecureStore 허용 문자 키와 비동기 저장·조회 적용
+		- 키 형식 회귀 테스트 추가
+
+		### 검증
+
+		- Android Studio AVD / Expo Go: 팝업 2건 순서 노출과 각각의 24시간 숨김·재실행 미노출 확인
+		- 경고 닫기 영속성과 정지 배너 지속 노출 확인
+		- 5단계 안내와 3단계 코치마크 전체 조작 및 완료 저장 확인
+		- `pnpm --filter native test`: 39 files / 388 tests 통과
+		- `pnpm --filter native check-types` 통과
+		- `pnpm check`, `git diff --check` 통과
+
+		### 주의사항
+
+		- DB migration과 신규 의존성은 없습니다.
+		- 기존 잘못된 `:` SecureStore 키는 저장 단계에서 거부됐으므로 별도 데이터 migration은 필요하지 않습니다.
+		- 이 PR은 최신 `origin/mobile`에서 독립 분기했으며 다른 구직자 PR에 의존하지 않습니다.
+	</details>
+	<details>
+	<summary>#385 docs(native): 원격 푸시 알림 구현 보류 조건 정리</summary>
+		[원본 PR](https://github.com/beyondsoft-kr/bambi-app/pull/385) · **OPEN** · `feat/native-push-notifications` → `mobile`
+		Closes #378
+
+		### 요약
+
+		Expo 계정·프로젝트와 Android FCM·iOS APNs 자격이 준비되지 않아 보류한 원격 푸시 알림의 구현 범위, 재개 조건과 검증 계획을 문서로 고정합니다.
+
+		- 보류 설계: `docs/superpowers/plans/2026-09-10-native-push-notifications-design.md`
+
+		### 주요 변경
+
+		- 현재 foreground SSE 알림과 원격 푸시 전달 계층의 경계 정리
+		- Expo SDK 56·expo-notifications 기반 권한·토큰 수명주기 계획
+		- 서버 토큰 저장·발송 실패 격리·invalid token 처리 계획
+		- foreground·background·cold start 딥링크와 badge 동기화 계획
+		- Drizzle migration과 Expo·FCM·APNs secret 관리 원칙 정리
+		- 다른 구직자 브랜치에 의존하지 않는 재개 방식 명시
+
+		### 검증
+
+		- 설계 문서 외 코드·의존성·DB·API·server 변경 없음 확인
+		- 최신 `origin/mobile` 기준 독립 브랜치와 원격 동기화 확인
+
+		### 주의사항
+
+		- 이 PR은 기능을 활성화하지 않는 보류 문서 PR입니다.
+		- Expo projectId, FCM, APNs 자격과 build profile이 준비되기 전에는 구현하지 않습니다.
+		- DB migration 및 배포 영향은 없습니다.
+	</details>
 </details>
 
 ## 개발 전 준비
@@ -174,9 +397,9 @@ Bambi는 **구직자·구인자·운영자를 연결하는 채용·커뮤니티 
 <details>
 <summary>스킬 적용 방식과 확인 범위</summary>
 	`skills-lock.json`의 외부 스킬에는 인증, Expo UI·배포·개발 클라이언트, native-data-fetching, Next.js, shadcn, HeroUI Native, Turborepo, Ultracite, React·React Native 성능, 로그 분석과 기기 검증 관련 스킬이 존재함. 설치 사실만으로 모든 기능에서 해당 스킬을 호출했다고 주장하지 않음.
-	
+
 	설계서·대화에서는 계획 작성, 디버깅, 기존 구현 재사용, 코드 리뷰와 완료 전 검증을 반복 적용한 사실을 확인함. 별도 대화에서 개인 `ui-ux-visual-quality` 스킬과 Bambi 프로필·다크모드 감사 문서를 저장소 밖에 보관한 기록도 확인함. 개인 규칙 원문은 프로젝트 Git에 넣지 않기로 한 기존 결정을 존중하고 적용 사실만 정리함.
-	
+
 	토큰 절감률은 계측 데이터가 없으므로 새 수치를 만들지 않음. 계획서 재사용, 관련 파일만 제공, 공용 컴포넌트 재사용, 패키지별 검사로 반복 탐색과 재작업을 줄인 방식을 기술함.
 </details>
 
@@ -288,6 +511,13 @@ PR 작성일 기준이며, 현재 상태를 함께 표시함. 닫힌 대체 PR�
 	- **09-09 · 검토 대기** — [#369 feat(native): 운영자 사이트 설정 섹션별 저장 구현](https://github.com/beyondsoft-kr/bambi-app/pull/369)
 	- **09-09 · 검토 대기** — [#370 feat(native): 운영자 매뉴얼 목차·표·링크 열람 구현](https://github.com/beyondsoft-kr/bambi-app/pull/370)
 	- **09-09 · 검토 대기** — [#371 feat(native): 운영자 크롤링·수집 콘텐츠·이미지 편집 구현](https://github.com/beyondsoft-kr/bambi-app/pull/371)
+	- **09-10 · 검토 대기** — [#379 feat(native): 구직자 수다방 전체 기능 연결](https://github.com/beyondsoft-kr/bambi-app/pull/379)
+	- **09-10 · 검토 대기** — [#380 feat(native): 구직자 고객센터와 상담 채팅 연결](https://github.com/beyondsoft-kr/bambi-app/pull/380)
+	- **09-10 · 검토 대기** — [#381 feat(native): 구직자 공고 탐색과 포인트 기능 확장](https://github.com/beyondsoft-kr/bambi-app/pull/381)
+	- **09-10 · 검토 대기** — [#382 feat(native): 구직자 공고 상세와 후기 열람 안전 흐름 연결](https://github.com/beyondsoft-kr/bambi-app/pull/382)
+	- **09-10 · 검토 대기** — [#383 feat(native): 구직자 채팅 상태와 면접 정보 동등성 구현](https://github.com/beyondsoft-kr/bambi-app/pull/383)
+	- **09-10 · 검토 대기** — [#384 feat(native): 구직자 계정 상태와 이용 안내 경험 구현](https://github.com/beyondsoft-kr/bambi-app/pull/384)
+	- **09-10 · 검토 대기** — [#385 docs(native): 원격 푸시 알림 구현 보류 조건 정리](https://github.com/beyondsoft-kr/bambi-app/pull/385)
 </details>
 
 ## 전체 자료와 보존 기록

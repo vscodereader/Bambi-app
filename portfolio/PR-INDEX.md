@@ -1,6 +1,6 @@
 # 전체 PR 목록
 
-원본: beyondsoft-kr/bambi-app. 수집 기준: 2026-09-10. 전체 202건. 작성자 기준 본인 계정: vscodereader.
+원본: beyondsoft-kr/bambi-app. 수집 기준: 2026-09-10. 전체 209건. 작성자 기준 본인 계정: vscodereader.
 
 | PR | 상태 | 작성자 | 대상 | 제목 | 본인 |
 |---|---|---|---|---|---|
@@ -206,3 +206,10 @@
 | [#369](https://github.com/beyondsoft-kr/bambi-app/pull/369) | OPEN | vscodereader | feat/native-admin-foundation | feat(native): 운영자 사이트 설정 섹션별 저장 구현 | 본인 |
 | [#370](https://github.com/beyondsoft-kr/bambi-app/pull/370) | OPEN | vscodereader | feat/native-admin-foundation | feat(native): 운영자 매뉴얼 목차·표·링크 열람 구현 | 본인 |
 | [#371](https://github.com/beyondsoft-kr/bambi-app/pull/371) | OPEN | vscodereader | feat/native-admin-foundation | feat(native): 운영자 크롤링·수집 콘텐츠·이미지 편집 구현 | 본인 |
+| [#379](https://github.com/beyondsoft-kr/bambi-app/pull/379) | OPEN | vscodereader | mobile | feat(native): 구직자 수다방 전체 기능 연결 | 본인 |
+| [#380](https://github.com/beyondsoft-kr/bambi-app/pull/380) | OPEN | vscodereader | mobile | feat(native): 구직자 고객센터와 상담 채팅 연결 | 본인 |
+| [#381](https://github.com/beyondsoft-kr/bambi-app/pull/381) | OPEN | vscodereader | mobile | feat(native): 구직자 공고 탐색과 포인트 기능 확장 | 본인 |
+| [#382](https://github.com/beyondsoft-kr/bambi-app/pull/382) | OPEN | vscodereader | mobile | feat(native): 구직자 공고 상세와 후기 열람 안전 흐름 연결 | 본인 |
+| [#383](https://github.com/beyondsoft-kr/bambi-app/pull/383) | OPEN | vscodereader | mobile | feat(native): 구직자 채팅 상태와 면접 정보 동등성 구현 | 본인 |
+| [#384](https://github.com/beyondsoft-kr/bambi-app/pull/384) | OPEN | vscodereader | mobile | feat(native): 구직자 계정 상태와 이용 안내 경험 구현 | 본인 |
+| [#385](https://github.com/beyondsoft-kr/bambi-app/pull/385) | OPEN | vscodereader | mobile | docs(native): 원격 푸시 알림 구현 보류 조건 정리 | 본인 |

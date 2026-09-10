@@ -2619,3 +2619,15 @@
 | `e4ee86c1c352e534e4d36d41e8ec88a6b1547200` | 2026-06-12T17:42:50+09:00 | dev | docs: add bambi mvp design | 팀/미분류 |
 | `cf4bf4d07341dc39dce0c183fce194dee5b4fe78` | 2026-06-12T14:47:52+09:00 | dev | chore: biome 설정 파일 수정 및 예외 경로 추가 | 팀/미분류 |
 | `36d3870ffa583707951f3c92d1b6c93a9341b6ae` | 2026-06-12T14:45:04+09:00 | dev | 프로젝트 초기화 | 팀/미분류 |
+
+
+## 2026-09-10 후속 PR 커밋
+
+- `fe75ea7315c455e37e74cb9de4184be5836d85c5` — feat(native): 구직자 수다방 전체 기능 연결 — PR #379
+- `5d877f55e3e28fcb6e269adda13c3a572fc3b79d` — feat(native): 구직자 고객센터와 상담 채팅 연결 — PR #380
+- `450f26404c9f26c1bfe15a17eeff6ecdadf6a53e` — feat(native): 구직자 공고 탐색과 포인트 기능 확장 — PR #381
+- `efae17f25140f74d535ea347f5fcda974bd9ac1b` — feat(native): 구직자 공고 상세와 후기 열람 안전 흐름 연결 — PR #382
+- `127d07957b63999582029e6c1c5ed3266dd186b7` — feat(native): 구직자 채팅 상태와 면접 정보 동등성 구현 — PR #383
+- `b9e88fa7d7d2655c795cc6085386ee9599049c1e` — fix(db): presence migration 파일 끝 공백 제거 — PR #383
+- `af0ec13cf6f92ae4818f397f1aea14a4c5bc6e37` — feat(native): 구직자 계정 상태와 이용 안내 경험 구현 — PR #384
+- `3bacf5e33bc3447f9de60651916e7f7f00a4e41a` — docs(native): 원격 푸시 알림 보류 설계 기록 — PR #385

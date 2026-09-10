@@ -90,3 +90,14 @@
 - 2026-09-09 · [feat(native): 운영자 사이트 설정 섹션별 저장 구현](prs/369.md) · OPEN · vscodereader
 - 2026-09-09 · [feat(native): 운영자 매뉴얼 목차·표·링크 열람 구현](prs/370.md) · OPEN · vscodereader
 - 2026-09-09 · [feat(native): 운영자 크롤링·수집 콘텐츠·이미지 편집 구현](prs/371.md) · OPEN · vscodereader
+
+
+## 2026-09-10 후속 PR 등록
+
+- [#379 feat(native): 구직자 수다방 전체 기능 연결](prs/379.md) — OPEN
+- [#380 feat(native): 구직자 고객센터와 상담 채팅 연결](prs/380.md) — OPEN
+- [#381 feat(native): 구직자 공고 탐색과 포인트 기능 확장](prs/381.md) — OPEN
+- [#382 feat(native): 구직자 공고 상세와 후기 열람 안전 흐름 연결](prs/382.md) — OPEN
+- [#383 feat(native): 구직자 채팅 상태와 면접 정보 동등성 구현](prs/383.md) — OPEN
+- [#384 feat(native): 구직자 계정 상태와 이용 안내 경험 구현](prs/384.md) — OPEN
+- [#385 docs(native): 원격 푸시 알림 구현 보류 조건 정리](prs/385.md) — OPEN
