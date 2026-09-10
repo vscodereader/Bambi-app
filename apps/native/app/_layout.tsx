@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
+import { MainPopupLayer } from "@/src/components/main-popup-layer";
 import { NotificationStreamGate } from "@/src/components/notification-stream-gate";
 import { queryClient } from "@/src/lib/orpc";
 
@@ -26,6 +27,7 @@ function StackLayout() {
 				options={{ headerBackTitle: "로그인", title: "회원가입" }}
 			/>
 			<Stack.Screen name="onboarding" options={{ title: "프로필 설정" }} />
+			<Stack.Screen name="feature-guide" options={{ headerShown: false }} />
 			<Stack.Screen name="(seeker)" options={{ headerShown: false }} />
 			<Stack.Screen name="(employer)" options={{ headerShown: false }} />
 			<Stack.Screen name="(moderator)" options={{ headerShown: false }} />
@@ -41,6 +43,7 @@ export default function Layout() {
 					<AppThemeProvider>
 						<HeroUINativeProvider>
 							<NotificationStreamGate />
+							<MainPopupLayer />
 							<StackLayout />
 						</HeroUINativeProvider>
 					</AppThemeProvider>

@@ -19,6 +19,7 @@ import { authClient } from "@/lib/auth-client";
 import { isIdentityVerificationConfigured } from "@/src/components/identity-verification-modal";
 import { type SignupSubmitValues, validateSignupInput } from "./bambi-native";
 import { clearGuestToken } from "./guest-store";
+import { signupSuccessRoute } from "./onboarding-guide";
 import { client, queryClient } from "./orpc";
 import {
 	identityErrorMessage,
@@ -206,7 +207,7 @@ export function useSignup() {
 		queryClient.clear();
 		// login이 스택 아래에 남으면 홈에서 뒤로가기 시 노출된다 — 스택을 비운다.
 		router.dismissAll();
-		router.replace("/" as Href);
+		router.replace(signupSuccessRoute(values.role) as Href);
 		return null;
 	};
 
