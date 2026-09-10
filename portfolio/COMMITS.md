@@ -13,45 +13,45 @@
 | `a03e758e21ccb0a93e4fee0982582ffc4f5fb649` | 2026-09-10T14:31:03+09:00 | vscodereader | archive: preserve uncommitted worktree snapshot (environment files excluded) | 확인 계정 |
 | `63dedb06686cecdc2a07d948deb3dc19dac4ea86` | 2026-09-10T14:31:01+09:00 | vscodereader | archive: preserve uncommitted worktree snapshot (environment files excluded) | 확인 계정 |
 | `b2fafc323b7213b9db1dd558a3589c1c9b089c5f` | 2026-09-10T14:30:56+09:00 | vscodereader | archive: preserve uncommitted worktree snapshot (environment files excluded) | 확인 계정 |
-| `61075646987621380112313f89174c1ad55717bf` | 2026-09-09T08:51:40Z | 최성원 | Merge 3be93a24dbc7268c19dcfa3b3923b007fd5e7a25 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `82bf6249f4c40517d29a5b52357849298604b8a6` | 2026-09-09T08:51:38Z | 최성원 | Merge 757c91abb3aaba2dedd9c8d0f6058a3b03f04871 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `61075646987621380112313f89174c1ad55717bf` | 2026-09-09T08:51:40Z | 최성원 | Merge 3be93a24dbc7268c19dcfa3b3923b007fd5e7a25 into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
+| `82bf6249f4c40517d29a5b52357849298604b8a6` | 2026-09-09T08:51:38Z | 최성원 | Merge 757c91abb3aaba2dedd9c8d0f6058a3b03f04871 into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `3be93a24dbc7268c19dcfa3b3923b007fd5e7a25` | 2026-09-09T17:51:36+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-crawler-review | 확인 계정 |
-| `a3c0f7bb1403e2b177fec646c1a38540a00dcd77` | 2026-09-09T08:51:34Z | 최성원 | Merge 36d652a129ec7b439b21f6ba84114bd6820abba1 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `a3c0f7bb1403e2b177fec646c1a38540a00dcd77` | 2026-09-09T08:51:34Z | 최성원 | Merge 36d652a129ec7b439b21f6ba84114bd6820abba1 into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `757c91abb3aaba2dedd9c8d0f6058a3b03f04871` | 2026-09-09T17:51:33+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-manual-review | 확인 계정 |
-| `f2ce77dfd8adda7190c9b2c04420dc64a1e5d595` | 2026-09-09T08:51:31Z | 최성원 | Merge 04cffa93935680ae758bd1310635ea6d588f6bbb into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `f2ce77dfd8adda7190c9b2c04420dc64a1e5d595` | 2026-09-09T08:51:31Z | 최성원 | Merge 04cffa93935680ae758bd1310635ea6d588f6bbb into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `36d652a129ec7b439b21f6ba84114bd6820abba1` | 2026-09-09T17:51:30+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-site-settings-review | 확인 계정 |
-| `63fdf942fba4c5936357fb101979c0898f330d76` | 2026-09-09T08:51:28Z | 최성원 | Merge 241f2a8b331d267991ef58dcb00464993d3dad7e into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `63fdf942fba4c5936357fb101979c0898f330d76` | 2026-09-09T08:51:28Z | 최성원 | Merge 241f2a8b331d267991ef58dcb00464993d3dad7e into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `04cffa93935680ae758bd1310635ea6d588f6bbb` | 2026-09-09T17:51:27+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-popups-review | 확인 계정 |
-| `950f4e42a3cb5b00c1055af67ca13b915a310844` | 2026-09-09T08:51:25Z | 최성원 | Merge 74481a2c1342b2ad713b78ebdad48f8858598214 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `950f4e42a3cb5b00c1055af67ca13b915a310844` | 2026-09-09T08:51:25Z | 최성원 | Merge 74481a2c1342b2ad713b78ebdad48f8858598214 into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `241f2a8b331d267991ef58dcb00464993d3dad7e` | 2026-09-09T17:51:24+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-reviews-review | 확인 계정 |
-| `c73ea6f26fb3f4aaf81c15de918cdf369c132d11` | 2026-09-09T08:51:22Z | 최성원 | Merge 623e04f3eb578c05539d6d2a12a21d0b06190f9f into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `c73ea6f26fb3f4aaf81c15de918cdf369c132d11` | 2026-09-09T08:51:22Z | 최성원 | Merge 623e04f3eb578c05539d6d2a12a21d0b06190f9f into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `74481a2c1342b2ad713b78ebdad48f8858598214` | 2026-09-09T17:51:21+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-banned-words-review | 확인 계정 |
-| `c30a80b2010ffd92b4c6211e539048f9e4211a11` | 2026-09-09T08:51:19Z | 최성원 | Merge bfd59028624dbf7c76b40b8e548f1ad199e3e8de into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `c30a80b2010ffd92b4c6211e539048f9e4211a11` | 2026-09-09T08:51:19Z | 최성원 | Merge bfd59028624dbf7c76b40b8e548f1ad199e3e8de into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `623e04f3eb578c05539d6d2a12a21d0b06190f9f` | 2026-09-09T17:51:18+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-support-chats-review | 확인 계정 |
-| `82692953275d7793fbf4f27c00d6510884559045` | 2026-09-09T08:51:16Z | 최성원 | Merge 862b34c2831018db9041ad571647edc9f1788173 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `82692953275d7793fbf4f27c00d6510884559045` | 2026-09-09T08:51:16Z | 최성원 | Merge 862b34c2831018db9041ad571647edc9f1788173 into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `bfd59028624dbf7c76b40b8e548f1ad199e3e8de` | 2026-09-09T17:51:15+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-faq-review | 확인 계정 |
-| `4b162fdc30388530ef8b6c40f94ea369369a6b83` | 2026-09-09T08:51:13Z | 최성원 | Merge 0ebb48e8b27af2cbb741cbf2272eeab85f27c3ef into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `4b162fdc30388530ef8b6c40f94ea369369a6b83` | 2026-09-09T08:51:13Z | 최성원 | Merge 0ebb48e8b27af2cbb741cbf2272eeab85f27c3ef into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `862b34c2831018db9041ad571647edc9f1788173` | 2026-09-09T17:51:12+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-community-boards-review | 확인 계정 |
-| `4a5e773925127cb74190b70d176348eb17e6cd82` | 2026-09-09T08:51:09Z | 최성원 | Merge 3ffe5d370af01103f0136e06b18fbd160f7ed0dd into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `4a5e773925127cb74190b70d176348eb17e6cd82` | 2026-09-09T08:51:09Z | 최성원 | Merge 3ffe5d370af01103f0136e06b18fbd160f7ed0dd into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `0ebb48e8b27af2cbb741cbf2272eeab85f27c3ef` | 2026-09-09T17:51:08+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-content-review | 확인 계정 |
 | `3ffe5d370af01103f0136e06b18fbd160f7ed0dd` | 2026-09-09T17:51:05+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-ad-products-review | 확인 계정 |
-| `37578dd241bb9c14db12425652d10063150e0e37` | 2026-09-09T08:51:05Z | 최성원 | Merge 6c0137a4c3fb296f6c7fe6205ed225dc60177642 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `762bb4239356b9b7b1c3187fb0b32468b595a680` | 2026-09-09T08:51:03Z | 최성원 | Merge 2198043888aeae34c56434c53fb1e9a5f8d6bd4c into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `37578dd241bb9c14db12425652d10063150e0e37` | 2026-09-09T08:51:05Z | 최성원 | Merge 6c0137a4c3fb296f6c7fe6205ed225dc60177642 into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
+| `762bb4239356b9b7b1c3187fb0b32468b595a680` | 2026-09-09T08:51:03Z | 최성원 | Merge 2198043888aeae34c56434c53fb1e9a5f8d6bd4c into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `6c0137a4c3fb296f6c7fe6205ed225dc60177642` | 2026-09-09T17:51:02+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-attendance-review | 확인 계정 |
-| `d0449204292cf82ffc8bdb0a9142bf8a6a1a6e0e` | 2026-09-09T08:51:00Z | 최성원 | Merge 1cc43a6cd1fd25491e74ff219c5729514193617b into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `d0449204292cf82ffc8bdb0a9142bf8a6a1a6e0e` | 2026-09-09T08:51:00Z | 최성원 | Merge 1cc43a6cd1fd25491e74ff219c5729514193617b into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `2198043888aeae34c56434c53fb1e9a5f8d6bd4c` | 2026-09-09T17:50:58+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-approvals-review | 확인 계정 |
-| `ae8e1111efdcbe78d3b6ff15f80b0b3b376eb4d4` | 2026-09-09T08:50:56Z | 최성원 | Merge 9202f7c2d2b3d033d7b96e710348abb87327e327 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `ae8e1111efdcbe78d3b6ff15f80b0b3b376eb4d4` | 2026-09-09T08:50:56Z | 최성원 | Merge 9202f7c2d2b3d033d7b96e710348abb87327e327 into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `1cc43a6cd1fd25491e74ff219c5729514193617b` | 2026-09-09T17:50:55+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-chats-review | 확인 계정 |
-| `037b1cba3606ce791969872f10651f85fbe00530` | 2026-09-09T08:50:53Z | 최성원 | Merge 1fd06e9f5804dbbc9df89e262963a932ea2631b1 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `037b1cba3606ce791969872f10651f85fbe00530` | 2026-09-09T08:50:53Z | 최성원 | Merge 1fd06e9f5804dbbc9df89e262963a932ea2631b1 into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `9202f7c2d2b3d033d7b96e710348abb87327e327` | 2026-09-09T17:50:52+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-jobs-review | 확인 계정 |
-| `1ad8fcf6627ccf7cff533f6465709be0586bdfc8` | 2026-09-09T08:50:50Z | 최성원 | Merge 7c15b5c7e2920c2d29c65ec044a793419890193a into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `1ad8fcf6627ccf7cff533f6465709be0586bdfc8` | 2026-09-09T08:50:50Z | 최성원 | Merge 7c15b5c7e2920c2d29c65ec044a793419890193a into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `1fd06e9f5804dbbc9df89e262963a932ea2631b1` | 2026-09-09T17:50:49+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-messages-review | 확인 계정 |
 | `7c15b5c7e2920c2d29c65ec044a793419890193a` | 2026-09-09T17:50:46+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-users-review | 확인 계정 |
-| `6315b6c3974dc4b1fe779b0818813f379b5fd6e7` | 2026-09-09T08:50:46Z | 최성원 | Merge 72d20b8c1e2614ded2607dfb158d2cbdc7e8cb0b into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `158509752560cd8fed1a4ca54728b45c6d3ab25a` | 2026-09-09T08:50:43Z | 최성원 | Merge 4bdd448eef7414198c2913935f0dff3071f6737b into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
+| `6315b6c3974dc4b1fe779b0818813f379b5fd6e7` | 2026-09-09T08:50:46Z | 최성원 | Merge 72d20b8c1e2614ded2607dfb158d2cbdc7e8cb0b into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
+| `158509752560cd8fed1a4ca54728b45c6d3ab25a` | 2026-09-09T08:50:43Z | 최성원 | Merge 4bdd448eef7414198c2913935f0dff3071f6737b into 868f55b817a5b042151dc9519c4423334c0764ad | 확인 계정 |
 | `72d20b8c1e2614ded2607dfb158d2cbdc7e8cb0b` | 2026-09-09T17:50:42+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-reports-review | 확인 계정 |
 | `4bdd448eef7414198c2913935f0dff3071f6737b` | 2026-09-09T17:50:39+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-review-queue-review | 확인 계정 |
-| `ac5ccbc0c64172ce43dfdf6a89e36aed6e504ae1` | 2026-09-09T08:50:26Z | 최성원 | Merge 868f55b817a5b042151dc9519c4423334c0764ad into 64c110185d22c761697a949906133c184c4bf549 | 팀/미분류 |
+| `ac5ccbc0c64172ce43dfdf6a89e36aed6e504ae1` | 2026-09-09T08:50:26Z | 최성원 | Merge 868f55b817a5b042151dc9519c4423334c0764ad into 64c110185d22c761697a949906133c184c4bf549 | 확인 계정 |
 | `868f55b817a5b042151dc9519c4423334c0764ad` | 2026-09-09T17:50:22+09:00 | 최성원 | refactor: 운영자 편집기·신규 라우터 공통 의존성 정리 | 확인 계정 |
 | `808991678dbbf8013d8a0de8b11ab8f42278a78a` | 2026-09-09T17:47:02+09:00 | 최성원 | feat(native): 운영자 크롤링·수집 콘텐츠·이미지 편집 구현 | 확인 계정 |
 | `4bd232b4ccc652af1da44854e7eccdeada6bbe30` | 2026-09-09T17:46:59+09:00 | 최성원 | feat(native): 운영자 매뉴얼 목차·표·링크 열람 구현 | 확인 계정 |
@@ -93,7 +93,7 @@
 | `427cab3d0b293bd9b1427a6493385da30e8953fc` | 2026-09-09T17:34:09+09:00 | 최성원 | feat(native): 운영자 공고 검수 상세·감지 문구 강조 | 확인 계정 |
 | `48f1eef61d4b12c3e70078a4e3a168ef62987736` | 2026-09-09T17:32:02+09:00 | 최성원 | feat: 운영자 기능 공통 API 계약·DB 스키마 확장 | 확인 계정 |
 | `986fb8def7485814c51aa45724f0f02f609ca51b` | 2026-09-09T17:26:42+09:00 | 최성원 | feat(native): 운영자 콘솔 공통 셸·다이얼로그·SAF 파일 저장 기반 | 확인 계정 |
-| `aae8f85fd448ed03d93e9682be16e26aa09debc3` | 2026-09-08T15:19:41+09:00 | 최성원 | Merge 93aca8cbb2cdd059ba43dccdaa36f8206c196c7c into e6b3d38b69d2f960b8b64c7bcf2bbe8aa1a9c754 | 팀/미분류 |
+| `aae8f85fd448ed03d93e9682be16e26aa09debc3` | 2026-09-08T15:19:41+09:00 | 최성원 | Merge 93aca8cbb2cdd059ba43dccdaa36f8206c196c7c into e6b3d38b69d2f960b8b64c7bcf2bbe8aa1a9c754 | 확인 계정 |
 | `93aca8cbb2cdd059ba43dccdaa36f8206c196c7c` | 2026-09-08T15:19:13+09:00 | 최성원 | fix(web): 비회원 본인인증을 회원가입에서 재사용 | 확인 계정 |
 | `d204a124720e4943c7ade1902155c5e7b1716fe3` | 2026-09-07T19:48:00+09:00 | HyeonJun Choi | Merge eb44b049f45df2b364b19ade304049f0ec76bc07 into 64c110185d22c761697a949906133c184c4bf549 | 팀/미분류 |
 | `eb44b049f45df2b364b19ade304049f0ec76bc07` | 2026-09-07T19:47:01+09:00 | HyeonJun | fix(native): 운영 필터 칩 행이 세로 flex를 차지·눌리던 문제 수정 | 팀/미분류 |
@@ -433,7 +433,7 @@
 | `69a47f69ce5e2040373be4c3456a64527bd3f75f` | 2026-08-27T09:41:31+09:00 | HyeonJun Choi | Merge f07361f039ebb5ba12c760ac055fab17548a94f3 into e66e06edcc905ba5772bb6da5562ef76bcbb6378 | 팀/미분류 |
 | `e66e06edcc905ba5772bb6da5562ef76bcbb6378` | 2026-08-27T09:37:16+09:00 | beyondsoft-dev | Merge pull request #260 from beyondsoft-kr/fix/table-selection-search-control-layout | 팀/미분류 |
 | `9688bcd4090280d6da80a417e5715cda627cf337` | 2026-08-27T09:25:18+09:00 | 최성원 | refactor: 안전 UI의 14px 반경 하드코딩을 디자인 토큰으로 치환 | 확인 계정 |
-| `937b00cc3abdb46fb952c0e07041e3573831e39d` | 2026-08-26T08:05:04Z | 최성원 | Merge f898f666b2e4c69bc6d511671efaab068ce27170 into 1f17ea97fdfa6a92e8afe79e45c8bc9eb94ebd54 | 팀/미분류 |
+| `937b00cc3abdb46fb952c0e07041e3573831e39d` | 2026-08-26T08:05:04Z | 최성원 | Merge f898f666b2e4c69bc6d511671efaab068ce27170 into 1f17ea97fdfa6a92e8afe79e45c8bc9eb94ebd54 | 확인 계정 |
 | `f898f666b2e4c69bc6d511671efaab068ce27170` | 2026-08-26T17:04:50+09:00 | vscodereader | fix: 포인트몰 상품 등록·카테고리 관리 UX 정리 | 확인 계정 |
 | `a16308807cccf54907f9d19bb2f389e672d83bf4` | 2026-08-26T17:00:04+09:00 | vscodereader | merge: 최신 develop 반영 및 migration 체인 재정렬 | 확인 계정 |
 | `216155a44b3aa9e8edda24f81170f7212443c818` | 2026-08-26T16:48:33+09:00 | 최성원 | fix: 공고 검수 상세 카드 헤더 기준선 정렬 | 확인 계정 |
@@ -443,7 +443,7 @@
 | `29ac0766f2a5595ac9df727954baa7dc7853c9e2` | 2026-08-26T15:22:54+09:00 | 최성원 | docs: 사용자 선택 열·검색 버튼·모바일 신고창 분리 계획 작성 | 확인 계정 |
 | `165271b91188e0dc83bbdade8cd56b049b058528` | 2026-08-26T15:18:45+09:00 | HyeonJun | merge: SEO Phase B — 가이드 15편 체제·board 커뮤니티 진입점화 - 가이드 클러스터 5편→15편 확장(밤알바 필러·급여 정산·룸싸롱 페이백·안전·등급 비교·면접·노래방·마사지·강남 룸알바·용어사전), 업종→가이드 매핑 정확 매칭 갱신 - /board 허브 "밤알바 커뮤니티" 진입점화와 가이드 허브 상호링크 - 가드 테스트 15편 확장, 교차 중복 문단·문장 정리(ultracite 0건·tsc·web 테스트 90건 통과) Co-Authored-By: Claude Fable 5 <noreply@anthropic.com> | 팀/미분류 |
 | `b7f32c5f42d045555d89253215c9b772d8d39f05` | 2026-08-26T15:18:08+09:00 | HyeonJun | feat: SEO Phase B — 가이드 10편 확장·board 커뮤니티 진입점화 - 가이드 클러스터를 5편→15편으로 확장: 밤알바 종류(헤드 필러)·밤알바 급여 정산(시급·일급·TC·페이백·마이킹 구조, 수치 금지)·룸싸롱 페이백(조건 유형·함정 5·분쟁 대처)·밤알바 안전(허위 공고 패턴·선불금·1350/112 공적 창구)·유흥알바 등급 비교(텐프로·쩜오·일반 룸)·밤알바 면접(체크리스트·위험 신호)·노래방알바(일반 노래방 카운터와 노래주점 접객 구분 축)·마사지알바(합법 등록 매장 한정·건전 업소 판별)·강남 룸알바(상권별 특징, 업소명 금지)·밤알바 용어사전(정산·근무·호칭·공고 표현), 각 1,123~1,263어절·첫 문단 40~60어절 직답·FAQ 4 - 계획의 "여우알바 뜻" 편은 본문 경쟁사명 금지 가드와 충돌해 용어사전 편으로 대체(브랜드 쿼리는 이미 1페이지) - 업종→가이드 매핑을 정확 매칭으로 갱신: karaoke-bar→noraebang-alba, room-salon→room-salon-payback, massage→massage-alba 신설 — 칩 렌더 변경 없이 단일값 구조 유지 - /board 허브를 "밤알바 커뮤" 쿼리(현 50위) 진입점화: title 선두·SSR 표제에 "밤알바 커뮤니티" 정확 문구, 가이드 허브↔board 상호링크 - 가드 테스트 15편 순회로 확장(카운트 5→15), 검증서 발견한 교차 중복 정리 — 노래방·마사지 편의 텐프로 편 문단 재사용(major)은 업종 특화 서술로 전면 재작성, 잔여 완전 동일 문장 5건(bam-alba·gangnam·interview)과 "무조건" 표현도 신규 문장으로 교체 - 검증: ultracite 0건·tsc 통과·web 테스트 90건 통과. community-board-navigation.test.ts 1건 실패는 이번 변경과 무관한 브랜치 기저 기존 실패로 확인 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com> | 팀/미분류 |
-| `d47befdbcd7e4bedc5088aaa605073309f4674c4` | 2026-08-26T06:13:10Z | 최성원 | Merge 5389080c60493b0070a0de6dc9e52b704d8da90a into 1f17ea97fdfa6a92e8afe79e45c8bc9eb94ebd54 | 팀/미분류 |
+| `d47befdbcd7e4bedc5088aaa605073309f4674c4` | 2026-08-26T06:13:10Z | 최성원 | Merge 5389080c60493b0070a0de6dc9e52b704d8da90a into 1f17ea97fdfa6a92e8afe79e45c8bc9eb94ebd54 | 확인 계정 |
 | `5389080c60493b0070a0de6dc9e52b704d8da90a` | 2026-08-26T15:13:05+09:00 | 최성원 | refactor: 비색상 UI 배치 변경을 별도 브랜치로 분리 | 확인 계정 |
 | `6762cb6795e009ce2d5d609b997fbb18a5ffc7d1` | 2026-08-26T15:03:12+09:00 | 최성원 | fix: 사용자 관리 체크박스 열 좌측 여백 보강 | 확인 계정 |
 | `681f71fe23a8aefc50fd6339769ae413d3b0ac57` | 2026-08-26T15:01:18+09:00 | 최성원 | fix: 헤더 검색 버튼을 공통 아이콘 크기로 통일 | 확인 계정 |
