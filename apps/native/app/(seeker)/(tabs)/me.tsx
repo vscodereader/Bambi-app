@@ -33,6 +33,7 @@ import { orpc, queryClient } from "@/src/lib/orpc";
 
 const MESSAGES_HREF = "/(seeker)/me/messages" as Href;
 const SETTINGS_HREF = "/(seeker)/me/settings" as Href;
+const SUPPORT_HREF = "/(seeker)/support" as Href;
 
 // 프로필 아이덴티티 카드 — 표시명 정본은 세션 user.name(웹과 동일 규칙),
 // 역할·본인인증 여부는 onboarding.getMine의 bambiProfile에서 온다.
@@ -251,6 +252,12 @@ const MY_PAGE_ITEMS: MenuItem[] = [
 		href: MESSAGES_HREF,
 		icon: "mail-outline" as const,
 		label: "쪽지함",
+	},
+	{
+		description: "자주 묻는 질문과 1:1 문의를 확인해요.",
+		href: SUPPORT_HREF,
+		icon: "help-circle-outline" as const,
+		label: "고객센터",
 	},
 	{
 		description: "표시 이름·본인인증을 관리해요.",
