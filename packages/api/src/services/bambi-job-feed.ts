@@ -195,6 +195,9 @@ export interface JobFeedInput {
 	industryCategory?: JobIndustryCategory;
 	limit: number;
 	minPayAmount?: number;
+	onlyBeginnerFriendly?: boolean;
+	onlyToday?: boolean;
+	onlyVerified?: boolean;
 	regionCode?: string;
 }
 
@@ -239,6 +242,12 @@ const jobPostFeedConditions = (input: JobFeedInput): SQL[] => {
 			minHourlyPayFilter(input.minPayAmount, jobPost.payAmount, jobPost.payUnit)
 		);
 	}
+	if (input.onlyBeginnerFriendly) {
+		conditions.push(eq(jobPost.beginnerFriendly, true));
+	}
+	if (input.onlyToday) {
+		conditions.push(eq(jobPost.instantInterview, true));
+	}
 
 	return conditions;
 };
@@ -268,6 +277,9 @@ const crawledJobFeedConditions = (
 		// 두 번 걸리고, 지원·채팅이 되는 쪽과 안 되는 쪽이 나란히 서게 된다.
 		sql`not exists (select 1 from ${jobPost} where ${jobPost.crawledFromId} = ${crawledJobPost.id})`,
 	];
+	if (input.onlyBeginnerFriendly || input.onlyToday || input.onlyVerified) {
+		conditions.push(sql`false`);
+	}
 
 	if (input.industryCategory) {
 		conditions.push(

@@ -1,3 +1,4 @@
+import { shouldShowHitRibbon } from "@bambi-app/api/services/bambi-job-hit";
 import { Ionicons } from "@expo/vector-icons";
 import {
 	keepPreviousData,
@@ -5,7 +6,7 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import { useNetworkState } from "expo-network";
-import { type Href, Link } from "expo-router";
+import { type Href, router } from "expo-router";
 import {
 	Button,
 	Chip,
@@ -33,6 +34,8 @@ import {
 } from "react-native";
 import { StateCard } from "@/src/components/bambi-screen";
 import { JobListCard } from "@/src/components/job-list-card";
+import { MarketplaceFilterSheet } from "@/src/components/seeker/marketplace-filter-sheet";
+import { PremiumBannerSection } from "@/src/components/seeker/premium-banner-section";
 import {
 	buildSeekerJobSections,
 	describeJobForScreenReader,
@@ -42,6 +45,12 @@ import {
 	type NativeSeekerJob,
 } from "@/src/lib/bambi-native";
 import { orpc } from "@/src/lib/orpc";
+import {
+	DEFAULT_NATIVE_MARKETPLACE_FILTERS,
+	marketplaceFilterInput,
+	type NativeMarketplaceFilters,
+} from "@/src/lib/seeker/marketplace-filters";
+import { usePointJobReward } from "@/src/lib/seeker/use-point-job-reward";
 
 const JOB_PAGE_SIZE = 20;
 // 스켈레톤은 순서가 바뀌지 않지만 인덱스를 key로 쓰지 않으려고 고정 키를 둔다.
@@ -135,6 +144,8 @@ function SeekerListHeader({
 	industry,
 	isFilterPending,
 	isOffline,
+	filters,
+	onApplyFilters,
 	onRefetch,
 	onSelectIndustry,
 	showStaleBanner,
@@ -143,6 +154,8 @@ function SeekerListHeader({
 	industry: null | NativeIndustryOption;
 	isFilterPending: boolean;
 	isOffline: boolean;
+	filters: NativeMarketplaceFilters;
+	onApplyFilters: (value: NativeMarketplaceFilters) => void;
 	onRefetch: () => void;
 	onSelectIndustry: (option: null | NativeIndustryOption) => void;
 	showStaleBanner: boolean;
@@ -156,6 +169,9 @@ function SeekerListHeader({
 					</Text>
 				)}
 				{isFilterPending ? <Spinner size="sm" /> : null}
+				<View className="ml-auto">
+					<MarketplaceFilterSheet onApply={onApplyFilters} value={filters} />
+				</View>
 			</View>
 			{isOffline ? (
 				<NoticeBanner
@@ -175,6 +191,7 @@ function SeekerListHeader({
 				/>
 			) : null}
 			<IndustryChipRail industry={industry} onSelect={onSelectIndustry} />
+			<PremiumBannerSection />
 		</View>
 	);
 }
@@ -225,6 +242,12 @@ function JobRow({
 	job: NativeSeekerJob;
 	sectionKey: NativeJobSectionKey;
 }) {
+	const rewardCategory = sectionKey === "special" ? "special" : "recommended";
+	const reward = usePointJobReward({
+		category: rewardCategory,
+		targetId: job.id,
+		targetSource: job.source === "crawled" ? "crawled_job_post" : "job_post",
+	});
 	// 카드에서 당일면접·인증완료 Pill을 걷어냈으므로 스크린리더 낭독에서도 뺀다(badges=[]).
 	// 대신 유료 카드에 보이는 누적 광고 등급을 웹처럼 "광고 N회 · 누적 N일"로 덧붙인다 —
 	// 카드 본문은 부모가 접근성 트리에서 숨기므로 이 라벨이 배지 의미를 대신 전달한다.
@@ -243,16 +266,41 @@ function JobRow({
 
 	return (
 		<View className="px-4 pb-3">
-			<Link asChild href={href}>
-				<Pressable
-					accessibilityLabel={accessibilityLabel}
-					accessibilityRole="button"
-					accessible
-					className="rounded-2xl active:opacity-75"
-				>
+			<Pressable
+				accessibilityLabel={accessibilityLabel}
+				accessibilityRole="button"
+				accessible
+				className="rounded-2xl active:opacity-75"
+				disabled={reward.isPending}
+				onPress={() => {
+					if (
+						reward.points > 0 &&
+						(sectionKey === "special" || sectionKey === "recommended")
+					) {
+						reward.claim();
+					}
+					router.push(href);
+				}}
+			>
+				<View>
+					{reward.points > 0 &&
+					(sectionKey === "special" || sectionKey === "recommended") ? (
+						<View className="absolute top-2 left-2 z-10 rounded-full bg-accent px-2 py-1">
+							<Text className="font-bold text-accent-foreground text-xs">
+								POINT
+							</Text>
+						</View>
+					) : null}
+					{shouldShowHitRibbon(job.performance, sectionKey) ? (
+						<View className="absolute top-2 right-2 z-10 rounded-full bg-accent px-2 py-1">
+							<Text className="font-bold text-accent-foreground text-xs">
+								HIT
+							</Text>
+						</View>
+					) : null}
 					<JobListCard job={job} sectionKey={sectionKey} />
-				</Pressable>
-			</Link>
+				</View>
+			</Pressable>
 		</View>
 	);
 }
@@ -381,7 +429,8 @@ function SeekerListFooter({
 
 export default function SeekerHomeScreen() {
 	const listRef = useRef<SectionList<NativeSeekerJob, JobSection>>(null);
-	const [industry, setIndustry] = useState<null | NativeIndustryOption>(null);
+	const [filters, setFilters] = useState(DEFAULT_NATIVE_MARKETPLACE_FILTERS);
+	const industry = filters.industry;
 	const accentColor = useThemeColor("accent");
 	const networkState = useNetworkState();
 	const configQuery = useQuery(
@@ -392,7 +441,7 @@ export default function SeekerHomeScreen() {
 			getNextPageParam: (lastPage) => lastPage.nextOrganicOffset ?? undefined,
 			initialPageParam: undefined as OrganicOffset | undefined,
 			input: (pageParam) => ({
-				industryCategory: industry ?? undefined,
+				...marketplaceFilterInput(filters),
 				limit: JOB_PAGE_SIZE,
 				organicOffset: pageParam,
 			}),
@@ -441,7 +490,7 @@ export default function SeekerHomeScreen() {
 	};
 
 	const selectIndustry = (option: null | NativeIndustryOption) => {
-		setIndustry(option);
+		setFilters((current) => ({ ...current, industry: option }));
 		// scrollToLocation은 빈 섹션에서 throw하므로 스크롤 응답자를 직접 쓴다.
 		listRef.current?.getScrollResponder()?.scrollTo({ animated: true, y: 0 });
 	};
@@ -501,9 +550,16 @@ export default function SeekerHomeScreen() {
 				ListHeaderComponent={
 					<SeekerListHeader
 						availableCount={availableCount}
+						filters={filters}
 						industry={industry}
 						isFilterPending={jobsQuery.isPlaceholderData}
 						isOffline={isOffline}
+						onApplyFilters={(next) => {
+							setFilters(next);
+							listRef.current
+								?.getScrollResponder()
+								?.scrollTo({ animated: true, y: 0 });
+						}}
 						onRefetch={refetchJobs}
 						onSelectIndustry={selectIndustry}
 						showStaleBanner={showStaleBanner}
