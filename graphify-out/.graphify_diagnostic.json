@@ -1,0 +1,201 @@
+{
+  "node_count": 5221,
+  "unverified_node_count": 0,
+  "raw_edge_count": 13473,
+  "non_object_edges": 0,
+  "missing_endpoint_edges": 0,
+  "dangling_endpoint_edges": 1313,
+  "self_loop_edges": 0,
+  "valid_candidate_edges": 12160,
+  "exact_duplicate_edges": 2,
+  "directed_unique_endpoint_pairs": 12118,
+  "directed_same_endpoint_collapsed_edges": 42,
+  "undirected_unique_endpoint_pairs": 12113,
+  "undirected_same_endpoint_collapsed_edges": 47,
+  "same_endpoint_group_count": 40,
+  "relation_variant_groups": 31,
+  "source_file_variant_groups": 0,
+  "source_location_variant_groups": 9,
+  "context_variant_groups": 2,
+  "post_build_graph_type": "Graph",
+  "post_build_node_count": 5221,
+  "post_build_edge_count": 12113,
+  "post_build_error": "",
+  "producer_suppression": {
+    "path": "C:\\Users\\user\\AppData\\Roaming\\uv\\tools\\graphifyy\\Lib\\site-packages\\graphify\\extract.py",
+    "total_sites": 11,
+    "sites": [
+      {
+        "line": 1099,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 1253,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 1255,
+        "name": "seen_doc_refs",
+        "tuple_arity": 0,
+        "sample": "seen_doc_refs: set[str] = set()"
+      },
+      {
+        "line": 1600,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 2069,
+        "name": "seen_keys",
+        "tuple_arity": 0,
+        "sample": "seen_keys: set[tuple] = set()"
+      },
+      {
+        "line": 2228,
+        "name": "seen_keys",
+        "tuple_arity": 0,
+        "sample": "seen_keys: set[tuple] = set()"
+      },
+      {
+        "line": 3272,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3380,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3459,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3974,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3975,
+        "name": "seen_edges",
+        "tuple_arity": 4,
+        "sample": "seen_edges: set[tuple[str, str, str, str | None]] = set()"
+      }
+    ],
+    "error": ""
+  },
+  "examples": [
+    {
+      "source": "apps_web_src_components_bambi_ad_banner_editor_editor_launcher",
+      "target": "apps_web_src_components_bambi_ad_banner_editor_ad_banner_editor",
+      "edge_count": 3,
+      "relations": [
+        "imports_from",
+        "re_exports"
+      ],
+      "source_files": [
+        "apps/web/src/components/bambi/ad-banner-editor/editor-launcher.tsx"
+      ],
+      "source_locations": [
+        "L18",
+        "L30"
+      ],
+      "contexts": [
+        "export",
+        "import",
+        "re-export"
+      ]
+    },
+    {
+      "source": "packages_api_src_services_bambi_crawl_queenalba",
+      "target": "packages_db_src_schema_bambi",
+      "edge_count": 3,
+      "relations": [
+        "imports_from",
+        "re_exports"
+      ],
+      "source_files": [
+        "packages/api/src/services/bambi-crawl-queenalba.ts"
+      ],
+      "source_locations": [
+        "L1",
+        "L7"
+      ],
+      "contexts": [
+        "export",
+        "import",
+        "re-export"
+      ]
+    },
+    {
+      "source": "apps_server_src_index",
+      "target": "apps_server_src_plugins_ai_aiplugin",
+      "edge_count": 2,
+      "relations": [
+        "imports",
+        "indirect_call"
+      ],
+      "source_files": [
+        "apps/server/src/index.ts"
+      ],
+      "source_locations": [
+        "L23",
+        "L3"
+      ],
+      "contexts": [
+        "argument",
+        "import"
+      ]
+    },
+    {
+      "source": "apps_server_src_index",
+      "target": "apps_server_src_plugins_auth_bridge_authbridgeplugin",
+      "edge_count": 2,
+      "relations": [
+        "imports",
+        "indirect_call"
+      ],
+      "source_files": [
+        "apps/server/src/index.ts"
+      ],
+      "source_locations": [
+        "L22",
+        "L4"
+      ],
+      "contexts": [
+        "argument",
+        "import"
+      ]
+    },
+    {
+      "source": "apps_server_src_index",
+      "target": "apps_server_src_plugins_auto_boost_autoboostplugin",
+      "edge_count": 2,
+      "relations": [
+        "imports",
+        "indirect_call"
+      ],
+      "source_files": [
+        "apps/server/src/index.ts"
+      ],
+      "source_locations": [
+        "L25",
+        "L5"
+      ],
+      "contexts": [
+        "argument",
+        "import"
+      ]
+    }
+  ]
+}

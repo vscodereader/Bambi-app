@@ -15,6 +15,7 @@ import {
 } from "../../services/bambi-main-popups";
 
 const countInput = z.object({ count: z.number().int().min(0) });
+const deleteInput = z.object({ id: z.string().uuid() });
 
 const saveInput = z
 	.object({
@@ -141,6 +142,35 @@ export const mainPopupsRouter = {
 		});
 		return { count: input.count };
 	}),
+
+	delete: adminProcedure.input(deleteInput).handler(async ({ input }) =>
+		db.transaction(async (transaction) => {
+			const [removed] = await transaction
+				.delete(mainPopup)
+				.where(eq(mainPopup.id, input.id))
+				.returning({ slotIndex: mainPopup.slotIndex });
+			if (!removed) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "삭제할 팝업을 찾을 수 없습니다.",
+				});
+			}
+			const subsequent = await transaction
+				.select({ id: mainPopup.id, slotIndex: mainPopup.slotIndex })
+				.from(mainPopup)
+				.where(gt(mainPopup.slotIndex, removed.slotIndex))
+				.orderBy(asc(mainPopup.slotIndex));
+			for (const popup of subsequent) {
+				await transaction
+					.update(mainPopup)
+					.set({ slotIndex: popup.slotIndex - 1 })
+					.where(eq(mainPopup.id, popup.id));
+			}
+			const remaining = await transaction
+				.select({ id: mainPopup.id })
+				.from(mainPopup);
+			return { count: remaining.length };
+		})
+	),
 
 	save: adminProcedure.input(saveInput).handler(async ({ context, input }) => {
 		const [existing] = await db

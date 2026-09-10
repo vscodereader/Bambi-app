@@ -1,5 +1,7 @@
 import type { JSONContent } from "@tiptap/react";
 
+const NON_NEGATIVE_INTEGER_PATTERN = /^\d+$/;
+
 export interface PopupImageAsset {
 	dataUrl: string;
 	height: number;
@@ -61,3 +63,22 @@ export const hiddenPopupStorageKey = (id: string) =>
 	`bambi:main-popup:hidden:${id}`;
 
 export const popupLoginTargetStorageKey = "bambi:main-popup:login-target";
+
+export const parseNonNegativeInteger = (value: string): number | null => {
+	if (!NON_NEGATIVE_INTEGER_PATTERN.test(value)) {
+		return null;
+	}
+	const parsed = Number(value);
+	return Number.isSafeInteger(parsed) ? parsed : null;
+};
+
+export const popupSaveErrorMessage = (message: string): string => {
+	const normalized = message.toLowerCase();
+	return normalized.includes("failed to fetch") ||
+		normalized.includes("request body too large") ||
+		normalized.includes("request body is too large") ||
+		normalized.includes("content too large") ||
+		normalized.includes("413")
+		? "이미지 용량이 커서 팝업을 저장할 수 없습니다. 이미지 용량을 줄인 뒤 다시 시도해 주세요."
+		: message || "팝업 설정을 저장하지 못했습니다.";
+};

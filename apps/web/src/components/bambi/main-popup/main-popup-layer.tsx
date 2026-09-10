@@ -116,18 +116,15 @@ export function MainPopupLayer() {
 	};
 	return (
 		<>
-			<div className="pointer-events-none fixed inset-0 z-40 hidden flex-wrap content-start gap-3 overflow-auto p-4 md:flex">
-				{items.map((item) => (
-					<PopupWindow
-						front={frontId === item.id}
-						item={item}
-						key={item.id}
-						onClose={() => close(item.id)}
-						onFocus={() => setFrontId(item.id)}
-						onHide={() => hide(item)}
-						onOpenLink={() => openLink(item.linkPath)}
-					/>
-				))}
+			<div className="pointer-events-none fixed inset-0 z-40 hidden overflow-auto p-4 md:block">
+				<DesktopPopupStack
+					frontId={frontId}
+					items={items}
+					onClose={close}
+					onFocus={setFrontId}
+					onHide={hide}
+					onOpenLink={openLink}
+				/>
 			</div>
 			<div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 md:hidden">
 				<PopupWindow
@@ -140,6 +137,53 @@ export function MainPopupLayer() {
 				/>
 			</div>
 		</>
+	);
+}
+
+function DesktopPopupStack({
+	frontId,
+	items,
+	onClose,
+	onFocus,
+	onHide,
+	onOpenLink,
+}: {
+	frontId: string | null;
+	items: PublicPopup[];
+	onClose: (id: string) => void;
+	onFocus: (id: string) => void;
+	onHide: (item: PublicPopup) => void;
+	onOpenLink: (path: string | null) => void;
+}) {
+	const item = items[0];
+	if (!item) {
+		return null;
+	}
+	return (
+		<div className="grid w-fit max-w-full [grid-template-areas:'popup']">
+			<div className="self-start justify-self-start [grid-area:popup]">
+				<PopupWindow
+					front={frontId === item.id}
+					item={item}
+					onClose={() => onClose(item.id)}
+					onFocus={() => onFocus(item.id)}
+					onHide={() => onHide(item)}
+					onOpenLink={() => onOpenLink(item.linkPath)}
+				/>
+			</div>
+			{items.length > 1 ? (
+				<div className="pointer-events-none self-start justify-self-start pt-8 pl-8 [grid-area:popup]">
+					<DesktopPopupStack
+						frontId={frontId}
+						items={items.slice(1)}
+						onClose={onClose}
+						onFocus={onFocus}
+						onHide={onHide}
+						onOpenLink={onOpenLink}
+					/>
+				</div>
+			) : null}
+		</div>
 	);
 }
 
@@ -161,7 +205,7 @@ function PopupWindow({
 	return (
 		<section
 			aria-label={`${item.slotIndex}번 안내 팝업`}
-			className={`pointer-events-auto h-fit max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-auto rounded-lg border bg-background shadow-2xl ${front ? "z-20" : "z-10"}`}
+			className={`pointer-events-auto relative h-fit max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-auto rounded-lg border bg-background shadow-2xl ${front ? "z-20" : "z-10"}`}
 			onPointerDown={onFocus}
 		>
 			{item.contentType === "image" && item.editedImage ? (

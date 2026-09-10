@@ -22,7 +22,7 @@ import { Label } from "@bambi-app/ui/components/label";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { JSONContent } from "@tiptap/react";
-import { ClipboardPaste, ImagePlus, Save, Undo2 } from "lucide-react";
+import { ClipboardPaste, ImagePlus, Save, Trash2, Undo2 } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -31,6 +31,8 @@ import {
 	EMPTY_TEXT_DOCUMENT,
 	type MainPopupDraft,
 	type PopupImageAsset,
+	parseNonNegativeInteger,
+	popupSaveErrorMessage,
 	readPopupImage,
 } from "@/lib/bambi/main-popup";
 import { orpc } from "@/utils/orpc";
@@ -40,6 +42,7 @@ import { PopupTextEditor } from "./popup-text-editor";
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+const COUNT_INPUT_PATTERN = /^\d*$/;
 const handleClass = (handle: Handle) =>
 	`absolute z-20 size-4 touch-none rounded-full border-2 border-background bg-primary ${({ e: "top-1/2 -right-2 -translate-y-1/2 cursor-ew-resize", n: "-top-2 left-1/2 -translate-x-1/2 cursor-ns-resize", ne: "-top-2 -right-2 cursor-nesw-resize", nw: "-top-2 -left-2 cursor-nwse-resize", s: "-bottom-2 left-1/2 -translate-x-1/2 cursor-ns-resize", se: "-right-2 -bottom-2 cursor-nwse-resize", sw: "-bottom-2 -left-2 cursor-nesw-resize", w: "top-1/2 -left-2 -translate-y-1/2 cursor-ew-resize" } as const)[handle]}`;
 
@@ -63,13 +66,18 @@ const toDraft = (row: Record<string, unknown>): MainPopupDraft => ({
 
 export function PopupManagement() {
 	const queryClient = useQueryClient();
-	const query = useQuery(orpc.bambi.mainPopups.listAdmin.queryOptions());
+	const query = useQuery({
+		...orpc.bambi.mainPopups.listAdmin.queryOptions(),
+		refetchOnWindowFocus: false,
+	});
+	const dirtyIds = useRef(new Set<string>());
 	const [drafts, setDrafts] = useState<MainPopupDraft[]>([]);
 	const [histories, setHistories] = useState<Record<string, MainPopupDraft[]>>(
 		{}
 	);
-	const [count, setCount] = useState(0);
+	const [countInput, setCountInput] = useState("0");
 	const [pendingCount, setPendingCount] = useState<number | null>(null);
+	const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 	const [pendingPasteId, setPendingPasteId] = useState<string | null>(null);
 	const [clipboard, setClipboard] = useState<PopupImageAsset | null>(null);
 	useEffect(() => {
@@ -77,17 +85,25 @@ export function PopupManagement() {
 			const next = query.data.items.map((item) =>
 				toDraft(item as unknown as Record<string, unknown>)
 			);
-			setDrafts(next);
-			setCount(next.length);
+			setDrafts((current) => {
+				const currentById = new Map(current.map((draft) => [draft.id, draft]));
+				return next.map((serverDraft) =>
+					dirtyIds.current.has(serverDraft.id)
+						? (currentById.get(serverDraft.id) ?? serverDraft)
+						: serverDraft
+				);
+			});
+			setCountInput(String(next.length));
 		}
 	}, [query.data]);
+	const count = parseNonNegativeInteger(countInput);
 	const countMutation = useMutation(
 		orpc.bambi.mainPopups.setCount.mutationOptions({
-			onSuccess: async () => {
+			onSuccess: async (result) => {
+				setCountInput(String(result.count));
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.mainPopups.listAdmin.queryKey(),
 				});
-				setHistories({});
 				toast.success("팝업 개수를 저장했습니다.");
 			},
 			onError: (error) => toast.error(error.message),
@@ -96,6 +112,7 @@ export function PopupManagement() {
 	const saveMutation = useMutation(
 		orpc.bambi.mainPopups.save.mutationOptions({
 			onSuccess: async (saved) => {
+				dirtyIds.current.delete(saved.id);
 				setHistories((current) => ({ ...current, [saved.id]: [] }));
 				localStorage.setItem(
 					"bambi:main-popup:revision-signal",
@@ -106,6 +123,24 @@ export function PopupManagement() {
 				});
 				toast.success("팝업 설정을 저장했습니다.");
 			},
+			onError: (error) => toast.error(popupSaveErrorMessage(error.message)),
+		})
+	);
+	const deleteMutation = useMutation(
+		orpc.bambi.mainPopups.delete.mutationOptions({
+			onSuccess: async (result, variables) => {
+				dirtyIds.current.delete(variables.id);
+				setHistories((current) => {
+					const next = { ...current };
+					delete next[variables.id];
+					return next;
+				});
+				setCountInput(String(result.count));
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.mainPopups.listAdmin.queryKey(),
+				});
+				toast.success("팝업을 삭제했습니다.");
+			},
 			onError: (error) => toast.error(error.message),
 		})
 	);
@@ -114,8 +149,9 @@ export function PopupManagement() {
 		change: (current: MainPopupDraft) => MainPopupDraft,
 		record = true
 	) =>
-		setDrafts((current) =>
-			current.map((draft) => {
+		setDrafts((current) => {
+			dirtyIds.current.add(id);
+			return current.map((draft) => {
 				if (draft.id !== id) {
 					return draft;
 				}
@@ -126,8 +162,8 @@ export function PopupManagement() {
 					}));
 				}
 				return change(draft);
-			})
-		);
+			});
+		});
 	const undo = (id: string) => {
 		const history = histories[id] ?? [];
 		const previous = history.at(-1);
@@ -137,7 +173,11 @@ export function PopupManagement() {
 		setDrafts((current) =>
 			current.map((draft) => (draft.id === id ? previous : draft))
 		);
-		setHistories((all) => ({ ...all, [id]: history.slice(0, -1) }));
+		const nextHistory = history.slice(0, -1);
+		if (nextHistory.length === 0) {
+			dirtyIds.current.delete(id);
+		}
+		setHistories((all) => ({ ...all, [id]: nextHistory }));
 	};
 	const pasteInto = (id: string) => {
 		if (!clipboard) {
@@ -158,7 +198,7 @@ export function PopupManagement() {
 		return <p>팝업 설정을 불러오는 중입니다.</p>;
 	}
 	return (
-		<div className="flex flex-col gap-6">
+		<div className="flex flex-col gap-6 pb-16">
 			<section>
 				<h1 className="font-semibold text-2xl">팝업 설정</h1>
 				<p className="text-muted-foreground">
@@ -174,21 +214,39 @@ export function PopupManagement() {
 						<Label htmlFor="popup-count">팝업 개수</Label>
 						<Input
 							id="popup-count"
-							min={0}
-							onChange={(event) =>
-								setCount(Math.max(0, Number(event.target.value)))
-							}
-							type="number"
-							value={count}
+							inputMode="numeric"
+							onBlur={() => {
+								if (count === null) {
+									setCountInput(String(drafts.length));
+								}
+							}}
+							onChange={(event) => {
+								const next = event.target.value;
+								if (COUNT_INPUT_PATTERN.test(next)) {
+									setCountInput(next);
+								}
+							}}
+							onFocus={(event) => event.currentTarget.select()}
+							type="text"
+							value={countInput}
 						/>
 					</div>
 					<Button
-						disabled={countMutation.isPending || count === drafts.length}
-						onClick={() =>
-							count < drafts.length
-								? setPendingCount(count)
-								: countMutation.mutate({ count })
+						disabled={
+							countMutation.isPending ||
+							count === null ||
+							count === drafts.length
 						}
+						onClick={() => {
+							if (count === null) {
+								return;
+							}
+							if (count < drafts.length) {
+								setPendingCount(count);
+							} else {
+								countMutation.mutate({ count });
+							}
+						}}
 					>
 						개수 저장
 					</Button>
@@ -201,6 +259,7 @@ export function PopupManagement() {
 					historyCount={histories[draft.id]?.length ?? 0}
 					key={draft.id}
 					onCancel={() => {
+						dirtyIds.current.delete(draft.id);
 						const saved = query.data?.items.find(
 							(item) => item.id === draft.id
 						);
@@ -221,6 +280,7 @@ export function PopupManagement() {
 							toast.success(`${draft.slotIndex}번 팝업 이미지를 복사했습니다.`);
 						}
 					}}
+					onDelete={() => setPendingDeleteId(draft.id)}
 					onPaste={() => {
 						if (!clipboard) {
 							return;
@@ -259,6 +319,39 @@ export function PopupManagement() {
 					update={(change, record) => update(draft.id, change, record)}
 				/>
 			))}
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setPendingDeleteId(null);
+					}
+				}}
+				open={pendingDeleteId !== null}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>이 팝업을 완전히 삭제할까요?</AlertDialogTitle>
+						<AlertDialogDescription>
+							이미지·글·링크·예약과 저장하지 않은 변경도 모두 삭제됩니다. 뒤
+							팝업 번호와 전체 개수는 자동으로 당겨집니다.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={deleteMutation.isPending}
+							onClick={() => {
+								if (pendingDeleteId) {
+									deleteMutation.mutate({ id: pendingDeleteId });
+								}
+								setPendingDeleteId(null);
+							}}
+							variant="destructive"
+						>
+							삭제
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 			<AlertDialog
 				onOpenChange={(open) => {
 					if (!open) {
@@ -332,6 +425,7 @@ function PopupCard({
 	historyCount,
 	onCancel,
 	onCopy,
+	onDelete,
 	onPaste,
 	onSave,
 	onUndo,
@@ -342,6 +436,7 @@ function PopupCard({
 	historyCount: number;
 	onCancel: () => void;
 	onCopy: () => void;
+	onDelete: () => void;
 	onPaste: () => void;
 	onSave: () => void;
 	onUndo: () => void;
@@ -424,7 +519,18 @@ function PopupCard({
 	return (
 		<Card>
 			<CardHeader className="flex-row items-center justify-between">
-				<CardTitle>{draft.slotIndex}번 팝업창</CardTitle>
+				<div className="flex items-center gap-2">
+					<CardTitle>{draft.slotIndex}번 팝업창</CardTitle>
+					<Button
+						aria-label={`${draft.slotIndex}번 팝업 삭제`}
+						className="text-destructive hover:text-destructive"
+						onClick={onDelete}
+						size="icon-sm"
+						variant="ghost"
+					>
+						<Trash2 />
+					</Button>
+				</div>
 				<div className="flex items-center gap-2">
 					<Label htmlFor={`enabled-${draft.id}`}>사용</Label>
 					<Switch
