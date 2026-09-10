@@ -15,86 +15,86 @@
 | `b2fafc323b7213b9db1dd558a3589c1c9b089c5f` | 2026-09-10T14:30:56+09:00 | vscodereader | archive: preserve uncommitted worktree snapshot (environment files excluded) | 확인 계정 |
 | `61075646987621380112313f89174c1ad55717bf` | 2026-09-09T08:51:40Z | 최성원 | Merge 3be93a24dbc7268c19dcfa3b3923b007fd5e7a25 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
 | `82bf6249f4c40517d29a5b52357849298604b8a6` | 2026-09-09T08:51:38Z | 최성원 | Merge 757c91abb3aaba2dedd9c8d0f6058a3b03f04871 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `3be93a24dbc7268c19dcfa3b3923b007fd5e7a25` | 2026-09-09T17:51:36+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-crawler-review | 팀/미분류 |
+| `3be93a24dbc7268c19dcfa3b3923b007fd5e7a25` | 2026-09-09T17:51:36+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-crawler-review | 확인 계정 |
 | `a3c0f7bb1403e2b177fec646c1a38540a00dcd77` | 2026-09-09T08:51:34Z | 최성원 | Merge 36d652a129ec7b439b21f6ba84114bd6820abba1 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `757c91abb3aaba2dedd9c8d0f6058a3b03f04871` | 2026-09-09T17:51:33+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-manual-review | 팀/미분류 |
+| `757c91abb3aaba2dedd9c8d0f6058a3b03f04871` | 2026-09-09T17:51:33+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-manual-review | 확인 계정 |
 | `f2ce77dfd8adda7190c9b2c04420dc64a1e5d595` | 2026-09-09T08:51:31Z | 최성원 | Merge 04cffa93935680ae758bd1310635ea6d588f6bbb into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `36d652a129ec7b439b21f6ba84114bd6820abba1` | 2026-09-09T17:51:30+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-site-settings-review | 팀/미분류 |
+| `36d652a129ec7b439b21f6ba84114bd6820abba1` | 2026-09-09T17:51:30+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-site-settings-review | 확인 계정 |
 | `63fdf942fba4c5936357fb101979c0898f330d76` | 2026-09-09T08:51:28Z | 최성원 | Merge 241f2a8b331d267991ef58dcb00464993d3dad7e into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `04cffa93935680ae758bd1310635ea6d588f6bbb` | 2026-09-09T17:51:27+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-popups-review | 팀/미분류 |
+| `04cffa93935680ae758bd1310635ea6d588f6bbb` | 2026-09-09T17:51:27+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-popups-review | 확인 계정 |
 | `950f4e42a3cb5b00c1055af67ca13b915a310844` | 2026-09-09T08:51:25Z | 최성원 | Merge 74481a2c1342b2ad713b78ebdad48f8858598214 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `241f2a8b331d267991ef58dcb00464993d3dad7e` | 2026-09-09T17:51:24+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-reviews-review | 팀/미분류 |
+| `241f2a8b331d267991ef58dcb00464993d3dad7e` | 2026-09-09T17:51:24+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-reviews-review | 확인 계정 |
 | `c73ea6f26fb3f4aaf81c15de918cdf369c132d11` | 2026-09-09T08:51:22Z | 최성원 | Merge 623e04f3eb578c05539d6d2a12a21d0b06190f9f into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `74481a2c1342b2ad713b78ebdad48f8858598214` | 2026-09-09T17:51:21+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-banned-words-review | 팀/미분류 |
+| `74481a2c1342b2ad713b78ebdad48f8858598214` | 2026-09-09T17:51:21+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-banned-words-review | 확인 계정 |
 | `c30a80b2010ffd92b4c6211e539048f9e4211a11` | 2026-09-09T08:51:19Z | 최성원 | Merge bfd59028624dbf7c76b40b8e548f1ad199e3e8de into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `623e04f3eb578c05539d6d2a12a21d0b06190f9f` | 2026-09-09T17:51:18+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-support-chats-review | 팀/미분류 |
+| `623e04f3eb578c05539d6d2a12a21d0b06190f9f` | 2026-09-09T17:51:18+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-support-chats-review | 확인 계정 |
 | `82692953275d7793fbf4f27c00d6510884559045` | 2026-09-09T08:51:16Z | 최성원 | Merge 862b34c2831018db9041ad571647edc9f1788173 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `bfd59028624dbf7c76b40b8e548f1ad199e3e8de` | 2026-09-09T17:51:15+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-faq-review | 팀/미분류 |
+| `bfd59028624dbf7c76b40b8e548f1ad199e3e8de` | 2026-09-09T17:51:15+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-faq-review | 확인 계정 |
 | `4b162fdc30388530ef8b6c40f94ea369369a6b83` | 2026-09-09T08:51:13Z | 최성원 | Merge 0ebb48e8b27af2cbb741cbf2272eeab85f27c3ef into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `862b34c2831018db9041ad571647edc9f1788173` | 2026-09-09T17:51:12+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-community-boards-review | 팀/미분류 |
+| `862b34c2831018db9041ad571647edc9f1788173` | 2026-09-09T17:51:12+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-community-boards-review | 확인 계정 |
 | `4a5e773925127cb74190b70d176348eb17e6cd82` | 2026-09-09T08:51:09Z | 최성원 | Merge 3ffe5d370af01103f0136e06b18fbd160f7ed0dd into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `0ebb48e8b27af2cbb741cbf2272eeab85f27c3ef` | 2026-09-09T17:51:08+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-content-review | 팀/미분류 |
-| `3ffe5d370af01103f0136e06b18fbd160f7ed0dd` | 2026-09-09T17:51:05+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-ad-products-review | 팀/미분류 |
+| `0ebb48e8b27af2cbb741cbf2272eeab85f27c3ef` | 2026-09-09T17:51:08+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-content-review | 확인 계정 |
+| `3ffe5d370af01103f0136e06b18fbd160f7ed0dd` | 2026-09-09T17:51:05+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-ad-products-review | 확인 계정 |
 | `37578dd241bb9c14db12425652d10063150e0e37` | 2026-09-09T08:51:05Z | 최성원 | Merge 6c0137a4c3fb296f6c7fe6205ed225dc60177642 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
 | `762bb4239356b9b7b1c3187fb0b32468b595a680` | 2026-09-09T08:51:03Z | 최성원 | Merge 2198043888aeae34c56434c53fb1e9a5f8d6bd4c into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `6c0137a4c3fb296f6c7fe6205ed225dc60177642` | 2026-09-09T17:51:02+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-attendance-review | 팀/미분류 |
+| `6c0137a4c3fb296f6c7fe6205ed225dc60177642` | 2026-09-09T17:51:02+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-attendance-review | 확인 계정 |
 | `d0449204292cf82ffc8bdb0a9142bf8a6a1a6e0e` | 2026-09-09T08:51:00Z | 최성원 | Merge 1cc43a6cd1fd25491e74ff219c5729514193617b into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `2198043888aeae34c56434c53fb1e9a5f8d6bd4c` | 2026-09-09T17:50:58+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-approvals-review | 팀/미분류 |
+| `2198043888aeae34c56434c53fb1e9a5f8d6bd4c` | 2026-09-09T17:50:58+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-approvals-review | 확인 계정 |
 | `ae8e1111efdcbe78d3b6ff15f80b0b3b376eb4d4` | 2026-09-09T08:50:56Z | 최성원 | Merge 9202f7c2d2b3d033d7b96e710348abb87327e327 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `1cc43a6cd1fd25491e74ff219c5729514193617b` | 2026-09-09T17:50:55+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-chats-review | 팀/미분류 |
+| `1cc43a6cd1fd25491e74ff219c5729514193617b` | 2026-09-09T17:50:55+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-chats-review | 확인 계정 |
 | `037b1cba3606ce791969872f10651f85fbe00530` | 2026-09-09T08:50:53Z | 최성원 | Merge 1fd06e9f5804dbbc9df89e262963a932ea2631b1 into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `9202f7c2d2b3d033d7b96e710348abb87327e327` | 2026-09-09T17:50:52+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-jobs-review | 팀/미분류 |
+| `9202f7c2d2b3d033d7b96e710348abb87327e327` | 2026-09-09T17:50:52+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-jobs-review | 확인 계정 |
 | `1ad8fcf6627ccf7cff533f6465709be0586bdfc8` | 2026-09-09T08:50:50Z | 최성원 | Merge 7c15b5c7e2920c2d29c65ec044a793419890193a into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `1fd06e9f5804dbbc9df89e262963a932ea2631b1` | 2026-09-09T17:50:49+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-messages-review | 팀/미분류 |
-| `7c15b5c7e2920c2d29c65ec044a793419890193a` | 2026-09-09T17:50:46+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-users-review | 팀/미분류 |
+| `1fd06e9f5804dbbc9df89e262963a932ea2631b1` | 2026-09-09T17:50:49+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-messages-review | 확인 계정 |
+| `7c15b5c7e2920c2d29c65ec044a793419890193a` | 2026-09-09T17:50:46+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-users-review | 확인 계정 |
 | `6315b6c3974dc4b1fe779b0818813f379b5fd6e7` | 2026-09-09T08:50:46Z | 최성원 | Merge 72d20b8c1e2614ded2607dfb158d2cbdc7e8cb0b into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
 | `158509752560cd8fed1a4ca54728b45c6d3ab25a` | 2026-09-09T08:50:43Z | 최성원 | Merge 4bdd448eef7414198c2913935f0dff3071f6737b into 868f55b817a5b042151dc9519c4423334c0764ad | 팀/미분류 |
-| `72d20b8c1e2614ded2607dfb158d2cbdc7e8cb0b` | 2026-09-09T17:50:42+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-reports-review | 팀/미분류 |
-| `4bdd448eef7414198c2913935f0dff3071f6737b` | 2026-09-09T17:50:39+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-review-queue-review | 팀/미분류 |
+| `72d20b8c1e2614ded2607dfb158d2cbdc7e8cb0b` | 2026-09-09T17:50:42+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-reports-review | 확인 계정 |
+| `4bdd448eef7414198c2913935f0dff3071f6737b` | 2026-09-09T17:50:39+09:00 | 최성원 | Merge branch 'feat/native-admin-foundation' into feat/native-admin-review-queue-review | 확인 계정 |
 | `ac5ccbc0c64172ce43dfdf6a89e36aed6e504ae1` | 2026-09-09T08:50:26Z | 최성원 | Merge 868f55b817a5b042151dc9519c4423334c0764ad into 64c110185d22c761697a949906133c184c4bf549 | 팀/미분류 |
-| `868f55b817a5b042151dc9519c4423334c0764ad` | 2026-09-09T17:50:22+09:00 | 최성원 | refactor: 운영자 편집기·신규 라우터 공통 의존성 정리 | 팀/미분류 |
-| `808991678dbbf8013d8a0de8b11ab8f42278a78a` | 2026-09-09T17:47:02+09:00 | 최성원 | feat(native): 운영자 크롤링·수집 콘텐츠·이미지 편집 구현 | 팀/미분류 |
-| `4bd232b4ccc652af1da44854e7eccdeada6bbe30` | 2026-09-09T17:46:59+09:00 | 최성원 | feat(native): 운영자 매뉴얼 목차·표·링크 열람 구현 | 팀/미분류 |
-| `7759b09b1e949d7dfa4b236373c7329fca670a8e` | 2026-09-09T17:46:56+09:00 | 최성원 | feat(native): 운영자 사이트 설정 섹션별 저장 구현 | 팀/미분류 |
-| `bab284814481be76ac15015f7c4a846ba6ee878c` | 2026-09-09T17:46:53+09:00 | 최성원 | feat(native): 운영자 팝업 리치 편집·이미지 가공·순서 미리보기 구현 | 팀/미분류 |
-| `dda1f56a44471105242e5156472476a9310c41a8` | 2026-09-09T17:46:49+09:00 | 최성원 | feat(native): 운영자 후기 상태 검수 화면 추가 | 팀/미분류 |
-| `6b7290a180eab1133980974fcd839a49c0f36338` | 2026-09-09T17:46:46+09:00 | 최성원 | feat(native): 운영자 금칙어 검색·CSV 일괄 관리 구현 | 팀/미분류 |
-| `e8e2b2163f9c2c1e6c9d152dd33007adf141710f` | 2026-09-09T17:46:43+09:00 | 최성원 | feat(native): 운영자 문의 채팅 답변·잠금·종료 관리 구현 | 팀/미분류 |
-| `094977b1c538ea5f8fb61c5bf77bae5e505a4083` | 2026-09-09T17:46:40+09:00 | 최성원 | feat(native): 운영자 FAQ 리치 편집·공개 관리 구현 | 팀/미분류 |
-| `a59dd7198172bd1a31e10ce274ba3a35264bd5ff` | 2026-09-09T17:46:36+09:00 | 최성원 | feat(native): 운영자 수다방 게시판 CRUD·배치 관리 구현 | 팀/미분류 |
-| `4bd7aa782530254704cb172e5fe18feac9125962` | 2026-09-09T17:46:33+09:00 | 최성원 | feat(native): 운영자 게시물·댓글 일괄 조치 구현 | 팀/미분류 |
-| `c93377834528f07c07ee847dfa9adf027777f5e0` | 2026-09-09T17:46:30+09:00 | 최성원 | feat(native): 운영자 광고 상품·결제·포인트몰 관리 구현 | 팀/미분류 |
-| `934e40ebfcd10a14fd295268ad373d6e83a3a677` | 2026-09-09T17:46:26+09:00 | 최성원 | feat(native): 운영자 출석·회원 등급·포인트 정책 관리 구현 | 팀/미분류 |
-| `d3f209ca7fa51cd39b11a86d8bf0dc28975b4328` | 2026-09-09T17:46:23+09:00 | 최성원 | feat(native): 운영자 업소·팀 합류·면접 관리 화면 추가 | 팀/미분류 |
-| `42aabffd1a6ebc39410b5f8001941224a7bbfe09` | 2026-09-09T17:46:20+09:00 | 최성원 | feat(native): 운영자 채팅 열람·차단·첨부 저장 구현 | 팀/미분류 |
-| `099f8db6c34447aa7ebd59e7dc9158306074bbf6` | 2026-09-09T17:46:17+09:00 | 최성원 | feat(native): 운영자 공고 수정·노출 기간·삭제 관리 구현 | 팀/미분류 |
-| `646217db11921b2b47a0ebf6fc99349af3bb434d` | 2026-09-09T17:46:13+09:00 | 최성원 | feat(native): 운영자 쪽지 리치 편집·대상 발송 구현 | 팀/미분류 |
-| `879a4762db989a405604cac7f628e3a1465eb7ab` | 2026-09-09T17:46:10+09:00 | 최성원 | feat(native): 운영자 사용자 상세·접속 상태·계정 조치 확장 | 팀/미분류 |
-| `d96785f135acffb5149caa9000f8a03acc6225fc` | 2026-09-09T17:46:06+09:00 | 최성원 | feat(native): 운영자 신고 상세·대상 후속 조치 구현 | 팀/미분류 |
-| `8aec79d70af3e0e37561b58a6bc5d596b6439863` | 2026-09-09T17:46:03+09:00 | 최성원 | feat(native): 운영자 공고 검수 상세·감지 문구 강조 | 팀/미분류 |
-| `19e7c3b1d08787df7b1cb63ffe694d0eeb59df56` | 2026-09-09T17:42:35+09:00 | 최성원 | feat(native): 운영자 크롤링·수집 콘텐츠·이미지 편집 구현 | 팀/미분류 |
-| `b033d3ae5b97c133a52548da91aef5c896c920fd` | 2026-09-09T17:42:31+09:00 | 최성원 | feat(native): 운영자 매뉴얼 목차·표·링크 열람 구현 | 팀/미분류 |
-| `720f6e86da7e2d4daf5949db9d2c3b13a81dafdd` | 2026-09-09T17:42:27+09:00 | 최성원 | feat(native): 운영자 사이트 설정 섹션별 저장 구현 | 팀/미분류 |
-| `e6985fd42ef4234246cd9cd78a955a63f98dfb40` | 2026-09-09T17:42:24+09:00 | 최성원 | feat(native): 운영자 팝업 리치 편집·이미지 가공·순서 미리보기 구현 | 팀/미분류 |
-| `52bda4e846dbe84b2d8ab923033b763d5111be9f` | 2026-09-09T17:42:21+09:00 | 최성원 | feat(native): 운영자 후기 상태 검수 화면 추가 | 팀/미분류 |
-| `d55f03b7571f124fd68e43429a7a2e98e68b27ac` | 2026-09-09T17:42:18+09:00 | 최성원 | feat(native): 운영자 금칙어 검색·CSV 일괄 관리 구현 | 팀/미분류 |
-| `5a852e21525f7e20d8196994250ae8004226f6ae` | 2026-09-09T17:42:14+09:00 | 최성원 | feat(native): 운영자 문의 채팅 답변·잠금·종료 관리 구현 | 팀/미분류 |
-| `a7643e8c15ca9155fdfc9f1955132fcbd6681fa9` | 2026-09-09T17:42:11+09:00 | 최성원 | feat(native): 운영자 FAQ 리치 편집·공개 관리 구현 | 팀/미분류 |
-| `a8097471f1de2701873e5982eb573c6919b584f4` | 2026-09-09T17:42:08+09:00 | 최성원 | feat(native): 운영자 수다방 게시판 CRUD·배치 관리 구현 | 팀/미분류 |
-| `57ef7d70c0b1f304158d188d52250cff15c29abb` | 2026-09-09T17:42:05+09:00 | 최성원 | feat(native): 운영자 게시물·댓글 일괄 조치 구현 | 팀/미분류 |
-| `43e14a8bdecb282978c2e4df810533186120fec8` | 2026-09-09T17:42:01+09:00 | 최성원 | feat(native): 운영자 광고 상품·결제·포인트몰 관리 구현 | 팀/미분류 |
-| `fafc3fc7318fe5dfc46c82aa1d84d4a5b010b757` | 2026-09-09T17:41:58+09:00 | 최성원 | feat(native): 운영자 출석·회원 등급·포인트 정책 관리 구현 | 팀/미분류 |
-| `5e3c83a886f8830a32f85a6ac79318c44b6412fc` | 2026-09-09T17:41:54+09:00 | 최성원 | feat(native): 운영자 업소·팀 합류·면접 관리 화면 추가 | 팀/미분류 |
-| `632b81afb470d323c4a5ea67142df4f4130dd1e7` | 2026-09-09T17:41:51+09:00 | 최성원 | feat(native): 운영자 채팅 열람·차단·첨부 저장 구현 | 팀/미분류 |
-| `e8f8b05d00456992a2f906bc4758d09e49b27a39` | 2026-09-09T17:40:55+09:00 | 최성원 | feat(native): 운영자 공고 수정·노출 기간·삭제 관리 구현 | 팀/미분류 |
-| `720bfec0e1bf8ee9d4937afb63eb3bc5a71dd347` | 2026-09-09T17:38:12+09:00 | 최성원 | feat(native): 운영자 쪽지 리치 편집·대상 발송 구현 | 팀/미분류 |
-| `65abc96b445c904c9ab318ab727e746ef7567f6d` | 2026-09-09T17:36:59+09:00 | 최성원 | feat(native): 운영자 사용자 상세·접속 상태·계정 조치 확장 | 팀/미분류 |
-| `cc69537aa68ecfd34f33990b8b7edd5f9e5aed77` | 2026-09-09T17:35:30+09:00 | 최성원 | feat(native): 운영자 신고 상세·대상 후속 조치 구현 | 팀/미분류 |
-| `427cab3d0b293bd9b1427a6493385da30e8953fc` | 2026-09-09T17:34:09+09:00 | 최성원 | feat(native): 운영자 공고 검수 상세·감지 문구 강조 | 팀/미분류 |
-| `48f1eef61d4b12c3e70078a4e3a168ef62987736` | 2026-09-09T17:32:02+09:00 | 최성원 | feat: 운영자 기능 공통 API 계약·DB 스키마 확장 | 팀/미분류 |
-| `986fb8def7485814c51aa45724f0f02f609ca51b` | 2026-09-09T17:26:42+09:00 | 최성원 | feat(native): 운영자 콘솔 공통 셸·다이얼로그·SAF 파일 저장 기반 | 팀/미분류 |
+| `868f55b817a5b042151dc9519c4423334c0764ad` | 2026-09-09T17:50:22+09:00 | 최성원 | refactor: 운영자 편집기·신규 라우터 공통 의존성 정리 | 확인 계정 |
+| `808991678dbbf8013d8a0de8b11ab8f42278a78a` | 2026-09-09T17:47:02+09:00 | 최성원 | feat(native): 운영자 크롤링·수집 콘텐츠·이미지 편집 구현 | 확인 계정 |
+| `4bd232b4ccc652af1da44854e7eccdeada6bbe30` | 2026-09-09T17:46:59+09:00 | 최성원 | feat(native): 운영자 매뉴얼 목차·표·링크 열람 구현 | 확인 계정 |
+| `7759b09b1e949d7dfa4b236373c7329fca670a8e` | 2026-09-09T17:46:56+09:00 | 최성원 | feat(native): 운영자 사이트 설정 섹션별 저장 구현 | 확인 계정 |
+| `bab284814481be76ac15015f7c4a846ba6ee878c` | 2026-09-09T17:46:53+09:00 | 최성원 | feat(native): 운영자 팝업 리치 편집·이미지 가공·순서 미리보기 구현 | 확인 계정 |
+| `dda1f56a44471105242e5156472476a9310c41a8` | 2026-09-09T17:46:49+09:00 | 최성원 | feat(native): 운영자 후기 상태 검수 화면 추가 | 확인 계정 |
+| `6b7290a180eab1133980974fcd839a49c0f36338` | 2026-09-09T17:46:46+09:00 | 최성원 | feat(native): 운영자 금칙어 검색·CSV 일괄 관리 구현 | 확인 계정 |
+| `e8e2b2163f9c2c1e6c9d152dd33007adf141710f` | 2026-09-09T17:46:43+09:00 | 최성원 | feat(native): 운영자 문의 채팅 답변·잠금·종료 관리 구현 | 확인 계정 |
+| `094977b1c538ea5f8fb61c5bf77bae5e505a4083` | 2026-09-09T17:46:40+09:00 | 최성원 | feat(native): 운영자 FAQ 리치 편집·공개 관리 구현 | 확인 계정 |
+| `a59dd7198172bd1a31e10ce274ba3a35264bd5ff` | 2026-09-09T17:46:36+09:00 | 최성원 | feat(native): 운영자 수다방 게시판 CRUD·배치 관리 구현 | 확인 계정 |
+| `4bd7aa782530254704cb172e5fe18feac9125962` | 2026-09-09T17:46:33+09:00 | 최성원 | feat(native): 운영자 게시물·댓글 일괄 조치 구현 | 확인 계정 |
+| `c93377834528f07c07ee847dfa9adf027777f5e0` | 2026-09-09T17:46:30+09:00 | 최성원 | feat(native): 운영자 광고 상품·결제·포인트몰 관리 구현 | 확인 계정 |
+| `934e40ebfcd10a14fd295268ad373d6e83a3a677` | 2026-09-09T17:46:26+09:00 | 최성원 | feat(native): 운영자 출석·회원 등급·포인트 정책 관리 구현 | 확인 계정 |
+| `d3f209ca7fa51cd39b11a86d8bf0dc28975b4328` | 2026-09-09T17:46:23+09:00 | 최성원 | feat(native): 운영자 업소·팀 합류·면접 관리 화면 추가 | 확인 계정 |
+| `42aabffd1a6ebc39410b5f8001941224a7bbfe09` | 2026-09-09T17:46:20+09:00 | 최성원 | feat(native): 운영자 채팅 열람·차단·첨부 저장 구현 | 확인 계정 |
+| `099f8db6c34447aa7ebd59e7dc9158306074bbf6` | 2026-09-09T17:46:17+09:00 | 최성원 | feat(native): 운영자 공고 수정·노출 기간·삭제 관리 구현 | 확인 계정 |
+| `646217db11921b2b47a0ebf6fc99349af3bb434d` | 2026-09-09T17:46:13+09:00 | 최성원 | feat(native): 운영자 쪽지 리치 편집·대상 발송 구현 | 확인 계정 |
+| `879a4762db989a405604cac7f628e3a1465eb7ab` | 2026-09-09T17:46:10+09:00 | 최성원 | feat(native): 운영자 사용자 상세·접속 상태·계정 조치 확장 | 확인 계정 |
+| `d96785f135acffb5149caa9000f8a03acc6225fc` | 2026-09-09T17:46:06+09:00 | 최성원 | feat(native): 운영자 신고 상세·대상 후속 조치 구현 | 확인 계정 |
+| `8aec79d70af3e0e37561b58a6bc5d596b6439863` | 2026-09-09T17:46:03+09:00 | 최성원 | feat(native): 운영자 공고 검수 상세·감지 문구 강조 | 확인 계정 |
+| `19e7c3b1d08787df7b1cb63ffe694d0eeb59df56` | 2026-09-09T17:42:35+09:00 | 최성원 | feat(native): 운영자 크롤링·수집 콘텐츠·이미지 편집 구현 | 확인 계정 |
+| `b033d3ae5b97c133a52548da91aef5c896c920fd` | 2026-09-09T17:42:31+09:00 | 최성원 | feat(native): 운영자 매뉴얼 목차·표·링크 열람 구현 | 확인 계정 |
+| `720f6e86da7e2d4daf5949db9d2c3b13a81dafdd` | 2026-09-09T17:42:27+09:00 | 최성원 | feat(native): 운영자 사이트 설정 섹션별 저장 구현 | 확인 계정 |
+| `e6985fd42ef4234246cd9cd78a955a63f98dfb40` | 2026-09-09T17:42:24+09:00 | 최성원 | feat(native): 운영자 팝업 리치 편집·이미지 가공·순서 미리보기 구현 | 확인 계정 |
+| `52bda4e846dbe84b2d8ab923033b763d5111be9f` | 2026-09-09T17:42:21+09:00 | 최성원 | feat(native): 운영자 후기 상태 검수 화면 추가 | 확인 계정 |
+| `d55f03b7571f124fd68e43429a7a2e98e68b27ac` | 2026-09-09T17:42:18+09:00 | 최성원 | feat(native): 운영자 금칙어 검색·CSV 일괄 관리 구현 | 확인 계정 |
+| `5a852e21525f7e20d8196994250ae8004226f6ae` | 2026-09-09T17:42:14+09:00 | 최성원 | feat(native): 운영자 문의 채팅 답변·잠금·종료 관리 구현 | 확인 계정 |
+| `a7643e8c15ca9155fdfc9f1955132fcbd6681fa9` | 2026-09-09T17:42:11+09:00 | 최성원 | feat(native): 운영자 FAQ 리치 편집·공개 관리 구현 | 확인 계정 |
+| `a8097471f1de2701873e5982eb573c6919b584f4` | 2026-09-09T17:42:08+09:00 | 최성원 | feat(native): 운영자 수다방 게시판 CRUD·배치 관리 구현 | 확인 계정 |
+| `57ef7d70c0b1f304158d188d52250cff15c29abb` | 2026-09-09T17:42:05+09:00 | 최성원 | feat(native): 운영자 게시물·댓글 일괄 조치 구현 | 확인 계정 |
+| `43e14a8bdecb282978c2e4df810533186120fec8` | 2026-09-09T17:42:01+09:00 | 최성원 | feat(native): 운영자 광고 상품·결제·포인트몰 관리 구현 | 확인 계정 |
+| `fafc3fc7318fe5dfc46c82aa1d84d4a5b010b757` | 2026-09-09T17:41:58+09:00 | 최성원 | feat(native): 운영자 출석·회원 등급·포인트 정책 관리 구현 | 확인 계정 |
+| `5e3c83a886f8830a32f85a6ac79318c44b6412fc` | 2026-09-09T17:41:54+09:00 | 최성원 | feat(native): 운영자 업소·팀 합류·면접 관리 화면 추가 | 확인 계정 |
+| `632b81afb470d323c4a5ea67142df4f4130dd1e7` | 2026-09-09T17:41:51+09:00 | 최성원 | feat(native): 운영자 채팅 열람·차단·첨부 저장 구현 | 확인 계정 |
+| `e8f8b05d00456992a2f906bc4758d09e49b27a39` | 2026-09-09T17:40:55+09:00 | 최성원 | feat(native): 운영자 공고 수정·노출 기간·삭제 관리 구현 | 확인 계정 |
+| `720bfec0e1bf8ee9d4937afb63eb3bc5a71dd347` | 2026-09-09T17:38:12+09:00 | 최성원 | feat(native): 운영자 쪽지 리치 편집·대상 발송 구현 | 확인 계정 |
+| `65abc96b445c904c9ab318ab727e746ef7567f6d` | 2026-09-09T17:36:59+09:00 | 최성원 | feat(native): 운영자 사용자 상세·접속 상태·계정 조치 확장 | 확인 계정 |
+| `cc69537aa68ecfd34f33990b8b7edd5f9e5aed77` | 2026-09-09T17:35:30+09:00 | 최성원 | feat(native): 운영자 신고 상세·대상 후속 조치 구현 | 확인 계정 |
+| `427cab3d0b293bd9b1427a6493385da30e8953fc` | 2026-09-09T17:34:09+09:00 | 최성원 | feat(native): 운영자 공고 검수 상세·감지 문구 강조 | 확인 계정 |
+| `48f1eef61d4b12c3e70078a4e3a168ef62987736` | 2026-09-09T17:32:02+09:00 | 최성원 | feat: 운영자 기능 공통 API 계약·DB 스키마 확장 | 확인 계정 |
+| `986fb8def7485814c51aa45724f0f02f609ca51b` | 2026-09-09T17:26:42+09:00 | 최성원 | feat(native): 운영자 콘솔 공통 셸·다이얼로그·SAF 파일 저장 기반 | 확인 계정 |
 | `aae8f85fd448ed03d93e9682be16e26aa09debc3` | 2026-09-08T15:19:41+09:00 | 최성원 | Merge 93aca8cbb2cdd059ba43dccdaa36f8206c196c7c into e6b3d38b69d2f960b8b64c7bcf2bbe8aa1a9c754 | 팀/미분류 |
-| `93aca8cbb2cdd059ba43dccdaa36f8206c196c7c` | 2026-09-08T15:19:13+09:00 | 최성원 | fix(web): 비회원 본인인증을 회원가입에서 재사용 | 팀/미분류 |
+| `93aca8cbb2cdd059ba43dccdaa36f8206c196c7c` | 2026-09-08T15:19:13+09:00 | 최성원 | fix(web): 비회원 본인인증을 회원가입에서 재사용 | 확인 계정 |
 | `d204a124720e4943c7ade1902155c5e7b1716fe3` | 2026-09-07T19:48:00+09:00 | HyeonJun Choi | Merge eb44b049f45df2b364b19ade304049f0ec76bc07 into 64c110185d22c761697a949906133c184c4bf549 | 팀/미분류 |
 | `eb44b049f45df2b364b19ade304049f0ec76bc07` | 2026-09-07T19:47:01+09:00 | HyeonJun | fix(native): 운영 필터 칩 행이 세로 flex를 차지·눌리던 문제 수정 | 팀/미분류 |
 | `e0be58742fc9d060361e1483e8a0778ffaaca024` | 2026-09-07T19:11:06+09:00 | HyeonJun | merge: native 운영자 콘솔 검수·신고·사용자 3탭 구현 | 팀/미분류 |
@@ -124,7 +124,7 @@
 | `eddcff8bd012127de53d8781720a453946fae024` | 2026-09-07T15:54:31+09:00 | HyeonJun | refactor: 포인트몰 상태·혜택·대상 라벨을 packages/api로 이동 | 팀/미분류 |
 | `ef939ff8af3574df9e7d0a96fdcebab837a9c12b` | 2026-09-07T15:38:07+09:00 | HyeonJun | docs: native 포인트몰·알림(SSE) 구현 계획 추가 | 팀/미분류 |
 | `e6b3d38b69d2f960b8b64c7bcf2bbe8aa1a9c754` | 2026-09-07T15:31:57+09:00 | beyondsoft-dev | Merge pull request #304 from beyondsoft-kr/fix/employer-approval-business-document-ui | 팀/미분류 |
-| `e89b0f81b7b353c47a23d66b794dceb16b6aa549` | 2026-09-07T15:28:42+09:00 | 최성원 | fix(web): 승인 완료 업소 재승인 방지·사업자 서류 행 통일 (#303) | 팀/미분류 |
+| `e89b0f81b7b353c47a23d66b794dceb16b6aa549` | 2026-09-07T15:28:42+09:00 | 최성원 | fix(web): 승인 완료 업소 재승인 방지·사업자 서류 행 통일 (#303) | 확인 계정 |
 | `fc5cd6432bc2eeadda02b7f6c4dda668d5fc344b` | 2026-09-07T15:23:42+09:00 | HyeonJun | docs: native 포인트몰·알림(SSE) 설계 스펙 추가 | 팀/미분류 |
 | `6c1259fcc044b41efe538e6e5f01cccd6d3c6111` | 2026-09-07T14:47:37+09:00 | beyondsoft-dev | Merge pull request #302 from beyondsoft-kr/fix/native-job-form-polish | 팀/미분류 |
 | `06350327cdb5998684ca15fab8be02caa403dfa5` | 2026-09-07T14:32:40+09:00 | beyondsoft-dev | Merge pull request #301 from beyondsoft-kr/fix/mobile-chat-attachment-layout | 팀/미분류 |
@@ -149,9 +149,9 @@
 | `b8aef2c7f2d46a8bc5dc39391c5b60b7d0908001` | 2026-09-07T10:48:14+09:00 | HyeonJun | fix(native): 공고 폼 마감 3건(삭제 다이얼로그 버튼·프리미엄 배너 문구 에디터·등록 후 이탈 경고) - 공고 삭제 다이얼로그 취소/삭제를 팀 삭제와 같은 Button 두 개(tertiary·danger, flex-1)로 정렬 - 배너 픽커를 인라인 에디터로 확장: 캔버스 미리보기·드래그 배치·스크림 토글/강도·문구 5개 추가/편집/삭제 - 문구 속성: 내용(40자)·글자 크기·폭 슬라이더·글자색 스와치+hex·굵기·정렬·연출, 저대비/무보호 이미지 경고 - ad-banner-slot-canvas 신설: 웹 렌더러와 같은 규칙(% 좌표·폭 대비 글자 크기·스크림·그림자), PanResponder 드래그 - ad-banner-layout 순수 로직 확장: addTextBlock·updateTextBlock(범위 클램프·글리치 시 스크림 강제)·removeTextBlock·findBannerLayoutIssue·isLowContrast - 등록 게이트에 findBannerLayoutIssue 추가: 빈 문구·단색 배경 문구 0을 서버 반려 전에 사유와 함께 차단 - 작성 폼 "다음"에서도 submittedRef를 세워 등록 성공 dismissTo 시 이탈 경고가 뜨지 않게 하고, 되돌아오면 useFocusEffect로 재무장 | 팀/미분류 |
 | `9994bb3830c6346b3c84cf1fe5086225b3f61414` | 2026-09-07T09:23:57+09:00 | beyondsoft-dev | Merge pull request #299 from beyondsoft-kr/feat/native-job-media-polish | 팀/미분류 |
 | `66a9843e497768a32cde7971056f042867f92029` | 2026-09-07T09:12:06+09:00 | beyondsoft-dev | Merge pull request #297 from beyondsoft-kr/feat/native-recruiter-boost | 팀/미분류 |
-| `8a0a84b6c5a540b172a211a716b4765233aa7c78` | 2026-09-04T18:03:59+09:00 | 최성원 | fix: 채팅 상태와 공고 메타데이터 뱃지 표시 교정 | 팀/미분류 |
-| `71dc4f495d1bd67c32851f16854d2e397df397ff` | 2026-09-04T18:03:46+09:00 | 최성원 | feat: 채팅 참여자 접속 상태와 평균 응답시간 정본 추가 | 팀/미분류 |
-| `2f7a39229b3f513d51bb795ab5f1ef965262aa55` | 2026-09-04T18:03:31+09:00 | 최성원 | docs: 채팅 접속·응답시간과 공고 메타 뱃지 계획 작성 | 팀/미분류 |
+| `8a0a84b6c5a540b172a211a716b4765233aa7c78` | 2026-09-04T18:03:59+09:00 | 최성원 | fix: 채팅 상태와 공고 메타데이터 뱃지 표시 교정 | 확인 계정 |
+| `71dc4f495d1bd67c32851f16854d2e397df397ff` | 2026-09-04T18:03:46+09:00 | 최성원 | feat: 채팅 참여자 접속 상태와 평균 응답시간 정본 추가 | 확인 계정 |
+| `2f7a39229b3f513d51bb795ab5f1ef965262aa55` | 2026-09-04T18:03:31+09:00 | 최성원 | docs: 채팅 접속·응답시간과 공고 메타 뱃지 계획 작성 | 확인 계정 |
 | `6aff78ed8bd5aeabed46a23f6240ba53eef5e114` | 2026-09-04T17:55:33+09:00 | HyeonJun | merge: native 공고 소재·폼 마감(상세 디자인 신청·배너 단색 배경·슬라이싱·폼 UX) | 팀/미분류 |
 | `e1e6e158fe0634b52891e2ab98215996e60d94c6` | 2026-09-04T17:55:11+09:00 | HyeonJun | feat(native): 공고 폼 마감(첫 오류 스크롤·이탈 경고·급여 표기·TextArea·섹션 분리) | 팀/미분류 |
 | `2a7711edddda8d250af8f3a3742a3a7ae2d96b2f` | 2026-09-04T17:54:45+09:00 | HyeonJun | feat(native): 상세 이미지 슬라이싱 생성 | 팀/미분류 |
@@ -176,18 +176,18 @@
 | `56c9d11e47e32a4c8579459ccbbe2b1bf771d36b` | 2026-09-04T14:52:26+09:00 | HyeonJun | merge: 팀원 카드 메뉴화·광고 탭 컴포넌트 교체·공고관리 홈 정리 | 팀/미분류 |
 | `9a2db1141e77fdafcb856c118dc03df14bda6d92` | 2026-09-04T14:52:14+09:00 | HyeonJun | fix(native): 구인자 팀원 카드 메뉴화·광고 탭 컴포넌트 교체·공고관리 홈 정리 | 팀/미분류 |
 | `558fec449ad03b307f0a4dda2bd9d50f8e66966e` | 2026-09-04T14:26:26+09:00 | beyondsoft-dev | Merge pull request #294 from beyondsoft-kr/feat/crawled-community-board-editing | 팀/미분류 |
-| `6c2fa135616f30ad41e253f3d0ec7134c4ff1a6b` | 2026-09-04T14:22:56+09:00 | 최성원 | fix: 수집 커뮤니티 동적 게시판 표시와 공용 정책 정리 (#293) | 팀/미분류 |
+| `6c2fa135616f30ad41e253f3d0ec7134c4ff1a6b` | 2026-09-04T14:22:56+09:00 | 최성원 | fix: 수집 커뮤니티 동적 게시판 표시와 공용 정책 정리 (#293) | 확인 계정 |
 | `5e191a71efa4fb3a64abc5c9e01cd7f42e44dc64` | 2026-09-04T14:18:13+09:00 | HyeonJun | merge: 구인자 광고 관리·성과 분석·팀 관리 화면 추가 | 팀/미분류 |
 | `4193063ec491730ded941f97a00e54329718a8ce` | 2026-09-04T14:17:43+09:00 | HyeonJun | feat(native): 구인자 광고 관리·성과 분석·팀 관리 화면 추가 | 팀/미분류 |
-| `489ad5c7f2d16059d1c4767f6902c9fac3ca1948` | 2026-09-04T14:10:17+09:00 | 최성원 | feat(web): 수집 게시판 선택과 기존 글·댓글 편집기 연결 (#293) | 팀/미분류 |
-| `8281c18081cbd44d9af05ea4dd59ad615a68bdf8` | 2026-09-04T14:10:16+09:00 | 최성원 | feat: 수집 커뮤니티 게시판별 저장과 관리자 편집 API 추가 (#293) | 팀/미분류 |
+| `489ad5c7f2d16059d1c4767f6902c9fac3ca1948` | 2026-09-04T14:10:17+09:00 | 최성원 | feat(web): 수집 게시판 선택과 기존 글·댓글 편집기 연결 (#293) | 확인 계정 |
+| `8281c18081cbd44d9af05ea4dd59ad615a68bdf8` | 2026-09-04T14:10:16+09:00 | 최성원 | feat: 수집 커뮤니티 게시판별 저장과 관리자 편집 API 추가 (#293) | 확인 계정 |
 | `515c96d697b15a80e912fc9fe75d4caec736eb71` | 2026-09-04T13:41:59+09:00 | beyondsoft-dev | Merge pull request #291 from beyondsoft-kr/feat/user-online-presence | 팀/미분류 |
-| `f42cc12ea22e68ff89a574551cf5a1c74e852645` | 2026-09-04T13:34:43+09:00 | 최성원 | fix: presence 재연결·오류 격리·실시간 렌더 안정성 보완 | 팀/미분류 |
+| `f42cc12ea22e68ff89a574551cf5a1c74e852645` | 2026-09-04T13:34:43+09:00 | 최성원 | fix: presence 재연결·오류 격리·실시간 렌더 안정성 보완 | 확인 계정 |
 | `f0b5d66c93f221faf03c7665bc010fbee5684bfc` | 2026-09-04T13:26:30+09:00 | HyeonJun Choi | Merge ed80e3a2abb19362c737ded3c2c426703e00ad41 into 1945b2134a0a2b792c5058358bbab541154f7222 | 팀/미분류 |
 | `dadc71a1d15371121fd322b20b9655ee1465be33` | 2026-09-04T13:23:12+09:00 | beyondsoft-dev | Merge pull request #292 from beyondsoft-kr/feat/native-recruiter | 팀/미분류 |
 | `fd595f55812acbcebc51053e9054bb69ff8e0803` | 2026-09-04T12:49:52+09:00 | HyeonJun | merge: 바텀시트가 페이지와 구분되도록 백드롭 딤 상향 | 팀/미분류 |
 | `fe1a31bee8b62e073b33c0cab4757c277c40caeb` | 2026-09-04T12:49:43+09:00 | HyeonJun | fix(native): 바텀시트가 페이지와 구분되도록 백드롭 딤 상향 | 팀/미분류 |
-| `f834d33c29c6bc56422c41e279ed1113f124602a` | 2026-09-04T12:42:50+09:00 | 최성원 | feat: 사용자 온라인 접속 상태·실시간 운영자 표시 | 팀/미분류 |
+| `f834d33c29c6bc56422c41e279ed1113f124602a` | 2026-09-04T12:42:50+09:00 | 최성원 | feat: 사용자 온라인 접속 상태·실시간 운영자 표시 | 확인 계정 |
 | `c5ecc7d30ace648823801717c21834b9324c915c` | 2026-09-04T12:39:51+09:00 | HyeonJun | merge: 구인자 공고 카드에 세부지역 배지 추가 | 팀/미분류 |
 | `86ad9776509cc142b0b529fbb0adcb0de0eead14` | 2026-09-04T12:39:40+09:00 | HyeonJun | feat(native): 구인자 공고 카드에 세부지역 배지 추가 | 팀/미분류 |
 | `a85ccc15d25bef2b6a4e7f9e6dc43bb619b15318` | 2026-09-04T12:34:25+09:00 | HyeonJun | merge: 공고 목록 정렬 셀렉트의 "정렬" 라벨 숨김 | 팀/미분류 |
@@ -234,7 +234,7 @@
 | `315d182548ccee66fae3b3b9f7bf29d0dac092d9` | 2026-09-03T14:40:19+09:00 | HyeonJun | docs(native): 구인자 영역 구현 플랜(Task 10개) - 순수 로직 lib/employer 5종+테스트, 탭 셸·역할 게이트, 목록·삭제, 폼 확장(스위치·블록·이미지), 등록/수정 배선, 내 정보 허브·업체 정보·사업자 인증 - 확정: update는 광고 필드 패스스루 필수, upsertEmployerOrganizationProfile은 displayName만, 블록 유틸은 api 순수 모듈 import, 홈 헤더는 employer 전용 신설 - Global Constraints에 heroui-native 스킬·Uniwind 문서 필수(native 전용) 추가, sonnet 사전 검토 반영(getDocumentAsync) | 팀/미분류 |
 | `1945b2134a0a2b792c5058358bbab541154f7222` | 2026-09-03T14:32:28+09:00 | beyondsoft-dev | Merge pull request #289 from beyondsoft-kr/feat/chat-action-confirmation | 팀/미분류 |
 | `40f0e0d65d479403fc3cca5193c8826eb1e967bc` | 2026-09-03T14:14:25+09:00 | HyeonJun | docs(native): 구인자 영역(공고관리·공고등록·업체정보) 설계 스펙 - (employer)/(tabs) 3탭 셸(공고관리·채팅 플레이스홀더·내 정보)+역할 게이트 - 공고 폼은 결제 제외 동등: 스위치·상세설명 블록·대표/상세 이미지, exposureType standard 고정 - 내 정보 허브: 업체 정보 수정·사업자 인증(서류 업로드)·seeker 설정 공유 - 슬라이싱·광고·결제·업체 채팅·팀 관리는 범위 밖, 서버·DB 변경 없음 | 팀/미분류 |
-| `04f75f02cf5de583a91098ee73ae3319507b31ef` | 2026-09-03T14:01:56+09:00 | 최성원 | feat(web): 연락처 공개·면접 확정 전 확인창 추가 | 팀/미분류 |
+| `04f75f02cf5de583a91098ee73ae3319507b31ef` | 2026-09-03T14:01:56+09:00 | 최성원 | feat(web): 연락처 공개·면접 확정 전 확인창 추가 | 확인 계정 |
 | `a5927ecc49e4c96262b2ebf7b8333281f0742e08` | 2026-09-03T13:40:52+09:00 | beyondsoft-dev | Merge pull request #287 from beyondsoft-kr/feat/native-chat | 팀/미분류 |
 | `d03d1ae3136e3f671ccb64d323678eab780ebd29` | 2026-09-03T13:24:45+09:00 | HyeonJun | merge: native 연락처 공개 페이지·서랍 버튼 삭제(카드 흐름으로 일원화) - reveal 화면·Stack 등록·케밥 메뉴 항목·getConfirmedScheduleId 제거, 서버·web 변경 없음 | 팀/미분류 |
 | `4d9b819f4867f68280e42ac7aff6245097c7882c` | 2026-09-03T13:24:27+09:00 | HyeonJun | refactor(native): 연락처 공개 페이지·채팅방 서랍 진입 버튼 삭제 - chats/[id]/reveal.tsx 화면 삭제, (seeker)/_layout Stack.Screen 등록 제거 — 연락처 공개는 채팅 안 contact_request 카드(공개/거절)로만 처리 - chat-room-menu: canRevealContact/onRevealContact props·"연락처 공개" 항목 제거(신고·차단·나가기만) - chats/[id].tsx: getConfirmedScheduleId·Href·router.push 진입 코드 제거 - bambi-native: 소비자가 없어진 getConfirmedScheduleId·NativeScheduleSummary 삭제, 테스트 케이스 제거 - native vitest 33 passed, check-types 0, ultracite·biome 0 | 팀/미분류 |
@@ -269,13 +269,13 @@
 | `3f6e7a7eb4676b586807c61f65f35f02e4e93bdc` | 2026-09-02T17:25:29+09:00 | beyondsoft-dev | Merge pull request #282 from beyondsoft-kr/develop | 팀/미분류 |
 | `8313e9efcaeb07e4f112df8598d7ef3d6f045769` | 2026-09-02T17:20:09+09:00 | beyondsoft-dev | Merge pull request #281 from beyondsoft-kr/feat/native-mypage | 팀/미분류 |
 | `c3567f891dad8c03169873dc0d94684f353a4fcf` | 2026-09-02T16:52:28+09:00 | beyondsoft-dev | Merge pull request #279 from beyondsoft-kr/feat/role-onboarding-experience | 팀/미분류 |
-| `4e0a42cb523d02c39624a7e7ad3071abea7b87e5` | 2026-09-02T16:48:44+09:00 | 최성원 | fix(web): 온보딩 포인트몰 상품권을 1만원권으로 변경 | 팀/미분류 |
+| `4e0a42cb523d02c39624a7e7ad3071abea7b87e5` | 2026-09-02T16:48:44+09:00 | 최성원 | fix(web): 온보딩 포인트몰 상품권을 1만원권으로 변경 | 확인 계정 |
 | `5cb16a2dfb6110a465795a13208e44064c4ae3a8` | 2026-09-02T16:48:42+09:00 | HyeonJun | merge: native 회원가입 EXPO_PUBLIC_WEB_URL·약관 웹 링크 제거(native 전용 페이지 예정) | 팀/미분류 |
 | `3b246ce5247e01470fe9c8c59edf8c239d851676` | 2026-09-02T16:48:28+09:00 | HyeonJun | refactor: native 회원가입에서 EXPO_PUBLIC_WEB_URL·약관 웹 링크 제거 - 약관·개인정보 처리방침은 native 전용 페이지로 별도 제작 예정(사용자 결정)이라 웹 문서 링크용으로 재도입했던 EXPO_PUBLIC_WEB_URL 스키마와 signup.tsx의 LegalLink·openLegalDoc·Linking 사용을 삭제, 링크 자리엔 예정 주석 한 줄 - isSignupAvailable은 포트원 env(isIdentityVerificationConfigured)만으로 판정 — 웹 URL 없이도 가입 활성 - 약관 동의 체크박스와 문구는 유지, login.tsx 무변경 - 검증: native tsc 0건·vitest 118건 통과·ultracite 4파일 0건, apps/native·packages/env에 WEB_URL 잔여 참조 0건 | 팀/미분류 |
 | `f66ae0a67acbb4894287dc473987b9f9c7f2cb09` | 2026-09-02T16:40:16+09:00 | HyeonJun | merge: native 회원가입 2단계(본인인증 선행 → 가입 폼) 연결 | 팀/미분류 |
 | `f66411db85ff22f1b2d4f739eb7a9be3e5b98014` | 2026-09-02T16:40:03+09:00 | HyeonJun | feat: native 회원가입 — 웹과 동일한 본인인증 선행 → 가입 폼 2단계 흐름 - 로그인 화면 "회원가입"이 notifyWebOnly 자리표시자였음 — 새 라우트 /signup(Stack 헤더 "회원가입"·back 라벨 "로그인")로 연결, 웹 auth-panel.tsx와 같은 2단계(본인인증 → 정보 입력) 구현, 서버·web·auth 계약 무변경 - 1단계: 인앱 본인인증 모달(useIdentityModal 재사용) → onboarding.checkIdentityForSignup → hasAccount면 "이미 가입된 계정이 있어요" 알럿 후 로그인 복귀, 아니면 인증 건 ID 보관 후 2단계 - 2단계 폼(웹 AuthSignupFields 순서·문구): 닉네임·아이디(LOGIN_ID_HELP_TEXT 상시 안내)·이메일·비밀번호(표시 토글)·비밀번호 확인·가입 유형(RadioGroup 개인회원/업소회원, 업소회원 안내)·약관 동의 Checkbox + 이용약관/개인정보 처리방침 링크(시스템 브라우저), 완료 키 체인, 단계 표시 SignupSteps(접근성 라벨), 19금 고지는 footer로 두 단계 상시 노출 - 신규 use-signup.tsx: validateSignupInput(웹 getValidationError 규칙·문구, 아이디는 @bambi-app/auth/login-id getLoginIdErrorMessage 공용) → authClient.signUp.email → 역할별 createJobSeeker/EmployerProfile({identityVerificationId}) → recordLegalConsent(실패 무시) → clearGuestToken → queryClient.clear → dismissAll+replace("/"). 세션 가드(Redirect)를 signup에 두지 않음 — signUp 직후 세션이 생겨 프로필 생성 전 언마운트되는 문제 회피. issueGuestToken은 부르지 않음(gender는 서버가 인증 건에서 파생) - 부분 실패 복구: signUp 성공 후 프로필 생성 실패 시 signedUpRef로 재제출 때 signUp 생략·getMine으로 기존 프로필 확인, BAD_REQUEST(인증 건 30분 만료)는 1단계로 되돌림, CONFLICT(타 계정 CI 충돌)는 signOut 후 로그인 복귀, signUp 처리 중·성공 후 beforeRemove·헤더 back·스와이프 이탈 차단 - onboarding.tsx(세션 있고 프로필 없는 복구 화면): 서버가 인증 건 없는 프로필 생성을 BAD_REQUEST로 막으므로 같은 인증 모달로 본인인증 → 프로필 생성, 오류 문구 한국어 맵 적용 - 공용화: bambi-screen.tsx에 notifyWebOnly·AdultNotice(19금 고지) 추출해 login/signup/member-only 공유, member-only 게스트 안내에서 "웹사이트에서 가입" 문구 제거 - env: EXPO_PUBLIC_WEB_URL(z.url().optional()) 재도입 — 용도는 약관·처리방침 문서 링크 전용, 포트원 env와 WEB_URL이 모두 있어야 isSignupAvailable(못 읽는 문서에 동의시키지 않기 위함), 미설정이면 기존 웹 안내 폴백 - 템플릿 잔재 삭제: components/sign-in.tsx·sign-up.tsx·utils/orpc.ts(미사용) - 검증: native tsc 0건·vitest 118건 통과·ultracite 72파일 0건, 적대적 리뷰 3렌즈×3라운드(통합 보고서 24건 수정), 4라운드는 사용자 지시로 종료 - 잔여(후속): 약관 동의 기록을 프로필 생성 전으로 옮겨 onboarding 복구 경로에도 남기기, 2단계 제출 오류 Alert를 가입 버튼 바로 위로 이동, MemberOnly 게스트 카드에 /signup 진입 버튼, 가입 보너스 안내(pointSettings.getPublicSignupBonus) 미구현, 실기기 확인(가입 완료·중복 계정·인증 만료 재시도·이탈 가드)은 사용자 수행 | 팀/미분류 |
-| `45d36235adae6663016af8690ab8ac72ccbbe4db` | 2026-09-02T16:17:58+09:00 | 최성원 | feat(web): 온보딩에 포인트몰 구매 시뮬레이션 5페이지 추가 | 팀/미분류 |
-| `2868db97c066039a7ad0e3c9cdcedb54361b2b37` | 2026-09-02T14:52:32+09:00 | 최성원 | ﻿feat(web): 역할별 반응형 온보딩·코치마크·코드 미리보기 추가 | 팀/미분류 |
+| `45d36235adae6663016af8690ab8ac72ccbbe4db` | 2026-09-02T16:17:58+09:00 | 최성원 | feat(web): 온보딩에 포인트몰 구매 시뮬레이션 5페이지 추가 | 확인 계정 |
+| `2868db97c066039a7ad0e3c9cdcedb54361b2b37` | 2026-09-02T14:52:32+09:00 | 최성원 | ﻿feat(web): 역할별 반응형 온보딩·코치마크·코드 미리보기 추가 | 확인 계정 |
 | `06b5aee3934cfc9f675adbdfd3bcf4e349c893d8` | 2026-09-02T14:19:50+09:00 | HyeonJun | merge: native 아이디 찾기·비밀번호 재설정 실배선(인앱 본인인증 모달 재사용) | 팀/미분류 |
 | `880fed4efba6d659832423357a4622a284ef3e47` | 2026-09-02T14:19:30+09:00 | HyeonJun | feat: native 아이디 찾기·비밀번호 재설정 실배선(인앱 본인인증 모달 + accountRecovery 계약) - 로그인 화면 "아이디 찾기"·"비밀번호를 잊으셨나요?"가 notifyWebOnly 안내 자리표시자였음 — 방금 도입한 @portone/react-native-sdk 인앱 인증 모달을 재사용해 본인인증 → accountRecovery.lookupAccountByIdentity → 결과 다이얼로그(아이디 노출 / 새 비밀번호 폼 / 계정 없음)로 배선, 서버·web 무변경 - use-identity-verification.tsx: useIdentityModal·identityErrorMessage export(폴백 문구 인자 추가, 기존 두 훅 동작 무변경) — 인증 모달 발급 ID 대조 보호를 그대로 계승 - 신규 use-account-recovery.tsx: useIdentityModal 1회 호출 + 진입 의도 ref로 분기(로그인 화면에 WebView 모달이 흐름마다 늘지 않도록), 비밀번호 경로도 lookup을 먼저 타서 새 비밀번호 입력 뒤 "계정 없음" 실패를 막음(lookup은 인증 건 미소진·reset이 최종 소진, 웹과 동일), reset 성공 시 OS 알럿 후 로그인 폼 복귀·자동 로그인 없음(서버가 전 세션 삭제), reset mutation gcTime 0으로 평문 새 비밀번호가 MutationCache에 남지 않게 함, 오류 코드→한국어 맵(BAD_REQUEST/FORBIDDEN 미성년/NOT_FOUND/TOO_MANY_REQUESTS — 두 프로시저는 기본 10/h 티어) - 신규 account-recovery-dialog.tsx: heroui-native Dialog, 제목·설명은 웹 heading() 원문 그대로, 찾은 아이디는 본인에게 보여주는 값이라 마스킹 없음(웹과 동일)·"이 아이디로 로그인"이 아이디 필드를 채우고 비밀번호로 포커스, 새 비밀번호·확인 입력은 인증 건 ID를 key로 마운트해 프로그램적 닫힘 뒤 평문이 남지 않게 함, 재설정 요청 중에는 오버레이·back·스와이프(isSwipeable) 닫기 차단, 다크모드 대비 text-foreground·bg-surface-secondary - bambi-native.ts: validateNewPassword(8~128자·확인 일치, 기존 비공개 상수 재사용) + vitest 2건 - login.tsx: 두 링크를 훅으로 연결(env 미설정이면 notifyWebOnly 폴백 유지), 계정복구·비회원 인증·로그인 제출을 서로의 진행 상태로 상호 배타(인증 모달 이중 표시·Redirect 언마운트 방지) - 범위 밖으로 확정: 탈퇴 계정 분기(서버가 found:false로만 응답·restoreWithdrawnAccount는 admin 전용), not-found의 "회원가입 하러 가기"(native 가입 라우트 없음), 웹 password-done 화면(알럿으로 대체) - 검증: native tsc 0건·vitest 112건 통과·ultracite 0건, 적대적 리뷰 3렌즈×3라운드(지적 15건 수정·2건 기각) + 잔여 4건 수정, 실기기 확인(아이디 찾기·재설정·취소·다크모드)은 사용자 수행 | 팀/미분류 |
 | `76cb5ae5c0cad9aabfa25ed435f480245f3e57f9` | 2026-09-02T12:58:55+09:00 | HyeonJun | merge: native 본인인증 @portone/react-native-sdk 인앱 WebView 전환(웹 릴레이 제거) | 팀/미분류 |
@@ -314,12 +314,12 @@
 | `ad3533b4325af5f23ab19913bcbb5c9548d8e699` | 2026-09-01T09:30:30+09:00 | beyondsoft-dev | Merge pull request #275 from beyondsoft-kr/feat/admin-test-account-creation | 팀/미분류 |
 | `24aaf9c125706414e03552b3e4de5a7f72d81055` | 2026-08-31T14:34:04+09:00 | HyeonJun | merge: 순수 공고 상세 이미지 업로드 슬라이싱과 조각 그룹 렌더 | 팀/미분류 |
 | `1810381c6dd3a7f37a07de38114ea4a259a89a61` | 2026-08-31T14:33:44+09:00 | HyeonJun | feat: 순수 공고 긴 상세 이미지를 업로드 시점에 슬라이싱해 native 흐림 해결 - 원인: Android RN Image(Fresco)가 세로 4096px 초과 비트맵을 다운샘플해 초장신 상세 이미지(실측 730×3200~5700px)가 흐려짐 — 저장본은 원본 그대로였음 - 업로드가 서명 URL 브라우저→GCS 직행(서버 무코덱)이라 웹 제출 시 canvas로 무의존 슬라이싱: 세로 3500px 초과 시 균등 분할(각 조각 ≤3500<4096), 조각별 업로드 - job_post_media에 sliceGroupId·sliceIndex(nullable) 추가 — 마이그레이션 0113(ALTER 2건만, 산출물 검토 완료·적용은 배포 절차에서), getById media.detail로 관통 - detail 개수 상한은 원본 단위 유지(sliceIndex null/0만 집계), zod 배열 max는 조각 하드캡(5×8)으로 상향, 편집 프리필은 조각 그룹을 원본 1장으로 접어 5슬롯 UI 유지·기존 키 재전송 - 웹 렌더: 조각 그룹을 간격 0·그룹 컨테이너에만 라운드/테두리로 이어 그림(단일 이미지 시각 불변) - native 렌더: groupDetailImageSlices 순수 함수(연속 sliceGroupId 런 그룹핑, 테스트 3건)로 그룹 안 간격 0·양 끝만 라운드/상하 테두리, 접근성은 그룹당 라벨 1개, 조각 메타 없으면 기존 렌더와 동일(수집 상세 불변) - 잔여: 기존 저장 이미지 백필 없음(재업로드 전까지 흐림 지속), 운영자 디자인 다이얼로그 경로는 미적용(재저장 시 그룹 메타 평탄화 가능), 조각 부분 업로드 실패 시 전량 재시도(고아 조각 허용) | 팀/미분류 |
-| `c2ab938dc5376c3acb1ac4c9a490668ecb500209` | 2026-08-31T14:13:27+09:00 | 최성원 | refactor 운영자 가계정 공통 정책 정리 | 팀/미분류 |
-| `7731bc9f2462c434e15d2bfee1803d000cf5e29e` | 2026-08-31T14:04:59+09:00 | 최성원 | feat: 운영자 수동 등급 기준 변경·계정 생성 진입점 보완 | 팀/미분류 |
+| `c2ab938dc5376c3acb1ac4c9a490668ecb500209` | 2026-08-31T14:13:27+09:00 | 최성원 | refactor 운영자 가계정 공통 정책 정리 | 확인 계정 |
+| `7731bc9f2462c434e15d2bfee1803d000cf5e29e` | 2026-08-31T14:04:59+09:00 | 최성원 | feat: 운영자 수동 등급 기준 변경·계정 생성 진입점 보완 | 확인 계정 |
 | `6d628afc679694c905341df92b95120eeaa9fd37` | 2026-08-31T13:52:48+09:00 | HyeonJun | merge: 순수 공고 상세 공고 설명 섹션 분리 | 팀/미분류 |
 | `bd697608fefd803d3d92132d5df4ee69b26955de` | 2026-08-31T13:52:35+09:00 | HyeonJun | feat(native): 순수 공고 상세의 상세 글을 "공고 설명" 별도 섹션으로 분리 - 정보 Surface 안에 평문으로 끼어 있던 description을 빼서 웹과 같은 "공고 설명" 섹션(헤딩→서식 본문→상세 이미지)으로 이동, 면접 안내는 정보 섹션 유지 - JobDescriptionSection 신설: 서버 descriptionBlocks(문단/소제목/불릿/강조)를 웹 job-description-content와 같은 규칙으로 렌더 — resolveJobDescriptionContent(순수 모듈) 재사용, 강조 박스는 웹 coral-50 축을 bg-accent/10 토큰으로 이식 - 상세 이미지는 getById가 이미 내려주던 media.detail(storageKey)을 공개 버킷 URL로 조립해 수집 상세의 접힘+더보기 컴포넌트(CrawledJobDetailImages)로 재사용 — 서버 수정 없음, base 미설정·크기 메타 없는 행은 제외 | 팀/미분류 |
-| `46aac563a441363a28ef9b9636f5ae85227a8f4e` | 2026-08-31T13:31:50+09:00 | 최성원 | feat: 운영자 계정 생성 화면·로컬 미디어 검증 흐름 완성 | 팀/미분류 |
-| `95afa923fc5a5c63aa1ab0856e450a85aaccee70` | 2026-08-31T13:31:36+09:00 | 최성원 | feat: 운영자 가계정 생성·인증 정책 연결 | 팀/미분류 |
+| `46aac563a441363a28ef9b9636f5ae85227a8f4e` | 2026-08-31T13:31:50+09:00 | 최성원 | feat: 운영자 계정 생성 화면·로컬 미디어 검증 흐름 완성 | 확인 계정 |
+| `95afa923fc5a5c63aa1ab0856e450a85aaccee70` | 2026-08-31T13:31:36+09:00 | 최성원 | feat: 운영자 가계정 생성·인증 정책 연결 | 확인 계정 |
 | `8dc0fcdfbf1b6ac2e912fa05b8d0fe3a34216f1f` | 2026-08-31T13:23:44+09:00 | HyeonJun | merge: 순수 공고 상세 InfoTile 통일 | 팀/미분류 |
 | `8c6d27df31723af072863881bc8c1bf0a6a1f16b` | 2026-08-31T13:23:33+09:00 | HyeonJun | feat(native): 순수 공고 상세도 InfoTile 정보 섹션으로 통일 - InfoTile·formatMinimumWageLabel·formatPayUnitFirst를 bambi-screen 공용으로 승격하고 수집 상세의 로컬 사본 제거(두 상세가 공유) - 순수 상세를 수집 상세와 같은 구성으로: BambiHeader 대신 제목 Text(초과 여백 제거), 배지 행 유지, 급여(단위 앞 표기+최저시급 보조)·구인 업소(employerDisplayName)·근무시간 타일 스택 - 헤더 description에 있던 업소명·근무시간은 타일로 이동, 설명·면접 안내·하단 채팅 CTA는 유지 | 팀/미분류 |
 | `871e40d746fd0ed66aed1b00eb9bb455a86f5312` | 2026-08-31T13:15:42+09:00 | HyeonJun | merge: 수집 상세 제목 간격·InfoTile 정보 섹션 | 팀/미분류 |
@@ -348,12 +348,12 @@
 | `2204d2aab954713f1b72f3c720cfef8b22ba2647` | 2026-08-28T17:45:06+09:00 | beyondsoft-dev | Merge pull request #273 from beyondsoft-kr/develop | 팀/미분류 |
 | `bbc840337ce86e3e4a7f24ede416037bf21a7746` | 2026-08-28T17:38:55+09:00 | beyondsoft-dev | Merge pull request #272 from beyondsoft-kr/fix/member-grade-icon-clipping | 팀/미분류 |
 | `87d4d118d401179df3aacd55ef34b6d5efbf3150` | 2026-08-28T17:38:55+09:00 | beyondsoft-dev | Merge pull request #272 from beyondsoft-kr/fix/member-grade-icon-clipping | 팀/미분류 |
-| `0c194d862b46b0aafb9ad3a48e873bb4aefb60e9` | 2026-08-28T17:37:30+09:00 | 최성원 | fix: 회원 등급 뱃지 아이콘 잘림 수정 내역 보완 (#271) | 팀/미분류 |
-| `6d3856c28e2e66282a745706da6c6c079fe956f8` | 2026-08-28T17:37:30+09:00 | 최성원 | fix: 회원 등급 뱃지 아이콘 잘림 수정 내역 보완 (#271) | 팀/미분류 |
+| `0c194d862b46b0aafb9ad3a48e873bb4aefb60e9` | 2026-08-28T17:37:30+09:00 | 최성원 | fix: 회원 등급 뱃지 아이콘 잘림 수정 내역 보완 (#271) | 확인 계정 |
+| `6d3856c28e2e66282a745706da6c6c079fe956f8` | 2026-08-28T17:37:30+09:00 | 최성원 | fix: 회원 등급 뱃지 아이콘 잘림 수정 내역 보완 (#271) | 확인 계정 |
 | `060087523a9439627d61dfc09f6cdc8fdc818971` | 2026-08-28T17:37:28+09:00 | HyeonJun | merge: 로그인 하단 비회원·회원가입 순서 교체와 전경색 중립화 | 팀/미분류 |
 | `f97df5da63165d76496af9e42cc711450f0a0e59` | 2026-08-28T17:37:18+09:00 | HyeonJun | fix(native): 로그인 하단 비회원·회원가입 순서 교체와 전경색 중립화 | 팀/미분류 |
-| `f1eacc725a7857fce8de35e2768b30c445d1767d` | 2026-08-28T17:36:29+09:00 | 최성원 | fix: ?? ?? ?? ??? ?? ?? (#271) | 팀/미분류 |
-| `cea6d44e2c33014463f21a16ff37197993472e34` | 2026-08-28T17:36:29+09:00 | 최성원 | fix: 회원 등급 뱃지 아이콘 잘림 수정 (#271) | 팀/미분류 |
+| `f1eacc725a7857fce8de35e2768b30c445d1767d` | 2026-08-28T17:36:29+09:00 | 최성원 | fix: ?? ?? ?? ??? ?? ?? (#271) | 확인 계정 |
+| `cea6d44e2c33014463f21a16ff37197993472e34` | 2026-08-28T17:36:29+09:00 | 최성원 | fix: 회원 등급 뱃지 아이콘 잘림 수정 (#271) | 확인 계정 |
 | `5db0ed833a0e68c988277b3c2aed5111f10e69b5` | 2026-08-28T17:27:56+09:00 | HyeonJun | merge: 로그인 화면 계정 복구·회원가입·비회원 인증 진입점 추가 | 팀/미분류 |
 | `f5a9db87f6d321a162a0fbdfd1330beaf204fc96` | 2026-08-28T17:27:41+09:00 | HyeonJun | feat(native): 로그인 화면 계정 복구·회원가입·비회원 인증 진입점 추가 | 팀/미분류 |
 | `e1328a1f7ebd0005aa1c18033e9a2983be218ccb` | 2026-08-28T16:53:10+09:00 | HyeonJun | merge: 키보드가 입력·CTA를 가리던 문제 수정 | 팀/미분류 |
@@ -364,22 +364,22 @@
 | `423599782c6036c649afb14364388dd4dee5e2e6` | 2026-08-28T15:49:33+09:00 | HyeonJun | merge: 구직자 홈 재설계·웹 브랜드 색상 이식 | 팀/미분류 |
 | `1658395af3219048c68ad9f90ea461e9f0c1bf70` | 2026-08-28T15:49:20+09:00 | HyeonJun | feat(native): 구직자 홈 재설계·웹 브랜드 색상 이식 | 팀/미분류 |
 | `7c1160765d30c3ad9b261800d4b2ce67b1b61aaa` | 2026-08-28T15:43:41+09:00 | beyondsoft-dev | Merge pull request #270 from beyondsoft-kr/fix/job-payment-grade-retention | 팀/미분류 |
-| `62562539cdbbf22d58c4ea1007bf144a19db1f70` | 2026-08-28T15:20:19+09:00 | 최성원 | refactor: 포인트 설정 하드코딩 제거 | 팀/미분류 |
+| `62562539cdbbf22d58c4ea1007bf144a19db1f70` | 2026-08-28T15:20:19+09:00 | 최성원 | refactor: 포인트 설정 하드코딩 제거 | 확인 계정 |
 | `5b64eecb2f8525d7cbf5b0a801507c952109e2a9` | 2026-08-28T15:00:45+09:00 | HyeonJun | fix(native): 로그인 화면 상단 여백 축소·19금 배지 추가 | 팀/미분류 |
-| `0535678c263a25b6a97232e47863242dcc239ec1` | 2026-08-28T15:00:41+09:00 | 최성원 | fix: 포인트 설정 저장 경계와 공고 결제 식별자 통합 | 팀/미분류 |
+| `0535678c263a25b6a97232e47863242dcc239ec1` | 2026-08-28T15:00:41+09:00 | 최성원 | fix: 포인트 설정 저장 경계와 공고 결제 식별자 통합 | 확인 계정 |
 | `790150b7db92db8e5b9a7604929baaf29dcd491f` | 2026-08-28T14:27:52+09:00 | HyeonJun | fix(native): 로그인 화면 내비게이션 헤더 제거 | 팀/미분류 |
 | `e267ebde32c77343220874ebb81b60b95c17527b` | 2026-08-28T14:26:11+09:00 | HyeonJun | fix(native): 로그인 화면에서 개발 빌드 전용 계정 블록 제거 | 팀/미분류 |
 | `a430931ae812dd58baace9b7795fa2953d13a670` | 2026-08-28T14:19:50+09:00 | HyeonJun | merge: native 로그인 화면 재설계·아이디 로그인·로그아웃 진입점 | 팀/미분류 |
 | `c85e8ecff9c391e34ec11ee6eb0112ad8fb82d1d` | 2026-08-28T14:18:20+09:00 | HyeonJun | feat(native): 로그인 화면 재설계·아이디 로그인 지원·로그아웃 진입점 추가 | 팀/미분류 |
 | `19e5cfc77248e87f83df51211477d397bdb93b13` | 2026-08-28T13:15:19+09:00 | HyeonJun | fix(native): 서버 계약 드리프트 6건 정정·metro lazy 청크 경고 제거 | 팀/미분류 |
-| `0b79117c0ac14d3a734b3b291c51b80f79d18d94` | 2026-08-28T13:11:49+09:00 | 최성원 | fix: 공고 결제 포인트 사용 시 회원 등급 유지 | 팀/미분류 |
+| `0b79117c0ac14d3a734b3b291c51b80f79d18d94` | 2026-08-28T13:11:49+09:00 | 최성원 | fix: 공고 결제 포인트 사용 시 회원 등급 유지 | 확인 계정 |
 | `684b9cc7fe48949492f52eb68226840d5c7cebdf` | 2026-08-28T12:43:58+09:00 | HyeonJun | chore: 앱 개발 스크립트 오타 수정 | 팀/미분류 |
 | `c2db00ece11e91c723591ae07f4bf15f9ff51345` | 2026-08-28T12:34:00+09:00 | HyeonJun | chore: web제외 앱 개발 스크립트 추가 | 팀/미분류 |
 | `b470ac02a3d59ab6b4ff7b44a0bc55a985d15ab2` | 2026-08-28T12:02:21+09:00 | beyondsoft-dev | Merge pull request #268 from beyondsoft-kr/feat/jobs-moon-ad-rail | 팀/미분류 |
-| `afdeae76629f82974c0da392c3277bbe30b00466` | 2026-08-28T11:59:05+09:00 | 최성원 | fix: HIT 리본 임의 글자 크기를 타이포 토큰으로 교체 | 팀/미분류 |
-| `e75f1774593c080b53e28d960e43a577857a48b6` | 2026-08-28T11:57:14+09:00 | 최성원 | fix: /jobs 소개 문구·회원가입 CTA 간소화 | 팀/미분류 |
-| `54c15cca001095d481ba411fe0cd316f8a20680f` | 2026-08-28T11:48:34+09:00 | 최성원 | feat: 공개 채용·커뮤니티 광고 rail·큐레이션 UI 개선 | 팀/미분류 |
-| `ea712978eb50d61b46683521bfc5c78890f1b30c` | 2026-08-28T11:48:26+09:00 | 최성원 | docs: 공개 채용·커뮤니티 랜딩 광고·큐레이션 계획 | 팀/미분류 |
+| `afdeae76629f82974c0da392c3277bbe30b00466` | 2026-08-28T11:59:05+09:00 | 최성원 | fix: HIT 리본 임의 글자 크기를 타이포 토큰으로 교체 | 확인 계정 |
+| `e75f1774593c080b53e28d960e43a577857a48b6` | 2026-08-28T11:57:14+09:00 | 최성원 | fix: /jobs 소개 문구·회원가입 CTA 간소화 | 확인 계정 |
+| `54c15cca001095d481ba411fe0cd316f8a20680f` | 2026-08-28T11:48:34+09:00 | 최성원 | feat: 공개 채용·커뮤니티 광고 rail·큐레이션 UI 개선 | 확인 계정 |
+| `ea712978eb50d61b46683521bfc5c78890f1b30c` | 2026-08-28T11:48:26+09:00 | 최성원 | docs: 공개 채용·커뮤니티 랜딩 광고·큐레이션 계획 | 확인 계정 |
 | `19833dff8e9e0e87cc9c42bc00d49b1c1662d0d7` | 2026-08-28T11:39:10+09:00 | beyondsoft-dev | Merge pull request #266 from beyondsoft-kr/fix/hydration-mismatch-418 | 팀/미분류 |
 | `ed8beb54de59f53fe387506c2e6fd8e5639aa7d1` | 2026-08-28T11:38:14+09:00 | beyondsoft-dev | Merge pull request #264 from beyondsoft-kr/fix/footer-ssr-and-block-hint | 팀/미분류 |
 | `bf394ea39c3e17b582c6fce5ff28099bdf5ee2e1` | 2026-08-28T10:55:25+09:00 | HyeonJun | merge: 하이드레이션 불일치 3건 해소 (#418) - auth-client-provider의 isPending·user에 mounted 가드를 채워 /employer/new 내비 span↔a 불일치 해소 - formatCommunityDate에 Asia/Seoul 타임존 고정(자정 경계 날짜 갈림), 푸터 저작권 연도는 suppressHydrationWarning - 광고 배너 로테이션 가설은 직접 검증으로 기각, 클라이언트 전용 상태 축은 이미 전부 가드되어 무변경 | 팀/미분류 |
@@ -406,7 +406,7 @@
 | `517e405dbf0481cbf4bda51543cc2d5527507795` | 2026-08-27T14:30:34+09:00 | HyeonJun | merge: 운영자 쪽지 발송·회원 쪽지함·알림 연동 - 스키마 0112(본문+수신자 분리)·directMessages 라우터·알림 파이프라인 direct_message 연동 - 쪽지함 /seeker/me/messages(읽음·보관·소프트 삭제·배지), 운영자 /moderator/messages(역할+개별 발송·이력·읽음 확인) - Fable 적대적 리뷰 8건 반영(SSE 배지 무효화·admin 개별 발송 차단·이력 페이지네이션 등), 매뉴얼 3종·브라우저 테스트 플로우 동반 - 타입 3패키지·신규 테스트(서비스 6·라벨 39·메뉴 5·매뉴얼 18) 통과, 이슈 #261 | 팀/미분류 |
 | `fd4c3614e5947916deb41f99fcfcf0cc4654915a` | 2026-08-27T14:30:16+09:00 | HyeonJun | docs: 운영자 쪽지 브라우저 테스트 플로우 추가 - 운영자 발송 7·수신자 8·엣지 6 시나리오(실시간 배지·admin 차단·입력 상한/이스케이프·모바일·빈 상태) - dev 23001·시드 계정·0112 적용 전제, 판정 기준 명시 | 팀/미분류 |
 | `952843ac10f44e75c54db3ae9c847c01a3ef0813` | 2026-08-27T14:30:09+09:00 | HyeonJun | fix: 쪽지 리뷰 지적 수정(배지 무효화·admin 발송 차단 등 8건) - SSE 수신 시 directMessages.unreadCount 무효화 추가 — 쪽지함 메뉴 배지 실시간 갱신(스펙 명시 기능 누락 보완) - 발송 이력 infiniteOptions+더 보기 전환(20건 초과 접근), sentDetail에 recipientCount 집계 반환·1000명 캡 안내 - 개별 지정 경로 admin·guest 발송 차단(서버 역할 필터 근본 수정+후보 검색·users 버튼 정합) — 매뉴얼 문구와 일치화 - 대량 브로드캐스트 알림 청크 25 병렬화(ponytail: 배치 insert 승격 여지), roles 중복 제거 스냅샷 정규화 - read 실패 toast, w-[560px]→sm:max-w-xl 토큰화, 패널 상세 SentDetailBody 추출(인지복잡도 한도) - api·web check-types, 서비스 6건·라벨 등 44건 테스트, ultracite 0건 통과 | 팀/미분류 |
-| `067060ace76bd4e487752d9e2374d1ce263949f2` | 2026-08-27T14:19:48+09:00 | 최성원 | feat: 포인트몰 확률·아이템·상품 유형 관리 개선 | 팀/미분류 |
+| `067060ace76bd4e487752d9e2374d1ce263949f2` | 2026-08-27T14:19:48+09:00 | 최성원 | feat: 포인트몰 확률·아이템·상품 유형 관리 개선 | 확인 계정 |
 | `1428de44bd330294bcaab758741b2c4c116ba53a` | 2026-08-27T14:10:47+09:00 | HyeonJun | docs: 매뉴얼 3종에 쪽지 기능 반영 - moderator-manual 3.24 쪽지 발송(대상 선택·발송 확인·발송 이력·수신자별 읽음), 2장 내비·3.3 사용자 관리 진입점 갱신 - seeker-manual 3-15 쪽지함, employer-manual 쪽지함 섹션(열람=읽음·보관·삭제 불가역·답장 불가), 알림 표에 쪽지 행 추가 - 실제 구현 화면 버튼명·문구 대조 작성, TOC 앵커 githubSlug 규칙 검증, 매뉴얼 테스트 18건 통과 | 팀/미분류 |
 | `0eea2018081dcad41b317ed1b7c564d818332c8b` | 2026-08-27T14:04:10+09:00 | HyeonJun | feat: 운영자 쪽지 발송·발송 이력 화면 추가 - /moderator/messages 신설(ModeratorMessagesPanel): 역할 체크박스(구직자[법률자문 포함]·구인자)+사용자 검색 멀티선택(listUsers 클라이언트 필터), 발송 확인 AlertDialog·toast - 발송 이력: 대상 라벨 매핑(구직자 전체/구인자 전체/개별 지정)·읽음 n/전체 m, 행 클릭 시 수신자별 읽음 Dialog - 내비 등록(회원 관리 그룹·more 탭 경로), users 테이블 "쪽지" 진입점(?to= 프리셋, 탈퇴 계정 숨김), ultracite 0건 | 팀/미분류 |
 | `61babfd938c71fa9cc34f4eb7869556e57af2e1d` | 2026-08-27T14:04:05+09:00 | HyeonJun | feat: 쪽지함 화면·마이페이지 메뉴 추가 - /seeker/me/messages 신설(MessagesScreen): 받은 쪽지/보관함 ToggleGroup 탭, keyset 무한 목록, 상세 Dialog 열람=읽음, 보관·삭제(확인 다이얼로그) - 마이페이지 NAV_ITEMS·허브 카드에 쪽지함 항목(MESSAGES_HREF 상수), 안읽음 배지(99+ 캡), admin에게는 숨김 - 역할 가시성 테스트 갱신(5건 통과), 스펙 문서 경로 /seeker/me/messages로 정정, ultracite 0건·web check-types 통과 | 팀/미분류 |
@@ -427,36 +427,36 @@
 | `1cac5588267a07e523a5375e0c655384fcded9b6` | 2026-08-27T10:42:12+09:00 | HyeonJun | merge: 매뉴얼 UI/UX 점검 후속 - 모바일 h2·h3 위계 단차(h3 text-lg md:text-xl), 전환 탭 aria-current, 목차 링크 py-1 탭 영역, 표 래퍼 section+tabIndex 키보드 스크롤(ultracite 0건·tsc·manual 테스트 13건 통과) | 팀/미분류 |
 | `f8469a6d8ad2bf30f3e02e8aad69ad21cba6c5dc` | 2026-08-27T10:41:55+09:00 | HyeonJun | fix: 매뉴얼 UI/UX 점검 후속 — 모바일 헤딩 위계·목차 탭 영역·접근성 보강 | 팀/미분류 |
 | `9e56e50d2deea010989276add6539028b08d0ddb` | 2026-08-27T10:11:59+09:00 | beyondsoft-dev | Merge pull request #254 from beyondsoft-kr/fix/mobile-chat-attachment-layout | 팀/미분류 |
-| `1cded893e00932ec5b3c14792de5191b7e98dced` | 2026-08-27T09:43:58+09:00 | 최성원 | fix: 공고 검수 감지 영역 폰트 스케일 통일 | 팀/미분류 |
-| `0175ec1a4a057dd09a201fdca6c93dceac43af01` | 2026-08-27T09:42:53+09:00 | 최성원 | Merge remote-tracking branch 'origin/develop' into fix/mobile-chat-attachment-layout | 팀/미분류 |
-| `d2ea51b6014f23c72ffaf12ccf93f074d3c0b51a` | 2026-08-27T09:42:43+09:00 | 최성원 | fix: 공고 검수 본문 임의 px 폰트 제거 | 팀/미분류 |
+| `1cded893e00932ec5b3c14792de5191b7e98dced` | 2026-08-27T09:43:58+09:00 | 최성원 | fix: 공고 검수 감지 영역 폰트 스케일 통일 | 확인 계정 |
+| `0175ec1a4a057dd09a201fdca6c93dceac43af01` | 2026-08-27T09:42:53+09:00 | 최성원 | Merge remote-tracking branch 'origin/develop' into fix/mobile-chat-attachment-layout | 확인 계정 |
+| `d2ea51b6014f23c72ffaf12ccf93f074d3c0b51a` | 2026-08-27T09:42:43+09:00 | 최성원 | fix: 공고 검수 본문 임의 px 폰트 제거 | 확인 계정 |
 | `69a47f69ce5e2040373be4c3456a64527bd3f75f` | 2026-08-27T09:41:31+09:00 | HyeonJun Choi | Merge f07361f039ebb5ba12c760ac055fab17548a94f3 into e66e06edcc905ba5772bb6da5562ef76bcbb6378 | 팀/미분류 |
 | `e66e06edcc905ba5772bb6da5562ef76bcbb6378` | 2026-08-27T09:37:16+09:00 | beyondsoft-dev | Merge pull request #260 from beyondsoft-kr/fix/table-selection-search-control-layout | 팀/미분류 |
-| `9688bcd4090280d6da80a417e5715cda627cf337` | 2026-08-27T09:25:18+09:00 | 최성원 | refactor: 안전 UI의 14px 반경 하드코딩을 디자인 토큰으로 치환 | 팀/미분류 |
+| `9688bcd4090280d6da80a417e5715cda627cf337` | 2026-08-27T09:25:18+09:00 | 최성원 | refactor: 안전 UI의 14px 반경 하드코딩을 디자인 토큰으로 치환 | 확인 계정 |
 | `937b00cc3abdb46fb952c0e07041e3573831e39d` | 2026-08-26T08:05:04Z | 최성원 | Merge f898f666b2e4c69bc6d511671efaab068ce27170 into 1f17ea97fdfa6a92e8afe79e45c8bc9eb94ebd54 | 팀/미분류 |
 | `f898f666b2e4c69bc6d511671efaab068ce27170` | 2026-08-26T17:04:50+09:00 | vscodereader | fix: 포인트몰 상품 등록·카테고리 관리 UX 정리 | 확인 계정 |
 | `a16308807cccf54907f9d19bb2f389e672d83bf4` | 2026-08-26T17:00:04+09:00 | vscodereader | merge: 최신 develop 반영 및 migration 체인 재정렬 | 확인 계정 |
-| `216155a44b3aa9e8edda24f81170f7212443c818` | 2026-08-26T16:48:33+09:00 | 최성원 | fix: 공고 검수 상세 카드 헤더 기준선 정렬 | 팀/미분류 |
+| `216155a44b3aa9e8edda24f81170f7212443c818` | 2026-08-26T16:48:33+09:00 | 최성원 | fix: 공고 검수 상세 카드 헤더 기준선 정렬 | 확인 계정 |
 | `7502177483562dfa5e3fb7e5bfc3addfc7a3c1d1` | 2026-08-26T15:56:20+09:00 | HyeonJun | merge: 가이드·매뉴얼 콘텐츠 아티클 타이포 리디자인 - 가이드 본문 에디토리얼 톤(전경색·base·행간 확대)·허브 카드 line-clamp-2+읽기 시간 메타, 매뉴얼 ToC 왼쪽 여백 grid 분리·Blockquote 콜아웃 박스 제거(라벨형 플레인), 표면 간 행간·위계 일관화(ultracite 0건·tsc·web 811건 통과, 실패 6건은 기저 실패 확인) | 팀/미분류 |
 | `5bf521c89e32716f231d50bdab6bc073ac0ca8f4` | 2026-08-26T15:55:58+09:00 | HyeonJun | feat: 가이드·매뉴얼 콘텐츠 아티클 타이포 리디자인 - 가이드(/jobs/guide/[slug]) 본문을 에디토리얼 아티클 톤으로: 문단 text-sm muted → text-base 전경색·leading-7/sm:leading-8, 섹션 h2 text-xl/sm:text-2xl 위계 강화, h1 text-3xl/sm:text-4xl, 리드문 확대, 본문 읽기폭 max-w-3xl, FAQ 동일 본문 톤 — 렌더 텍스트·헤딩 레벨·JSON-LD는 불변 - 가이드 허브 카드: 설명 line-clamp-2로 높이 정렬 + 어절수 기반 "읽는 시간 약 N분" 메타 라인(분당 250어절·최소 1분, 레지스트리 파생·신규 콘텐츠 없음), 카드 p-5·h-full·mt-auto 바닥 핀 - 매뉴얼 ToC를 왼쪽 여백으로: lg+에서 grid-cols-[14rem_minmax(0,1fr)]로 ToC를 좌측 열에 분리해 본문이 읽기폭을 온전히 확보, sticky·자체 스크롤·scrollspy·모바일 아코디언 유지 - 매뉴얼 본문 타이포: h2 border-t 구분선 폐지(크기·여백 위계, text-xl/md:text-2xl), 행간 leading-7/sm:leading-8, Blockquote 콜아웃 박스(코럴 좌측보더+배경) 제거 → 라벨형 플레인 텍스트(첫 텍스트 기반 라벨 분기: "참고:"/"최종 갱신" 시작이면 라벨 생략, ⚠는 "주의", 그 외 "참고") — md 원문 무수정 - 교차 일관성 정리: 두 표면 본문 행간을 leading-7/sm:leading-8로 통일, 허브 리드문 sm:leading-8 누락 보완, 매뉴얼 모바일 h1>h2 단차 확보 - 검증: ultracite 0건·tsc 통과, web 테스트 811건 통과(실패 6건은 이번 변경과 무관한 기저 실패로 확인) | 팀/미분류 |
-| `998fa599001d80648c2c049c5f7a7f9ad400d6c4` | 2026-08-26T15:22:54+09:00 | 최성원 | fix: 사용자 선택 열·검색 버튼·모바일 신고창 배치 정리 | 팀/미분류 |
-| `29ac0766f2a5595ac9df727954baa7dc7853c9e2` | 2026-08-26T15:22:54+09:00 | 최성원 | docs: 사용자 선택 열·검색 버튼·모바일 신고창 분리 계획 작성 | 팀/미분류 |
+| `998fa599001d80648c2c049c5f7a7f9ad400d6c4` | 2026-08-26T15:22:54+09:00 | 최성원 | fix: 사용자 선택 열·검색 버튼·모바일 신고창 배치 정리 | 확인 계정 |
+| `29ac0766f2a5595ac9df727954baa7dc7853c9e2` | 2026-08-26T15:22:54+09:00 | 최성원 | docs: 사용자 선택 열·검색 버튼·모바일 신고창 분리 계획 작성 | 확인 계정 |
 | `165271b91188e0dc83bbdade8cd56b049b058528` | 2026-08-26T15:18:45+09:00 | HyeonJun | merge: SEO Phase B — 가이드 15편 체제·board 커뮤니티 진입점화 - 가이드 클러스터 5편→15편 확장(밤알바 필러·급여 정산·룸싸롱 페이백·안전·등급 비교·면접·노래방·마사지·강남 룸알바·용어사전), 업종→가이드 매핑 정확 매칭 갱신 - /board 허브 "밤알바 커뮤니티" 진입점화와 가이드 허브 상호링크 - 가드 테스트 15편 확장, 교차 중복 문단·문장 정리(ultracite 0건·tsc·web 테스트 90건 통과) Co-Authored-By: Claude Fable 5 <noreply@anthropic.com> | 팀/미분류 |
 | `b7f32c5f42d045555d89253215c9b772d8d39f05` | 2026-08-26T15:18:08+09:00 | HyeonJun | feat: SEO Phase B — 가이드 10편 확장·board 커뮤니티 진입점화 - 가이드 클러스터를 5편→15편으로 확장: 밤알바 종류(헤드 필러)·밤알바 급여 정산(시급·일급·TC·페이백·마이킹 구조, 수치 금지)·룸싸롱 페이백(조건 유형·함정 5·분쟁 대처)·밤알바 안전(허위 공고 패턴·선불금·1350/112 공적 창구)·유흥알바 등급 비교(텐프로·쩜오·일반 룸)·밤알바 면접(체크리스트·위험 신호)·노래방알바(일반 노래방 카운터와 노래주점 접객 구분 축)·마사지알바(합법 등록 매장 한정·건전 업소 판별)·강남 룸알바(상권별 특징, 업소명 금지)·밤알바 용어사전(정산·근무·호칭·공고 표현), 각 1,123~1,263어절·첫 문단 40~60어절 직답·FAQ 4 - 계획의 "여우알바 뜻" 편은 본문 경쟁사명 금지 가드와 충돌해 용어사전 편으로 대체(브랜드 쿼리는 이미 1페이지) - 업종→가이드 매핑을 정확 매칭으로 갱신: karaoke-bar→noraebang-alba, room-salon→room-salon-payback, massage→massage-alba 신설 — 칩 렌더 변경 없이 단일값 구조 유지 - /board 허브를 "밤알바 커뮤" 쿼리(현 50위) 진입점화: title 선두·SSR 표제에 "밤알바 커뮤니티" 정확 문구, 가이드 허브↔board 상호링크 - 가드 테스트 15편 순회로 확장(카운트 5→15), 검증서 발견한 교차 중복 정리 — 노래방·마사지 편의 텐프로 편 문단 재사용(major)은 업종 특화 서술로 전면 재작성, 잔여 완전 동일 문장 5건(bam-alba·gangnam·interview)과 "무조건" 표현도 신규 문장으로 교체 - 검증: ultracite 0건·tsc 통과·web 테스트 90건 통과. community-board-navigation.test.ts 1건 실패는 이번 변경과 무관한 브랜치 기저 기존 실패로 확인 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com> | 팀/미분류 |
 | `d47befdbcd7e4bedc5088aaa605073309f4674c4` | 2026-08-26T06:13:10Z | 최성원 | Merge 5389080c60493b0070a0de6dc9e52b704d8da90a into 1f17ea97fdfa6a92e8afe79e45c8bc9eb94ebd54 | 팀/미분류 |
-| `5389080c60493b0070a0de6dc9e52b704d8da90a` | 2026-08-26T15:13:05+09:00 | 최성원 | refactor: 비색상 UI 배치 변경을 별도 브랜치로 분리 | 팀/미분류 |
-| `6762cb6795e009ce2d5d609b997fbb18a5ffc7d1` | 2026-08-26T15:03:12+09:00 | 최성원 | fix: 사용자 관리 체크박스 열 좌측 여백 보강 | 팀/미분류 |
-| `681f71fe23a8aefc50fd6339769ae413d3b0ac57` | 2026-08-26T15:01:18+09:00 | 최성원 | fix: 헤더 검색 버튼을 공통 아이콘 크기로 통일 | 팀/미분류 |
-| `a7df91a3aed22d2151f1608c246d896a46623157` | 2026-08-26T15:00:07+09:00 | 최성원 | fix: 사용자 관리 선택 열을 출석 관리 여백 패턴으로 통일 | 팀/미분류 |
-| `f60b27aaac6fb621a2116f146bc2c7082b9cb1bf` | 2026-08-26T14:54:03+09:00 | 최성원 | fix: 모바일 신고창 폭·간격·액션 배치 축소 | 팀/미분류 |
-| `6cca4bef2f533bc165749ea53d5c332270f62d27` | 2026-08-26T14:44:48+09:00 | 최성원 | fix: 모바일 채팅 햄버거 아이콘 중앙 정렬 | 팀/미분류 |
+| `5389080c60493b0070a0de6dc9e52b704d8da90a` | 2026-08-26T15:13:05+09:00 | 최성원 | refactor: 비색상 UI 배치 변경을 별도 브랜치로 분리 | 확인 계정 |
+| `6762cb6795e009ce2d5d609b997fbb18a5ffc7d1` | 2026-08-26T15:03:12+09:00 | 최성원 | fix: 사용자 관리 체크박스 열 좌측 여백 보강 | 확인 계정 |
+| `681f71fe23a8aefc50fd6339769ae413d3b0ac57` | 2026-08-26T15:01:18+09:00 | 최성원 | fix: 헤더 검색 버튼을 공통 아이콘 크기로 통일 | 확인 계정 |
+| `a7df91a3aed22d2151f1608c246d896a46623157` | 2026-08-26T15:00:07+09:00 | 최성원 | fix: 사용자 관리 선택 열을 출석 관리 여백 패턴으로 통일 | 확인 계정 |
+| `f60b27aaac6fb621a2116f146bc2c7082b9cb1bf` | 2026-08-26T14:54:03+09:00 | 최성원 | fix: 모바일 신고창 폭·간격·액션 배치 축소 | 확인 계정 |
+| `6cca4bef2f533bc165749ea53d5c332270f62d27` | 2026-08-26T14:44:48+09:00 | 최성원 | fix: 모바일 채팅 햄버거 아이콘 중앙 정렬 | 확인 계정 |
 | `38c05653fb78b23dd95248255fb317b19cc4500c` | 2026-08-26T14:39:31+09:00 | HyeonJun | feat: /jobs 푸터 사업자 정보를 정적 HTML에 서버 주입 - SiteFooter가 클라이언트 조회 전까지 BAMBI_COMPANY 폴백(TODO_ 자리표시자)을 그리는 구조라, JS를 실행하지 않는 크롤러(AI봇 등)는 ISR HTML에서 자리표시자만 보던 문제 해소 — GEO 전략상 공개 표면(/jobs)은 정적 HTML에 실값이 실려야 함 - jobs/layout.tsx에서 publicClient(next/headers 미사용, ISR 비파괴)로 siteSettings.getFooter를 서버 조회해 SiteFooter initialData로 주입, 조회 실패 시 기존 폴백 동작 유지 - SiteFooter에 SiteFooterSettings 타입·initialData prop 추가(useQuery initialData 경유, 다른 사용처는 무변경) — 사업자 정보 정본은 운영자 콘솔 DB라는 운영 모델 유지(코드 하드코딩 배제) Co-Authored-By: Claude Fable 5 <noreply@anthropic.com> | 팀/미분류 |
-| `722a9dc7e87da9a85ee672ade298d5ce1e0be089` | 2026-08-26T14:38:09+09:00 | 최성원 | fix: 모바일 채팅 입력·첨부·정보 버튼 외곽선 보강 | 팀/미분류 |
-| `4b571039027846ecab87cdf6e21dfbc5bba3108f` | 2026-08-26T14:36:27+09:00 | 최성원 | fix: 운영자 검수 사유 모달 대비와 다크 외곽선 보강 | 팀/미분류 |
-| `dbf569830bea6d64014cb816c9cc56bb872abe30` | 2026-08-26T14:30:41+09:00 | 최성원 | fix: 다크 비활성 입력·버튼 글자 대비 강화 | 팀/미분류 |
-| `7a2334bb100125bcfec6db31b39148c68adbd441` | 2026-08-26T14:27:35+09:00 | 최성원 | fix: 비활성 outline 버튼 글자 대비 보강 | 팀/미분류 |
+| `722a9dc7e87da9a85ee672ade298d5ce1e0be089` | 2026-08-26T14:38:09+09:00 | 최성원 | fix: 모바일 채팅 입력·첨부·정보 버튼 외곽선 보강 | 확인 계정 |
+| `4b571039027846ecab87cdf6e21dfbc5bba3108f` | 2026-08-26T14:36:27+09:00 | 최성원 | fix: 운영자 검수 사유 모달 대비와 다크 외곽선 보강 | 확인 계정 |
+| `dbf569830bea6d64014cb816c9cc56bb872abe30` | 2026-08-26T14:30:41+09:00 | 최성원 | fix: 다크 비활성 입력·버튼 글자 대비 강화 | 확인 계정 |
+| `7a2334bb100125bcfec6db31b39148c68adbd441` | 2026-08-26T14:27:35+09:00 | 최성원 | fix: 비활성 outline 버튼 글자 대비 보강 | 확인 계정 |
 | `6294b3a7dba389fd1e67f796bc4c0b809f28203c` | 2026-08-26T14:20:18+09:00 | HyeonJun | feat: SEO Phase A — 가이드 클러스터 5편·E-E-A-T 푸터·GEO 보강 - 하루알바 /content/* 패턴을 벤치마크한 공개 가이드 클러스터 신설: /jobs/guide 허브 + /jobs/guide/[slug] 5편(텐프로알바·화류알바·주점알바·유흥알바·유흥알바 구인), 각 1,130~1,175어절·첫 문단 40~60어절 직답·FAQ 3~5문항·ISR·Article+BreadcrumbList JSON-LD(FAQPage 미사용 정책 유지) - GSC 근접권 쿼리(텐프로알바 9위·화류알바 10위·대구 주점알바 11.7위)와 전담 페이지 부재였던 유흥 계열(86~122위)을 타깃 — SEO title은 guideTitle이 keyword에서 파생해 퀸알바→여우알바→밤알바 정책 순서로 병기하고, h1·본문 표면에는 경쟁사명 미노출(검증에서 yuheung-alba h1 노출 결함 발견·수정) - 내부링크 그물: 가이드→관련 지역×업종 랜딩(jobLandingPath), 가이드 상호링크, 업종 랜딩→관련 가이드 칩(guideForIndustrySlug 매핑), /jobs 허브→가이드 허브, sitemap에 허브+5편 등재 - 가드 테스트(job-guide-content.test.ts) 신설: 본문 어절수 1,100~1,600·FAQ 3개 이상·금칙(경쟁사명·원화 금액 수치·로그인 유도)·relatedLandings/relatedGuides 슬러그 실존을 레지스트리 전편에 강제 — 화류알바 편의 업종 정의 문단이 유흥알바 편·랜딩 정의와 준-축어 중복이던 것을 화류계 분류 관점으로 재작성 후 재통과 - E-E-A-T: /jobs 전 공개 표면에 SiteFooter 마운트(jobs/layout.tsx 신설, 사업자 정보·직업정보제공사업 신고번호 노출), (legal)/about 회사소개 페이지 신설(sitemap 등재, TODO_ 자리표시자 값은 비노출), Organization JSON-LD에 직업정보제공사업 신고번호 identifier 추가 - GEO: public/llms.txt 신설(공개 표면·문의처 안내), 공고 0건 랜딩의 「모집 중인 공고 0개」를 중립 서술로 교체(AI·검색엔진의 "해당 지역엔 없음" 오인용 방지) - 검증: ultracite 0건·tsc 통과·web 테스트 40건 통과 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com> | 팀/미분류 |
-| `2267d8d7e39ed091c4f958f94559430377cc984d` | 2026-08-26T14:19:28+09:00 | 최성원 | fix: 공고 상세설명 보존·운영자 본문 이미지 검수 개선 | 팀/미분류 |
+| `2267d8d7e39ed091c4f958f94559430377cc984d` | 2026-08-26T14:19:28+09:00 | 최성원 | fix: 공고 상세설명 보존·운영자 본문 이미지 검수 개선 | 확인 계정 |
 | `f07361f039ebb5ba12c760ac055fab17548a94f3` | 2026-08-26T13:13:37+09:00 | HyeonJun | merge: 즉시 수집·수집 스케줄러 탭 통합 - 두 카드를 한 카드의 탭 구조로 합치고 스케줄러 탭 라벨에 켜짐/꺼짐 배지 부착, 매뉴얼 3.16 동기화 | 팀/미분류 |
 | `09b7831cbffe0f076b5867d4f56139ac764c6922` | 2026-08-26T13:13:25+09:00 | HyeonJun | feat: 즉시 수집·수집 스케줄러를 한 카드의 탭으로 통합 - 세로로 나란하던 두 카드를 shadcn Tabs 한 카드로 합침(기본 탭 즉시 수집) — 운영자가 그린 시안대로 탭 전환 구조 - 수집 스케줄러 탭 라벨에 저장된 상태 배지(켜짐=default·꺼짐=outline) 부착, 저장 시 배지 동기화 — 탭이 접혀도 자동 수집 여부가 보이게 - 두 패널은 keepMounted로 DOM 유지해 탭을 오가도 각자의 수집 데이터 선택 state가 초기화되지 않음(즉시 수집·스케줄러 선택 독립성 유지) - 기존 카드 컴포넌트는 Card 래퍼만 벗겨 Panel로 개명(ImmediateCollectionPanel·CrawlSchedulerPanel), 로직 불변 - 운영자 매뉴얼 3.16: 두 카드 서술을 수집 실행 카드(두 탭) 구조·탭 라벨 배지로 갱신 - ultracite 린트·web check-types 통과 | 팀/미분류 |
 | `e84efbb71a61999a54083435c44005ad6f141bd6` | 2026-08-26T12:59:06+09:00 | HyeonJun | merge: 크롤링 운영 후속 3건 — 카드 분리·고아 회차 수정·커뮤니티 하드삭제 - 즉시 수집과 수집 스케줄러를 독립된 두 카드로 분리해 "즉시 수집 전 저장 필요?" 혼동 제거 - 서버 재시작으로 「진행 중·0」으로 영영 남던 고아 수집 회차를 부팅 시 자동 실패 정리 - 수집 커뮤니티 글에도 완전 삭제(하드삭제) 추가(댓글 cascade 동반 삭제 고지), 운영자 매뉴얼 3.16 동기화 | 팀/미분류 |
@@ -465,15 +465,15 @@
 | `9a7a24c9dc5fce11e5faa029fa1d812a1d8d4e68` | 2026-08-26T12:58:39+09:00 | HyeonJun | fix: 서버 재시작으로 고아가 된 수집 회차를 부팅 시 실패로 정리 - 회차 완료 UPDATE는 크롤을 돌리는 프로세스 안에서만 일어나므로, dev HMR·재배포로 서버가 회차 도중 재시작되면 running 행이 「진행 중·수집 0」으로 영영 남던 버그 수정 - bambi-crawl-ingest에 reapOrphanedRunsOnBoot 신설 — 단일 인스턴스 전제상 부팅 시점 running 행은 전부 고아이므로 나이 무관 전량을 failed·finishedAt·"서버 재시작으로 중단된 회차입니다(완료 기록이 남지 않았습니다)" 메모로 정리, 정리 건수 반환 - crawl 플러그인이 스케줄 등록 전 이를 await(try/catch로 기동 비차단, 건수 있으면 warn 로그) — 고아를 만드는 재시작 자체가 정리 시점이 되어 즉시 자가 치유 - 기존 reapStaleRuns(다음 틱+30분) 경로는 행잉 대비 벨트로 유지 | 팀/미분류 |
 | `7896abe913189b21571f39c288be680afcebfb17` | 2026-08-26T12:32:53+09:00 | HyeonJun | merge: 운영자 크롤링 하드삭제·UX 개선 - 수집 공고 「삭제됨」 행에서 완전 삭제(하드삭제)할 수 있게 서버 hardDeletePost·확인 다이얼로그 추가 - 크롤링 페이지 UX 12건 개선(로딩 스켈레톤·노출 스위치 낙관 반영·진행 회차 자동 폴링·CSS truncate·커뮤니티 필터 URL 보존·업종 지정 되돌리기·현황 타일 앵커·h1·필터 건수·tabular-nums·설명 접기)과 운영자 매뉴얼 3.16 동기화 | 팀/미분류 |
 | `b113f26b77d5d03673eac51a098a743a945b7c01` | 2026-08-26T12:29:36+09:00 | HyeonJun | feat: 운영자 크롤링 페이지 UX 개선 12건 + 매뉴얼 동기화 - 로딩 스켈레톤: 수집 현황 타일이 로딩 중 0으로 오독되던 것과 목록 카드의 EmptyState "불러오는 중" 문구를 Skeleton으로 교체 - 노출 스위치 낙관 반영: onMutate 캐시 즉시 반영·onError 롤백·onSettled invalidate로 전환, 왕복 대기 중 연타 시 낡은 스냅샷 merge 레이스 해소 - 진행 중 회차 자동 폴링: running 회차가 있으면 회차 목록·수집 현황을 5초 간격 refetch, 끝나면 자동 중지 - 제목 12자 JS 하드컷 제거: CSS truncate(max-w-48)로 전환, title 툴팁 유지 - 커뮤니티 글 관리 필터·페이지 URL 보존: topicPage/topicStatus 파라미터 헬퍼 신설(공고 카드 jobPage/jobStatus와 상호 보존), 페이지 초과 보정 동일 적용 - 업종 지정: 저장 중인 행만 Select 잠금(전체 잠금 해제), 성공 토스트에 「되돌리기」 액션 추가 — setIndustryCategory 입력을 nullable로 확장해 null이면 업종을 비우고 active→needs_review 역전환 - 수집 현황 타일 앵커: 업종 검토 대기 타일→검토 카드, 정상/만료/삭제됨 타일→수집 공고 관리 카드로 scrollIntoView, 5타일 그리드 정돈(md:3·lg:5) - 페이지 h1 「크롤링」 추가(다른 moderator 페이지 관례와 통일) - 공고 상태 필터에 건수 표시(getSummary 캐시 공유, 커뮤니티는 상태별 집계 API 없어 미표시) - 회차 표 수집/신규/변경/실패·커뮤니티 댓글/조회에 tabular-nums, 메모 컬럼 max-w-xs·줄바꿈으로 표 폭 밀림 방지 - 수집 상한 카드 긴 설명 2문단을 첫 문장만 남기고 InfoPopover(base-ui render prop)로 접기 - 운영자 매뉴얼 3.16 크롤링: 완전 삭제·업종 되돌리기·필터 건수·자동 갱신·타일 이동·필터 유지 반영, 기존 "검토 대기로 되돌릴 방법 없음" 충돌 문구 교정 - ultracite 린트·@bambi-app/api·web check-types 통과 | 팀/미분류 |
-| `74333f481ca07dace191eebb95be2018274a4f5a` | 2026-08-26T12:18:14+09:00 | 최성원 | fix: 다크모드 outline 버튼 정책을 공통 컴포넌트로 일원화 | 팀/미분류 |
+| `74333f481ca07dace191eebb95be2018274a4f5a` | 2026-08-26T12:18:14+09:00 | 최성원 | fix: 다크모드 outline 버튼 정책을 공통 컴포넌트로 일원화 | 확인 계정 |
 | `a3c350f7c40a506ae2adbb4fa695614666347e78` | 2026-08-26T12:16:30+09:00 | HyeonJun | feat: 수집 공고 하드삭제(완전 삭제) 추가 - crawler 라우터에 hardDeletePost 추가 — status='removed' 행만 실제 DELETE(소프트 삭제 선행 필수), 행이 지워지면 재수집 방지 톰스톤도 사라져 원본이 살아 있으면 다음 회차에 다시 수집될 수 있음을 주석·화면 양쪽에 고지, FK(jobPost.crawledFromId)는 set null이라 전환된 공고는 유지 - 운영자 수집 공고 관리의 「삭제됨」 행 조치 메뉴를 복구 → 구분선 → 완전 삭제(destructive)로 재구성, 전용 확인 AlertDialog에서 되돌릴 수 없음·재수집 가능성 고지 - 라우터 테스트에 hardDeletePostAs 헬퍼와 완전삭제 성공(행 소멸 확인)·비removed NOT_FOUND 케이스 추가(스위트 실행은 dev DB 보호로 보류) - ultracite 린트·@bambi-app/api·web check-types 통과 | 팀/미분류 |
-| `6fcd845a49a9f9bf8fd23655c9504fc6bcce0237` | 2026-08-26T12:00:03+09:00 | 최성원 | fix: 고객센터 보조 액션 다크 스타일 통일 | 팀/미분류 |
-| `2064f1c069fb7e9a486ad5536702940c66d842f3` | 2026-08-26T11:43:42+09:00 | 최성원 | fix: 다크 헤더 전체 액션을 검은 표면과 밝은 전경으로 통일 | 팀/미분류 |
-| `dc6565fe13d8d2eff253ba5a9103131872e637c0` | 2026-08-26T11:41:19+09:00 | 최성원 | fix: 채팅·알림 버튼 다크 표면과 밝은 아이콘 복원 | 팀/미분류 |
-| `161f70e45e8c4e90ae2bfc85eaba6e1bf375710a` | 2026-08-26T11:38:25+09:00 | 최성원 | fix: 다크 헤더 채팅·알림 버튼 스타일 통일 | 팀/미분류 |
-| `2722b6b2921fda65bfb1a7086ffb6ef576046b30` | 2026-08-26T11:09:38+09:00 | 최성원 | merge: 최신 develop 반영 | 팀/미분류 |
-| `6ac5e54f22fa1e1ff0ce20338d8367ad3106c658` | 2026-08-26T11:09:05+09:00 | 최성원 | feat: 웹 전역 수동 다크모드와 UI 대비 정리 | 팀/미분류 |
-| `b1abb51cc02de7e3accf031c67c40e8bb66ba3e6` | 2026-08-26T11:08:50+09:00 | 최성원 | docs: 웹 전역 다크모드 구현 계획과 검수 흐름 정리 | 팀/미분류 |
+| `6fcd845a49a9f9bf8fd23655c9504fc6bcce0237` | 2026-08-26T12:00:03+09:00 | 최성원 | fix: 고객센터 보조 액션 다크 스타일 통일 | 확인 계정 |
+| `2064f1c069fb7e9a486ad5536702940c66d842f3` | 2026-08-26T11:43:42+09:00 | 최성원 | fix: 다크 헤더 전체 액션을 검은 표면과 밝은 전경으로 통일 | 확인 계정 |
+| `dc6565fe13d8d2eff253ba5a9103131872e637c0` | 2026-08-26T11:41:19+09:00 | 최성원 | fix: 채팅·알림 버튼 다크 표면과 밝은 아이콘 복원 | 확인 계정 |
+| `161f70e45e8c4e90ae2bfc85eaba6e1bf375710a` | 2026-08-26T11:38:25+09:00 | 최성원 | fix: 다크 헤더 채팅·알림 버튼 스타일 통일 | 확인 계정 |
+| `2722b6b2921fda65bfb1a7086ffb6ef576046b30` | 2026-08-26T11:09:38+09:00 | 최성원 | merge: 최신 develop 반영 | 확인 계정 |
+| `6ac5e54f22fa1e1ff0ce20338d8367ad3106c658` | 2026-08-26T11:09:05+09:00 | 최성원 | feat: 웹 전역 수동 다크모드와 UI 대비 정리 | 확인 계정 |
+| `b1abb51cc02de7e3accf031c67c40e8bb66ba3e6` | 2026-08-26T11:08:50+09:00 | 최성원 | docs: 웹 전역 다크모드 구현 계획과 검수 흐름 정리 | 확인 계정 |
 | `269489b7ad2b4a5dd62c169a55ba28047e0df51a` | 2026-08-26T10:58:18+09:00 | HyeonJun | merge: 모바일 필터 트리거 제거·광고 모집중 요약 점선 테두리 - 모바일(<md) 필터 미제공 제품 결정 반영(트리거 md~1720px 한정), 요약 박스 코럴 점선 테두리 통일 | 팀/미분류 |
 | `16fcf482c56295d4eb242220496a722d2d1c409e` | 2026-08-26T10:58:01+09:00 | HyeonJun | fix: 모바일 필터 트리거 제거·광고 모집중 요약 점선 테두리 - 필터 시트 트리거를 모바일(<md)에서 숨김(hidden md:inline-flex) — 모바일 필터는 의도적으로 제거된 기능(제품 결정), md~1720px에서만 노출하고 1720px+는 기존 사이드바 유지 - "+N칸 광고 모집중" 요약을 점선 테두리 박스로 변경 — bg-secondary 채움 제거, 광고 자리표시와 같은 코럴 계열(border-coral-300 dashed·text-destructive)로 통일 - visual-job-components.test.ts 주석·단언 갱신(md:inline-flex 노출 규칙 고정) | 팀/미분류 |
 | `243e43993d95c56dc02eef7d7b78dc4fdf6e1690` | 2026-08-26T10:36:17+09:00 | HyeonJun | merge: Seeker 메인페이지 UI/UX 개선 (필터 시트·자리표시 접기·접근성) - 1720px 미만 필터 소실을 시트로 해소(활성 필터 수 배지 트리거, MarketplaceFilterControls 재사용), 모바일 광고 자리표시 2개+"+N칸 모집중" 요약 접기·빈 상태 "필터 초기화" 배선 - 공고 카드 7자 JS 하드컷 제거(CSS truncate 일원화), 커버·가로 배너 object-cover 전환, 프리미엄 라벨 배지 톤 교정 - 접근성: 탭바 aria-current·배지 aria-label, 필터 라벨 useId 연결, 최소시급 inputMode="numeric", 오류 배너 role="status", 더보기 스피너+aria-busy - 수다방 섹션 CLS 제거(마운트 전 CommunitySkeleton), 모바일 하단 중복 여백 제거, 임의 px 토큰화, visual-job-components.test.ts 갱신 - 세션 환경 제약으로 lint·tsc·vitest 미실행 — 로컬 검증 필요 | 팀/미분류 |
@@ -484,10 +484,10 @@
 | `ba0705eb1d493c48227e611be06b0a4d7cb0e782` | 2026-08-26T09:35:00+09:00 | HyeonJun | feat: 기타 포인트 설정의 댓글 보너스·마일스톤 섹션 아코디언 전환 - 댓글 랜덤 보너스(comment-bonus-card)·댓글 마일스톤(comment-milestone-section)의 section+h2 래퍼를 "회원가입과 출석"과 동일한 아코디언 패턴으로 교체(자체 단일 아이템 Accordion, 하단 배치 순서 유지) - h2 제목을 AccordionTrigger로 이동, 내부 폼·목록·다이얼로그는 AccordionContent(px-4 pt-4 pb-4)로 그대로 이동, 기본 접힘 - ultracite 린트·web check-types 통과 | 팀/미분류 |
 | `d02e20fc88d22bea9372641076564cc32e3f1ab1` | 2026-08-25T17:42:29+09:00 | HyeonJun | merge: develop 최신화 반영(커뮤니티 레이아웃·글 내비게이션) - develop(cee75b1e, PR #246)을 feat/comment-point-bonus에 병합 - 마이그레이션 번호 충돌 해소: develop 0109_yielding_songbird 정본 유지, 우리 것을 0110_free_mulholland_black·0111_confused_lightspeed로 리넘버(journal when 승격·스냅샷 prevId 체인 재구성, generate no-op 검증) - dev DB 정합: songbird 수동 적용+기록 삽입, 리넘버 기록 갱신 후 migrate 진성 no-op 확인 - community.ts·community-post-detail.tsx 양축(보너스 배지·글 내비게이션) 보존 확인, api 44·web 7 테스트 통과 | 팀/미분류 |
 | `cee75b1e1609fdb92451a6659c01b64a8241b2e8` | 2026-08-25T17:27:30+09:00 | beyondsoft-dev | Merge pull request #246 from beyondsoft-kr/feat/community-layout-post-navigation | 팀/미분류 |
-| `f36be88de626fcc46a99dad917a3a364a01a8ba5` | 2026-08-25T17:22:50+09:00 | 최성원 | refactor: 게시판 배치 surface와 수다방 경로 단일 소스화 | 팀/미분류 |
-| `9db9265d43771a67f99d64547c660597af0efc89` | 2026-08-25T17:17:37+09:00 | 최성원 | feat: 메인·수다방 배치 관리와 글 상세 탐색 UI 추가 | 팀/미분류 |
-| `2f364afc8d4fa3ef887a7586c3007c9e269b25ca` | 2026-08-25T17:17:24+09:00 | 최성원 | feat: 게시판 배치 분리와 등록시간 탐색 API 구현 | 팀/미분류 |
-| `771190ab6b0c37b5551d378635309be79cc996d1` | 2026-08-25T17:17:08+09:00 | 최성원 | docs: 메인·수다방 배치 분리와 글 탐색 설계 작성 | 팀/미분류 |
+| `f36be88de626fcc46a99dad917a3a364a01a8ba5` | 2026-08-25T17:22:50+09:00 | 최성원 | refactor: 게시판 배치 surface와 수다방 경로 단일 소스화 | 확인 계정 |
+| `9db9265d43771a67f99d64547c660597af0efc89` | 2026-08-25T17:17:37+09:00 | 최성원 | feat: 메인·수다방 배치 관리와 글 상세 탐색 UI 추가 | 확인 계정 |
+| `2f364afc8d4fa3ef887a7586c3007c9e269b25ca` | 2026-08-25T17:17:24+09:00 | 최성원 | feat: 게시판 배치 분리와 등록시간 탐색 API 구현 | 확인 계정 |
+| `771190ab6b0c37b5551d378635309be79cc996d1` | 2026-08-25T17:17:08+09:00 | 최성원 | docs: 메인·수다방 배치 분리와 글 탐색 설계 작성 | 확인 계정 |
 | `bea379ebd458c21e6b8f5111a42066912a4237ca` | 2026-08-25T17:17:02+09:00 | HyeonJun | fix: Seeker 메인페이지 UI/UX 개선 (필터 시트·자리표시 접기·접근성) - 1720px 미만에서 접근 불가였던 마켓플레이스 필터를 시트로 제공: 추천 공고 헤더에 활성 필터 수 배지 트리거 추가, MarketplaceFilterControls 재사용, 데스크톱 aside와 min-[1720px] 상보 - 모바일(<lg) 광고 자리표시 최대 32개 세로 나열을 2개+"+N칸 광고 모집중" 요약으로 접기, 빈 상태에 "필터 초기화" 액션 배선(onResetFilters·countActiveFilters export) - 공고 카드 7자 JS 하드컷 제거(CSS truncate 일원화, title 전체 값 유지), 커버 object-fill→object-cover·width 힌트 120 일치·border-border, HIT 리본 text-xs·제목 text-base 토큰화 - 가로 광고 배너 object-fill→object-cover(세로 눌림 제거)·주석 정합, 프리미엄 라벨 Badge tone pending→primary(상태 시맨틱 오용 해소) - 접근성: 하단 탭바 활성 탭 aria-current·채팅 배지 aria-label, 필터 라벨 useId 연결(aria-labelledby·htmlFor), 최소시급 type="text" inputMode="numeric", 오류 배너 role="status", 더보기 스피너+aria-busy - 수다방 섹션 마운트 전 null→CommunitySkeleton 렌더로 CLS 제거(결정적 트리라 hydration 안전), 모바일 하단 pb-24 중복 여백 제거, 탭바 라벨·배지 위치 임의 px 토큰화 - visual-job-components.test.ts를 새 렌더에 맞춰 갱신(하드컷 제거·object-cover·필터 시트 재도입 반전) - 세션 환경 제약(symlink 차단)으로 lint·tsc·vitest 미실행 — 로컬 검증 필요 | 팀/미분류 |
 | `c61affdfcd948bc9b41cc877808b8c634a5dc2a5` | 2026-08-25T17:11:08+09:00 | HyeonJun | merge: 댓글 마일스톤 전역 선착 전환·당첨 댓글 공개 배지 | 팀/미분류 |
 | `270a7f854317188ba2e6403d9ee84bea1d974790` | 2026-08-25T17:10:51+09:00 | HyeonJun | feat: 댓글 마일스톤 전역 선착 전환·당첨 댓글 공개 배지 - 마일스톤 판정을 회원별 누적 → 사이트 전체 통산 정확 안착(comment_count == 전체 count)으로 전환, catch-up 소급 폐지 - award unique를 milestoneId 단독으로 변경(마일스톤당 전 사이트 1회 선착) + 당첨 댓글 연결 comment_id 추가(FK set null, 마이그레이션 0110) - 댓글 응답에 bonusPoints·milestoneCommentCount 공개 노출, 댓글 메타 라인에 당첨 배지 2종(🏆 전체 N번째·🎉 NP 보너스) — 인증·공개 경로 모두 - 토스트·종 알림 문구 "전체 N번째"로 갱신, 운영자 마일스톤 목록에 달성 상태(당첨 완료/지나감/대기)·전체 댓글 수 표기 - 게스트 안착 시 수상자 없음(영구 미달성) 에지·count 경합 한계 주석 명시 - 0110 dev 적용·검증, ultracite 9파일·db/api/web 타입체크·서비스 테스트 40건 통과 | 팀/미분류 |
@@ -556,24 +556,24 @@
 | `089ce031a7c2887cd577f948a8d916fc953a6c1a` | 2026-08-24T10:47:24+09:00 | HyeonJun | fix: 사용자 관리 테이블 헤더 호버 시 primary 배경 사라지던 문제 - 공용 TableRow의 hover:bg-muted/50이 헤더 행에도 적용돼 [&_thead_tr]:bg-primary/10 틴트를 호버 시 덮던 문제(PR #233 이전부터 있던 기존 결함) - [&_thead_tr:hover]:bg-primary/10을 추가해 호버 중에도 헤더 틴트 유지 - 배경이 더 이상 호버로 바뀌지 않으므로 헤더 체크박스의 :hover/:not(:hover) 이중 스타일 세트를 한 벌로 단순화 | 팀/미분류 |
 | `5e3c277a9e70ef66b6ee3e042008bcad50634f4d` | 2026-08-24T10:47:16+09:00 | HyeonJun | fix: 교차 노출 게시판 경로에서 공지 수정 시 게시판 선택 아코디언 누락 - 수정 폼의 공지 판정이 URL slug 기준이라 교차 노출된 게시판 경로로 수정에 들어오면 게시판 선택 아코디언·이벤트 스위치가 숨고, 저장 시 이벤트 플래그까지 꺼지던 문제 - getPost의 board를 initialPost로 전달하고 공지/이벤트 판정을 effectiveBoardKey(수정 모드=글의 원래 게시판, 작성 모드=URL board)로 통일 - 잠금·자유/비밀게시판 판정과 제출 대상 board는 기존 URL 기준 유지 | 팀/미분류 |
 | `e235b45096e47dd6bed522c51ec29fa7edc4bc43` | 2026-08-24T10:46:52+09:00 | HyeonJun | fix: 포인트 광고 로테이션 시간 변경 저장 시 500 오류 수정 - saveAdmin의 쿨타임 조정 raw SQL에서 JS Date 파라미터를 Postgres가 interval로 해석해 로테이션 값을 바꿀 때마다 UPDATE가 통째로 실패하던 문제(operator does not exist: timestamp without time zone <= interval) - ${now}를 ${now.toISOString()}::timestamp로 캐스트해 timestamp 컬럼 저장 관례(UTC 벽시계)와 일치시킴 - dev DB 롤백 재현 스크립트로 수정 전 오류·수정 후 정상 실행 확인 | 팀/미분류 |
-| `4b5023837625b505c1c910c74c1779bc4c78e088` | 2026-08-21T18:01:10+09:00 | 최성원 | fix: 참고 이미지 기준 뽑기 기계·볼 이동 재구성 | 팀/미분류 |
-| `417114f6b18e1dd2fb774af772ed297b3d037604` | 2026-08-21T17:52:04+09:00 | 최성원 | fix: 누락된 포인트몰 migration 기반 조건부 복구 | 팀/미분류 |
-| `64c69aa947bbaefeaa17560d4da04ee181b25c82` | 2026-08-21T17:42:00+09:00 | 최성원 | feat: 포인트몰 동적 진열·랜덤 뽑기 UI 통합 | 팀/미분류 |
-| `7d96445067750bc5ef13f84812ac27dfdff496c6` | 2026-08-21T17:41:26+09:00 | 최성원 | feat: 뽑기권·연속 출석·동적 포인트몰 서버 구현 | 팀/미분류 |
-| `e5e3ab2dcdf59d8820fcf1fef9a9f9f601ffd137` | 2026-08-21T17:41:02+09:00 | 최성원 | docs: 포인트몰 동적 진열·랜덤 뽑기 통합 설계 작성 | 팀/미분류 |
-| `ff03265c63d02de49d99b22bbd0b9d64901091d5` | 2026-08-21T12:57:56+09:00 | 최성원 | fix: 교차 노출 공지의 홈 미리보기 표시 정리 | 팀/미분류 |
-| `57730fde3a935b02d10f0231204d677e815593b2` | 2026-08-21T12:40:54+09:00 | 최성원 | fix: 게시판 목록 공지 강조·업소 배지 제거 | 팀/미분류 |
-| `567036cccf8404201e1d5f79f4ac51c81dd35698` | 2026-08-21T12:26:33+09:00 | 최성원 | feat: 공지 다중 게시판 노출·유형별 포인트 광고 보상 통합 | 팀/미분류 |
-| `37a6e53b1c5e82fd8a02fa46f28cf63c573d1922` | 2026-08-21T12:26:24+09:00 | 최성원 | docs: 공지 다중 노출·포인트 광고 보상 통합 설계 작성 | 팀/미분류 |
+| `4b5023837625b505c1c910c74c1779bc4c78e088` | 2026-08-21T18:01:10+09:00 | 최성원 | fix: 참고 이미지 기준 뽑기 기계·볼 이동 재구성 | 확인 계정 |
+| `417114f6b18e1dd2fb774af772ed297b3d037604` | 2026-08-21T17:52:04+09:00 | 최성원 | fix: 누락된 포인트몰 migration 기반 조건부 복구 | 확인 계정 |
+| `64c69aa947bbaefeaa17560d4da04ee181b25c82` | 2026-08-21T17:42:00+09:00 | 최성원 | feat: 포인트몰 동적 진열·랜덤 뽑기 UI 통합 | 확인 계정 |
+| `7d96445067750bc5ef13f84812ac27dfdff496c6` | 2026-08-21T17:41:26+09:00 | 최성원 | feat: 뽑기권·연속 출석·동적 포인트몰 서버 구현 | 확인 계정 |
+| `e5e3ab2dcdf59d8820fcf1fef9a9f9f601ffd137` | 2026-08-21T17:41:02+09:00 | 최성원 | docs: 포인트몰 동적 진열·랜덤 뽑기 통합 설계 작성 | 확인 계정 |
+| `ff03265c63d02de49d99b22bbd0b9d64901091d5` | 2026-08-21T12:57:56+09:00 | 최성원 | fix: 교차 노출 공지의 홈 미리보기 표시 정리 | 확인 계정 |
+| `57730fde3a935b02d10f0231204d677e815593b2` | 2026-08-21T12:40:54+09:00 | 최성원 | fix: 게시판 목록 공지 강조·업소 배지 제거 | 확인 계정 |
+| `567036cccf8404201e1d5f79f4ac51c81dd35698` | 2026-08-21T12:26:33+09:00 | 최성원 | feat: 공지 다중 게시판 노출·유형별 포인트 광고 보상 통합 | 확인 계정 |
+| `37a6e53b1c5e82fd8a02fa46f28cf63c573d1922` | 2026-08-21T12:26:24+09:00 | 최성원 | docs: 공지 다중 노출·포인트 광고 보상 통합 설계 작성 | 확인 계정 |
 | `43edcf32fc8062b36fb614dc00682684f97d1e78` | 2026-08-20T18:01:56+09:00 | beyondsoft-dev | Merge pull request #231 from beyondsoft-kr/develop | 팀/미분류 |
 | `b2282cf21797a98a4da7fb3e5cfbf51fbe182043` | 2026-08-20T17:52:28+09:00 | beyondsoft-dev | Merge pull request #230 from beyondsoft-kr/fix/moderator-qa-defects | 팀/미분류 |
 | `2d69091418e0555218a3312595dcfc90f8bc710b` | 2026-08-20T17:46:52+09:00 | HyeonJun | Merge remote-tracking branch 'origin/develop' into fix/moderator-qa-defects | 팀/미분류 |
 | `5bcbd8864425a9542ed1c5da32005fe1791eda9d` | 2026-08-20T17:46:21+09:00 | HyeonJun | fix: 삭제된 채팅방 신고를 운영자가 열람하지 못하던 문제 | 팀/미분류 |
 | `f4ef8daf1bb28b6e67d4e818b0a23ac8c5d6a2b8` | 2026-08-20T17:45:45+09:00 | HyeonJun | fix: 작성 콘텐츠 이력의 enum 원값 노출 수정 | 팀/미분류 |
 | `c8969174928efdabe703c2a865873e293398ab80` | 2026-08-20T17:33:11+09:00 | beyondsoft-dev | Merge pull request #227 from beyondsoft-kr/fix/secret-read-payment-community-layout-content-footer | 팀/미분류 |
-| `98b85cc52c8470ad120ae77f9094ff7934e0e9d5` | 2026-08-20T17:32:16+09:00 | 최성원 | revert: footer 사이트 정보 렌더링 변경 제외 | 팀/미분류 |
-| `d97b0c393cb3999a7dd232d7f81ed9ab448aaf2f` | 2026-08-20T17:22:24+09:00 | 최성원 | fix: 비밀글 열람·공고 결제·글 관리 UI 안정화 | 팀/미분류 |
-| `4b22a64bfa9d65a2ec499f08e5bd538afcaff6ae` | 2026-08-20T17:22:23+09:00 | 최성원 | docs: 비밀글·결제·수다방·글 관리 안정화 설계 작성 | 팀/미분류 |
+| `98b85cc52c8470ad120ae77f9094ff7934e0e9d5` | 2026-08-20T17:32:16+09:00 | 최성원 | revert: footer 사이트 정보 렌더링 변경 제외 | 확인 계정 |
+| `d97b0c393cb3999a7dd232d7f81ed9ab448aaf2f` | 2026-08-20T17:22:24+09:00 | 최성원 | fix: 비밀글 열람·공고 결제·글 관리 UI 안정화 | 확인 계정 |
+| `4b22a64bfa9d65a2ec499f08e5bd538afcaff6ae` | 2026-08-20T17:22:23+09:00 | 최성원 | docs: 비밀글·결제·수다방·글 관리 안정화 설계 작성 | 확인 계정 |
 | `a1693244164faaed7fe10906e8f03c2a8e06773e` | 2026-08-20T17:08:38+09:00 | beyondsoft-dev | Merge pull request #225 from beyondsoft-kr/fix/dialog-mobile-max-height | 팀/미분류 |
 | `78fe1fdf8cac315386e6dfcdf838eee9a5044445` | 2026-08-20T16:55:02+09:00 | HyeonJun | merge: 모바일에서 긴 다이얼로그 하단 액션 버튼에 닿지 못하던 문제 - 공용 DialogContent·AlertDialogContent에 max-h-[calc(100dvh-2rem)] 추가로 팝업 내부 스크롤 확보(운영자 포인트몰 아이템 추가 폼 제보 경로 포함 전역 해소) - 호출부 중복 max-h·overflow 오버라이드 정리, inset 배치인 ad-banner-editor는 max-h-none으로 방어 | 팀/미분류 |
 | `67fb44b77ea0e36adf61e1f298082749086a5cce` | 2026-08-20T16:54:31+09:00 | HyeonJun | fix: 모바일에서 긴 다이얼로그 하단 액션 버튼에 닿지 못하던 문제 - 공용 DialogContent·AlertDialogContent가 overflow-y-auto만 있고 최대 높이가 없어, fixed top-1/2 -translate-y-1/2 중앙 정렬 상태에서 내용이 길면 팝업이 뷰포트 위아래로 삐져나가고 스크롤 컨테이너 높이가 없어 하단 저장·취소 버튼에 영영 닿지 못했음(제보 경로: 운영자 포인트몰 아이템 추가 폼) - 두 컴포넌트 base 클래스에 max-h-[calc(100dvh-2rem)] 추가 — dvh로 모바일 주소창 접힘까지 대응, 기존 overflow-y-auto가 내부 스크롤을 담당 - 포인트몰 ItemForm은 자체 높이·overflow 오버라이드가 없어 공용 수정만으로 해소(해당 파일 무변경) - 호출부에서 같은 결함을 손으로 때우던 중복 오버라이드 제거 — boost-option-purchase-dialog의 max-h-[85vh], job-detail-design-dialog의 max-h-[90vh]·overflow-y-auto(폭 지정은 유지) - ad-banner-editor/editor-launcher는 top·bottom inset으로 높이를 정하는 전체화면 배치라 base 상한이 겹치면 bottom이 무시되고 하단이 뜬다 — max-h-none으로 방어 | 팀/미분류 |
@@ -587,27 +587,27 @@
 | `37ebd5ee78a6686f3d3bc76a71aac1548b86dbcb` | 2026-08-20T15:15:29+09:00 | HyeonJun | feat: 공개 SEO 보완 — /jobs openGraph 정합·/seeker 고유 메타와 게이트 콘텐츠 - seo.ts에 siteOpenGraph 헬퍼 신설 — Next metadata openGraph는 최상위 키 shallow-merge라 페이지 부분 정의 시 루트 기본 필드가 통째로 사라짐, 헬퍼가 type·locale·siteName·og-image를 항상 보존하고 페이지 title·description·url만 덮음, 루트 layout 인라인 openGraph도 헬퍼로 교체(출력 동일) - /jobs 3개 페이지(인덱스·지역·지역/업종)에 openGraph 추가 — 페이지 title과 무관하게 루트 og:title·og:url(루트 도메인)이 상속되던 공백 해소, og:url이 canonical과 같은 경로를 가리킴(상대경로는 metadataBase로 절대화) - /seeker에 라우트 고유 metadata 추가(title "밤비알바 채용정보 - 퀸알바·여우알바·밤알바 유흥알바 구인구직"·description·canonical /seeker·openGraph) — 루트와 완전 동일하던 title과 canonical 부재 해소, anon은 layout이 게이트를 그리지만 metadata export는 렌더 분기와 무관하게 적용 - anon 게이트 화면에 sr-only h1(마켓 화면과 동일 문구)·보이는 muted 소개 문단·/jobs 내부 링크 추가 — 공고 텍스트가 전부 마스킹돼 실질 본문이 푸터뿐이던 씬 콘텐츠 보완, 크롤러가 게이트에서 공개 랜딩으로 빠지는 본문 링크 확보, md 미만/이상 두 레이아웃 모두 카드·푸터 흐름 무변경 위치(absolute 오버레이 밖) - siteOpenGraph 회귀 테스트 추가(페이지 값 덮기 + 기본 필드 보존), ultracite·web check-types 통과, vitest 실패 5건은 기저 ab7ec865에서도 동일 실패하는 무관 기존 결함(채팅 messageId 소스 스캔 등) 확인 - ultracode 워크플로우로 작업(구현 opus-high 2 병렬·검증 Fable high 2렌즈), board 목록·상세의 부분 openGraph(og:image·siteName 소실)는 기존 결함으로 후속 이연 | 팀/미분류 |
 | `48716041adf01092dc2dcf09b3df8683e21ec9e0` | 2026-08-20T15:06:26+09:00 | beyondsoft-dev | Merge pull request #221 from beyondsoft-kr/fix/community-board-layout-biome-cleanup | 팀/미분류 |
 | `ab7ec865ba4ce70487b192d23b4f18e66d519d63` | 2026-08-20T15:01:26+09:00 | HyeonJun | merge: 검색 노출 문구 경쟁 서비스명 순서 확정(퀸알바·여우알바·밤알바) - 전역 SITE_TITLE·SITE_DESCRIPTION·SITE_KEYWORDS 선두를 퀸알바·여우알바·밤알바 순서로 교체 — 경쟁 서비스명을 keywords뿐 아니라 title에도 노출(사용자 확정 정책) - /jobs 161개 랜딩·/board 허브의 title·description·keywords 세 검색어 순서 통일 - SITE_TITLE 문구·keywords 선두 순서 회귀 어서션 추가, 테스트 18건·ultracite·web check-types 통과 | 팀/미분류 |
-| `0547da1611de69671a93350be3e290a62520eee0` | 2026-08-20T14:49:59+09:00 | 최성원 | fix: 게시판 배치 Biome 예외 주석 제거 | 팀/미분류 |
-| `b1310b05b273d6c4c2d23220a46553429e22fb1e` | 2026-08-20T15:00:58+09:00 | 최성원 | docs: 게시판 홈 배치 Biome 예외 제거 설계 작성 | 팀/미분류 |
+| `0547da1611de69671a93350be3e290a62520eee0` | 2026-08-20T14:49:59+09:00 | 최성원 | fix: 게시판 배치 Biome 예외 주석 제거 | 확인 계정 |
+| `b1310b05b273d6c4c2d23220a46553429e22fb1e` | 2026-08-20T15:00:58+09:00 | 최성원 | docs: 게시판 홈 배치 Biome 예외 제거 설계 작성 | 확인 계정 |
 | `77ed21585fec0732673a371c4cfbffd154a1923a` | 2026-08-20T14:57:49+09:00 | HyeonJun | feat: 검색 노출 문구에 경쟁 서비스명 순서 확정 반영(퀸알바·여우알바·밤알바) - 전역 SITE_TITLE을 "밤비알바 - 퀸알바·여우알바·밤알바 \| 유흥알바 구인구직"으로 교체 — 경쟁 서비스명을 keywords뿐 아니라 title에도 노출(사용자 확정 정책), OG title·WebSite alternateName은 같은 원본 공유로 자동 반영 - SITE_DESCRIPTION을 같은 주장으로 갱신, SITE_KEYWORDS 선두를 퀸알바·여우알바·밤알바 순으로 재배열(총 99개·중복 없음 유지) - /jobs 161개 랜딩의 title·description·keywords 세 검색어 순서를 밤알바·여우알바·퀸알바 → 퀸알바·여우알바·밤알바로 통일(job-landing.ts) - /board 허브 title·description·keywords도 같은 순서로 통일 - 회귀 고정: SITE_TITLE 문구·keywords 선두 3개 순서 어서션 추가(seo.test), 랜딩 title 기대값 갱신(job-landing.test) - 테스트 18건·ultracite·web check-types 통과 | 팀/미분류 |
-| `165923eadcb6b9fe38348098ebdf7d4b210bf72b` | 2026-08-20T14:49:59+09:00 | 최성원 | fix: 게시판 배치 Biome 예외 주석 제거 | 팀/미분류 |
+| `165923eadcb6b9fe38348098ebdf7d4b210bf72b` | 2026-08-20T14:49:59+09:00 | 최성원 | fix: 게시판 배치 Biome 예외 주석 제거 | 확인 계정 |
 | `201e3354488c6a8c26fd7f7638f789919d740498` | 2026-08-20T14:45:57+09:00 | beyondsoft-dev | Merge pull request #218 from beyondsoft-kr/feat/secret-board-review-content-management | 팀/미분류 |
-| `c9a21a1ee95c838486cad6973c95a59d896fdf71` | 2026-08-20T14:41:00+09:00 | 최성원 | fix: 게시판·등급 설정 하드코딩 제거 | 팀/미분류 |
-| `a5fdf950ecff30074ca68c59ca31ddc117d4cb87` | 2026-08-20T14:40:58+09:00 | 최성원 | merge: 최신 develop 반영 및 migration 이력 재정렬 | 팀/미분류 |
-| `5ae83817d7ee18c5e3d9ef94cb795df4f9c8a6c9` | 2026-08-20T13:40:12+09:00 | 최성원 | fix: 회원 등급 GIF 하단 잘림 해소 | 팀/미분류 |
-| `890f95d908fe21bdcf64d8cb285fe9fbc6747bcc` | 2026-08-20T13:36:52+09:00 | 최성원 | fix: 본인인증 실명 UI·API·신고 snapshot 반출 제거 | 팀/미분류 |
-| `a72086cea68f58168188ad20489e8803fbcc9d66` | 2026-08-20T13:13:15+09:00 | 최성원 | feat: 비밀글·후기 포인트·콘텐츠 이력 통합 | 팀/미분류 |
-| `e60ce446a526b9650d3f4b93afc1c1828db02003` | 2026-08-20T13:13:01+09:00 | 최성원 | docs: 비밀글·후기·콘텐츠 관리 통합 설계 작성 | 팀/미분류 |
+| `c9a21a1ee95c838486cad6973c95a59d896fdf71` | 2026-08-20T14:41:00+09:00 | 최성원 | fix: 게시판·등급 설정 하드코딩 제거 | 확인 계정 |
+| `a5fdf950ecff30074ca68c59ca31ddc117d4cb87` | 2026-08-20T14:40:58+09:00 | 최성원 | merge: 최신 develop 반영 및 migration 이력 재정렬 | 확인 계정 |
+| `5ae83817d7ee18c5e3d9ef94cb795df4f9c8a6c9` | 2026-08-20T13:40:12+09:00 | 최성원 | fix: 회원 등급 GIF 하단 잘림 해소 | 확인 계정 |
+| `890f95d908fe21bdcf64d8cb285fe9fbc6747bcc` | 2026-08-20T13:36:52+09:00 | 최성원 | fix: 본인인증 실명 UI·API·신고 snapshot 반출 제거 | 확인 계정 |
+| `a72086cea68f58168188ad20489e8803fbcc9d66` | 2026-08-20T13:13:15+09:00 | 최성원 | feat: 비밀글·후기 포인트·콘텐츠 이력 통합 | 확인 계정 |
+| `e60ce446a526b9650d3f4b93afc1c1828db02003` | 2026-08-20T13:13:01+09:00 | 최성원 | docs: 비밀글·후기·콘텐츠 관리 통합 설계 작성 | 확인 계정 |
 | `f0960b2f35a15cf6aa8f70597dc6865dcb04c6d1` | 2026-08-20T14:12:56+09:00 | beyondsoft-dev | Merge pull request #219 from beyondsoft-kr/feat/job-card-ad-period-badge | 팀/미분류 |
-| `c04cf61fbaaac640c4b1d3292d2ed43cc70a171e` | 2026-08-20T13:40:12+09:00 | 최성원 | fix: 회원 등급 GIF 하단 잘림 해소 | 팀/미분류 |
-| `862a3fbbe41d2516cb68355b1191aca5864502bc` | 2026-08-20T13:36:52+09:00 | 최성원 | fix: 본인인증 실명 UI·API·신고 snapshot 반출 제거 | 팀/미분류 |
+| `c04cf61fbaaac640c4b1d3292d2ed43cc70a171e` | 2026-08-20T13:40:12+09:00 | 최성원 | fix: 회원 등급 GIF 하단 잘림 해소 | 확인 계정 |
+| `862a3fbbe41d2516cb68355b1191aca5864502bc` | 2026-08-20T13:36:52+09:00 | 최성원 | fix: 본인인증 실명 UI·API·신고 snapshot 반출 제거 | 확인 계정 |
 | `cbeb5ec0ecd04601709b961777e02352907a6896` | 2026-08-20T13:36:44+09:00 | HyeonJun | merge: 급여 대비 롤백 + 카드 접근성 Minor(포커스 링·톤 라벨·ul/li·h1·GIF 안내) - coral-700 대비 상향 롤백(사용자 결정, coral-600 유지) - 포커스 링 코럴 명시·aria-label 톤 라벨·카드 그리드 목록 시맨틱·sr-only h1 - 등급 아이콘 업로드 폼에 투명 여백 비대칭 안내 추가 | 팀/미분류 |
 | `fe22581740988e835ab10b9b17eafdccc90eafc8` | 2026-08-20T13:36:29+09:00 | HyeonJun | fix: 공고 카드 접근성 Minor 항목 — 포커스 링·톤 정보·목록 시맨틱·h1·GIF 안내 - 카드 버튼 focus-visible에 브랜드 코럴 링 명시(ring-2 ring-coral-400 offset-2 + rounded-md) — 브라우저 기본 outline 대체, offset 4px < 카드 패딩 8px라 overflow-hidden에 안 잘림 - aria-label 끝에 톤 라벨 부착(스페셜/급구/추천 공고, organic 무표기) — 테두리 색뿐이던 구분에 비시각 수단 추가, 시각 변경 없음 - 잘린 제목(7자)은 코드 무변경 수용 — 복원 경로(title 속성·aria-label·상세 페이지)를 truncateJobCardText 주석에 기록 - 카드 그리드 div → ul/li 목록 시맨틱: 스크린리더가 "N개 중 k번째"를 읽음, li는 grid로 카드 렌더 박스 무변경, breakpoint display 클래스는 그리드 셀인 li로 이동(숨김 슬롯이 빈 칸을 차지하지 않게), 실카드·자리표시·로딩 스켈레톤 3경로 모두 처리 - /seeker에 sr-only h1 "밤비알바 채용정보" 추가(기존 최상위가 h2 "빠른 탐색") - 운영자 등급 아이콘 업로드 안내에 GIF 투명 여백 비대칭 → 배지 치우침 경고 문구 추가(실사고 예방: 64px 캔버스 위 8px 여백 GIF) - 회귀 방지 어서션 추가, 테스트 47건·ultracite·check-types 통과, 급여 색 coral-600 롤백 유지 | 팀/미분류 |
 | `cc0dfc8754b472d3d4848eaf529bbbe21646be36` | 2026-08-20T13:27:33+09:00 | HyeonJun | revert: 급여 금액·단위 배지 대비 상향 롤백(coral-700 → coral-600) - 사용자 결정: 카드 급여 표기는 브랜드 코럴 톤(coral-600) 유지 - 단위 배지 danger 톤 coral-700 override 제거(틴트·글자색 원복) - 클릭 영역 확장·aria-label·장식 alt·등급 프리셋 교체는 유지 - 테스트 어서션을 coral-600 유지 결정으로 갱신 | 팀/미분류 |
 | `e5a1b5bba00010c53a64d6d76ca0cb26697ded5f` | 2026-08-20T13:18:02+09:00 | HyeonJun | merge: 공고 카드 접근성 4건(대비·클릭영역·스크린리더 이름) - 급여 coral-700·단위 배지 coral-700 덮음·등급 프리셋 5종 어두운 토큰 교체(전수 4.5:1 CI 테스트 포함) - 클릭 영역 카드 전체 확장(122px 결합 유지), aria-label·장식 alt 처리 | 팀/미분류 |
 | `459fef696ade050490cb20eb60c162d6223282f1` | 2026-08-20T13:17:49+09:00 | HyeonJun | fix: 공고 카드 접근성 4건 — 대비·클릭영역·스크린리더 이름 - 급여 금액 text-coral-600(4.32:1) → text-coral-700(5.96:1), WCAG AA 4.5:1 충족(16px bold는 large text 미달이라 4.5 필요) - 단위 배지(시급·일급) danger 톤 글자를 카드 사용부에서만 coral-700로 덮음 — 틴트 배경(#FFEFEF) 대비 2.74 → 5.35, ds.tsx는 무변경(다른 danger 배지 회귀 없음) - 등급 색 프리셋 FAIL 5종을 같은 계열 어두운 토큰으로 교체: text-primary→coral-700(5.96)·slate-400→slate-600(7.58)·amber-500→amber-800(7.09)·sky-500→sky-700(5.93)·violet-500→violet-600(5.70), 폴백 상수(실버·골드·다이아)도 동일 교체 - 프리셋+폴백 전수 4.5:1 이상을 강제하는 순수 테스트 추가 — 새 색 추가 시 대비 미달이 CI에서 걸림 - 클릭 영역 카드 전체로 확장: 급여 행을 button 안으로 이동 + flex-1, 상단 60px만 눌리던 문제 해소, 카드 높이 122px 결합(h-9·mt-auto·배지 border-0 py-0 pr-0·size-6) 유지 - button에 aria-label(전체 제목·업소·지역·급여) — 잘린 "제목..." 대신 온전한 이름을 읽고 급여 누락 해소 - 커버 이미지 alt="6.jpg" 파일명 노출 → JobCoverImage에 선택적 alt prop 추가해 카드에서 alt="" 장식 처리, 미지정 시 기존 altText·파일명 동작 유지(타 4개 사용처 회귀 없음) - 회귀 방지 어서션 3건 추가, 테스트 45건·ultracite·check-types 통과 - 잔여: DB 저장된 기존 등급 행(text-sky-500·text-primary 등)은 운영자가 프리셋 재선택 전까지 저대비 유지 | 팀/미분류 |
-| `e245e46c8ba4ff640066d9d7ce512950c3a17441` | 2026-08-20T13:13:15+09:00 | 최성원 | feat: 비밀글·후기 포인트·콘텐츠 이력 통합 | 팀/미분류 |
-| `cb8654416cbdeec9c73c7504678851769df19b43` | 2026-08-20T13:13:01+09:00 | 최성원 | docs: 비밀글·후기·콘텐츠 관리 통합 설계 작성 | 팀/미분류 |
+| `e245e46c8ba4ff640066d9d7ce512950c3a17441` | 2026-08-20T13:13:15+09:00 | 최성원 | feat: 비밀글·후기 포인트·콘텐츠 이력 통합 | 확인 계정 |
+| `cb8654416cbdeec9c73c7504678851769df19b43` | 2026-08-20T13:13:01+09:00 | 최성원 | docs: 비밀글·후기·콘텐츠 관리 통합 설계 작성 | 확인 계정 |
 | `dd8e97f210e179db222c1b3a09fed8616f36ddeb` | 2026-08-20T12:50:03+09:00 | HyeonJun | merge: 카드 광고 배지 아이콘 24px·테두리 제거·오른쪽 정렬 - size-6 확대, border-0으로 칩 테두리 제거, pr-0으로 카드 콘텐츠 경계에 정렬 - py-0으로 배지 높이 24px 고정해 카드 높이 122px 결합 보호 | 팀/미분류 |
 | `ccc02093d68af723312a27c88610b4b05f907113` | 2026-08-20T12:49:53+09:00 | HyeonJun | fix: 카드 광고 배지 아이콘 확대·테두리 제거·오른쪽 정렬 - 업로드 아이콘이 16px에선 알아보기 어려워 카드 배지에서만 size-4 → size-6(24px) - 배지 테두리 제거(border-0) — 칩이 아니라 급여 행에 얹힌 글자로 보이게 - pr-0으로 배지 오른쪽 끝을 카드 콘텐츠 경계(p-2)에 맞춤, 왼쪽 px-2는 급여와의 간격으로 유지 - py-0으로 배지 높이를 아이콘과 같은 24px로 고정 — 급여 행 h-9(36px) 안이라 카드 높이 122px 결합 유지 - 의미 없어진 rounded-sm 제거(테두리·배경이 없어 반경이 보이지 않음) - AdPeriodTierIcon의 고유 크기 주석 정정: unoptimized라 실제 화소는 원본, 표시 크기는 className이 정함 - 회귀 방지 테스트 2건 추가(border-0 py-0 pr-0·size-6), 구인자 안내·운영자 목록은 16px 유지 | 팀/미분류 |
 | `39be568381b3307c493707752ebe4a81d9e97d41` | 2026-08-20T12:27:13+09:00 | HyeonJun | merge: 누적 광고일수 등급 아이콘 이미지·GIF 업로드 - icon_image_url 컬럼(0103)·adminProcedure 업로드 인텐트·AdPeriodTierIcon 공용 컴포넌트 - GIF는 등급 전용 정책으로만 허용(공용 미디어 정책 미변경) - 배포 전 운영 DB migrate에 0103 포함 필요 | 팀/미분류 |
@@ -660,9 +660,9 @@
 | `0bc4418b79b12f02e5ab3f2d6b2574fd20934ea2` | 2026-08-19T14:34:59+09:00 | HyeonJun | merge: origin/develop 최신 반영 — 포인트 관리·공고 결제(PR #210) 통합, 포인트몰 마이그레이션 0097 리넘버 - 마이그레이션 번호 충돌 해소: develop의 0096_robust_dormammu(포인트 원장·설정)를 0096으로 유지하고 우리 0096_freezing_prism(포인트몰)을 0097로 리넘버 — journal when을 dormammu+1,000,000(1787110382463)으로 승격해 created_at 비교 스킵 함정(PR #100 사례) 방지 - 스냅샷 체인 정정: 0097 스냅샷을 dormammu 베이스+포인트몰 테이블 2개 스플라이스로 재구성, prevId를 dormammu id로 연결 — drizzle-kit check "Everything's fine"·generate "No schema changes"로 정합 검증 - attendance.ts 양쪽 의도 통합: develop의 원장 경로(adjustMemberPoints·notifyBambiNotification) 채택 + 트랜잭션 진입 직후 acquirePointShopUserLock 재배치(원장 락 hashtextextended와 포인트몰 락 int4쌍이 서로소라 포인트몰 구매 차감과 직렬화 필요, 락 순서 일관으로 데드락 없음), getMine은 attendancePoints(develop)+등급 기준 gradeBasis(우리) 공존 - index.ts pointSettings·pointShop 알파벳순 공존, member-points는 import 충돌만(getGradeBasisPoints·lockMemberPoints 양립) - 검증: api check-types 0오류, member-points·point-shop·job-payment-points 서비스 테스트 41건 전부 통과, 충돌 마커 0건 - dev DB 후속: dormammu 수동 적용 + __drizzle_migrations 이력 정정 필요(별도 수행) | 팀/미분류 |
 | `055738b2c3acd51c3b4a0d9174c750bce10c8218` | 2026-08-19T14:17:25+09:00 | HyeonJun | docs: 포인트몰 혜택 스펙 2차 개정 — 쿠폰 코드 풀 폐지, 발송형 쿠폰으로 전환 - 코드 테이블·CSV/textarea 등록·마스킹·번호 보기(revealed_at)·코드 상태 3단계·SKIP LOCKED 선점 전부 삭제, 폐기된 대안으로 §2.4·§8에 기록 - 쿠폰형은 별도 유형(coupon) 유지: "본인인증 시 등록된 휴대폰 번호로 발송" 안내 + 운영자 외부 발송 후 지급완료, 본인인증 미완료(is_phone_verified) 구매 차단·인증 유도, 발송 번호는 profile.phone_number 정본(운영자 주문 화면 별도 조회 명시) - 취소·환불: 쿠폰·수동형 pending에서 구매자·운영자 취소 가능(환불+재고 복원), 지급완료 후 불가 — 구매자용 라벨 주문완료/지급완료/취소·환불, 운영자 라벨 분리 - 재고는 전 유형 공통 stock_quantity, 만료 임박 알림은 끌올·연장 전용 명확화, 동시성 시나리오 4→3개 축소 | 팀/미분류 |
 | `126655fcf7eac3ee8cd6d3fe6171b1d5a7c8d0f5` | 2026-08-19T13:16:15+09:00 | beyondsoft-dev | Merge pull request #210 from beyondsoft-kr/feat/point-management-job-payment | 팀/미분류 |
-| `ec32d95e44bcba9b20d8e851d17cca3049c7c024` | 2026-08-19T13:11:51+09:00 | 최성원 | fix: 운영자 포인트 화면의 하드코딩 스타일 제거 | 팀/미분류 |
+| `ec32d95e44bcba9b20d8e851d17cca3049c7c024` | 2026-08-19T13:11:51+09:00 | 최성원 | fix: 운영자 포인트 화면의 하드코딩 스타일 제거 | 확인 계정 |
 | `e29f242061bf606f8480d1c8003dc7958bb9a927` | 2026-08-19T13:08:29+09:00 | HyeonJun | docs: 포인트몰 혜택 스펙 개정 — 사용·열람 전 취소·환불 허용으로 정책 전환 - 혜택형 전면 취소 불가 폐기: 쿠폰은 owned+코드 마스킹, "번호 보기"(revealed_at) 후 환불 불가·열람 전 취소 시 코드 배정 해제로 재고 복원, 끌올·연장은 미사용 시 취소 가능, 수동형 취소도 재고 +1 복원 — 유형별 통합 정책 표(§3.4) 신설 - 만료 임박 알림을 구현 범위로 승격(매일 배치·3일 이내·expiry_notified_at 멱등), 만료 건은 환불 불가(소멸 정책 유지) - 회원 탈퇴 다이얼로그에 보유 아이템 소멸 경고·재확인 강화 서술(WithdrawAccountSection, cascade 근거) - 운영자 adjustJobPostExposure read-modify-write 정정을 구현 범위로 승격, 동시성 섹션에 열람 vs 취소 경합·이중 환불 방지 추가 | 팀/미분류 |
-| `429cc2d767e944bfc99840ada6d95b19c178d52e` | 2026-08-19T12:48:20+09:00 | 최성원 | feat: 포인트 관리와 공고 결제 사용 흐름 구현 | 팀/미분류 |
+| `429cc2d767e944bfc99840ada6d95b19c178d52e` | 2026-08-19T12:48:20+09:00 | 최성원 | feat: 포인트 관리와 공고 결제 사용 흐름 구현 | 확인 계정 |
 | `6c6ead24134baf1e4b9a309edfea40660d417cbf` | 2026-08-19T12:46:50+09:00 | HyeonJun | docs: 포인트몰 아이템 혜택 커스텀 스펙 작성 - 혜택 유형 6종(수동·쿠폰 코드·끌올 3종·광고 연장)과 구매 대상·사용기한·재고 설정을 아이템 정의에 추가하는 설계 - 쿠폰 코드 풀(textarea+CSV 등록, 상태 3단계: 구입 대기/미사용/사용 완료, 재고=미배정 코드 수 종속), 품절 파생 상태·품절 카드 UI - 끌올·연장은 구매→보유(owned)→사용(공고 선택·최종 확인) 모델, 취소·환불 불가 사전 고지, job_boost_purchase 재사용(purchase_source에 point_shop 값 추가) - 동시성 별도 섹션(계정 락+코드 SKIP LOCKED 선점+재고 조건부 UPDATE+사용 전이 가드+연장 원자 갱신) — 구현·리뷰 최우선 검증 항목으로 명시 - 빈틈 해소 확정: 취소 시 재고 복원, 판매 이력 아이템 유형 변경 금지, 만료 소멸 정책, 사용 시점 자격 재검사 | 팀/미분류 |
 | `c3f9a908d5673304b98063c17a326c5ef9121bfe` | 2026-08-19T12:11:33+09:00 | HyeonJun | merge: 운영자 포인트몰 아이템 관리 조치 RowActions 전환 - 수정·삭제 인라인 버튼을 주문 탭과 동일한 드롭다운 조치 메뉴로 통일 | 팀/미분류 |
 | `bcba9067e0ec3d56af275b14cca3b4364224d784` | 2026-08-19T12:11:15+09:00 | HyeonJun | feat: 운영자 포인트몰 아이템 관리 조치를 RowActions 드롭다운으로 전환 - 아이템 탭 관리 컬럼의 인라인 버튼 2개(수정·삭제)를 주문 탭 OrderRowActions와 동일한 패턴의 ItemRowActions로 교체 — ghost MoreHorizontal 트리거 + DropdownMenu, 삭제는 destructive - 핸들러·다이얼로그 흐름 무변경(수정 Dialog·삭제 AlertDialog 그대로), 트리거 UI만 교체 - 검증: ultracite check 클린, web check-types 0오류 | 팀/미분류 |
@@ -691,7 +691,7 @@
 | `d0513ec1def86e05fe406b4576f279be8f71d66f` | 2026-08-19T10:08:23+09:00 | beyondsoft-dev | Merge pull request #206 from beyondsoft-kr/fix/test-site-account-moderation-pagination-qa | 팀/미분류 |
 | `976fa5066a62a7ddfe70fbbc24f6855ff95c7d85` | 2026-08-19T09:52:23+09:00 | HyeonJun | docs: 포인트몰 구현 계획 작성 + 스펙 라우트 조정 - 스펙: /seeker/point-shop → /point-shop 최상위 라우트로 조정 — resolve-gate가 anon을 /seeker 하위에서 리다이렉트하고 layout이 pathname 예외를 둘 수 없어 /support·/board 공개 선례를 따름 - 스펙: 모바일 탭바는 SeekerNav.showNav 대신 /support처럼 layout이 MobileTabBar 직접 부착 + mobile-tab-bar "none" 분기 추가로 변경 - 계획: 12개 태스크(스키마 0096·등급 산식 분리·순수 서비스 TDD·라우터·게이트 개방·위젯 이벤트·layout/nav·화면·마이페이지·운영자·매뉴얼·통합 검증) - 조사 반영: adminProcedure(모더레이터 프로시저 없음)·advisory lock 2-인자 hashtext 신규 도입·community.createMediaUpload 이미지 인텐트 재사용·my-page 메뉴 2곳+테스트 갱신 규칙·GA promotionSurface 자유 문자열 | 팀/미분류 |
 | `01c587078772c5d1cbd6e3bb7710d8ea021cb806` | 2026-08-19T09:28:21+09:00 | HyeonJun | docs: 포인트몰 설계 스펙 작성 | 팀/미분류 |
-| `7a2e745769f677a2c6c6989c647fdf3a6085d4c8` | 2026-08-19T09:07:06+09:00 | 최성원 | fix: 계정 제재와 운영자 QA 동작 개선 | 팀/미분류 |
+| `7a2e745769f677a2c6c6989c647fdf3a6085d4c8` | 2026-08-19T09:07:06+09:00 | 최성원 | fix: 계정 제재와 운영자 QA 동작 개선 | 확인 계정 |
 | `1363f25cb2897658c12d0d7cd98238fc94cf1acf` | 2026-08-18T18:07:58+09:00 | beyondsoft-dev | Merge pull request #204 from beyondsoft-kr/develop | 팀/미분류 |
 | `2f55ba24b7cb12daa0f6886107940a5507ace72a` | 2026-08-18T17:57:20+09:00 | beyondsoft-dev | Merge pull request #203 from beyondsoft-kr/feat/ad-inquiry-banner-card | 팀/미분류 |
 | `3d8e20d29b21c7729ec5a07d1118c8872af2551f` | 2026-08-18T17:52:20+09:00 | HyeonJun | merge: 채팅방 상담 FAB 숨김·광고 등록 문의 카드 상시 1칸 예약 | 팀/미분류 |
@@ -726,7 +726,7 @@
 | `79035d13347c9107661d0b5e0e053b968f9f98ce` | 2026-08-18T12:46:44+09:00 | HyeonJun | merge: 문의 플로팅 버튼 레일 하단 이동 + 인터콤 개편 설계 문서 | 팀/미분류 |
 | `3cd4716b3c4a9dcc47e59a46d5ed73c154f96634` | 2026-08-18T12:46:29+09:00 | HyeonJun | docs: 문의 채팅 인터콤 스타일 개편 설계·구현 계획 - 스펙: 여러 대화 스레드(1인 1방 유니크 해제·status enum)·홈 탭(인사말/공지 배너/FAQ 카드)·운영자 종료+7일 무활동 자동 종료(파생 판정, cron 없음)·소유자 축 차단·재개 규칙 확정 - 계획: 8태스크(스키마 0094→유효 종료 헬퍼 TDD→문의자 라우터 getMyRooms/getRoomMessages/sendMessage(roomId?)/getWidgetHome→운영자 라우터 상태 필터·setClosed·소유자 차단→공지 설정→위젯 홈/메시지/대화 뷰 분리→콘솔 상태 탭→매뉴얼·검증) - 런처 버튼의 레일 앵커 포털 배치 로직은 개편에서도 보존하도록 명시 | 팀/미분류 |
 | `47faa67144095cbd54419f58bada88e5441830c9` | 2026-08-18T12:46:11+09:00 | HyeonJun | feat: 문의 플로팅 버튼을 세로 배너 레일 하단으로 이동 - AdBannerRail 슬롯 스택 맨 아래에 data-support-chat-anchor 포털 앵커 추가 — 배너와 같은 왼쪽 정렬·gap-3 간격, id 대신 data 속성이라 레일이 중복 렌더돼도 충돌 없음 - 위젯이 pathname 변경·resize 때 앵커를 재탐색해 offsetParent가 살아 있으면(초광폭에서 레일 표시 중) createPortal로 레일 하단에, 아니면 기존 fixed 우하단으로 폴백 렌더 — isConnected 가드로 페이지 이동 직후 떨어진 앵커 참조도 안전 - 미읽음 뱃지는 런처 조각에 포함돼 어느 위치로 렌더돼도 따라감, 열린 패널 위치·mounted 게이트·?auth= 숨김·딥링크·폴링은 무변경 - web check-types exit 0·ultracite 대상 파일 에러 0 | 팀/미분류 |
-| `d2fcff3574c7e0bf89e9eacee007b301253026f9` | 2026-08-18T12:31:06+09:00 | 최성원 | feat: 신고·경고 운영 흐름과 페이지네이션 개선 | 팀/미분류 |
+| `d2fcff3574c7e0bf89e9eacee007b301253026f9` | 2026-08-18T12:31:06+09:00 | 최성원 | feat: 신고·경고 운영 흐름과 페이지네이션 개선 | 확인 계정 |
 | `6a5304f7a6879c2efb859d982336aa279e9025bf` | 2026-08-18T12:15:02+09:00 | HyeonJun | fix: 문의 채팅 비회원 경로 버그 3건 — CORS 헤더·로그인 화면 숨김 - server CORS allowedHeaders에 x-bambi-support-chat 추가 — 문의 쿠키가 생긴 브라우저에서 프리플라이트가 본요청을 통째로 차단해 공고 목록·내 정보 등 모든 orpc 호출이 죽던 원인(재시작 후 프리플라이트 응답에 포함 실증), 새 신원 헤더 추가 시 이 목록도 함께 늘려야 한다는 주석 보강 - 위젯을 인증 카드 화면(?auth=)에서 숨김 — SupportChatDeepLink를 SupportChatSearchParams로 확장해 auth 파라미터를 useLayoutEffect로 구독(페인트 전 반영, 로그인 화면에서 버튼이 한 프레임도 안 비침), hidden이어도 구독은 항상 렌더해 카드가 닫히면 감춤이 풀리게 유지 - UI 렌더를 mounted 이후로 게이트하고 열린 패널을 SupportChatPanel 컴포넌트로 추출(중첩 삼항 증가로 인지 복잡도 임계 초과하던 ultracite 에러 해소) - 비회원 첫 발신 404는 코드 결함 아님 — Turbopack dev 온디맨드 컴파일 콜드 스타트 아티팩트로 확인(라우트 첫 히트 후 자가 치유, 무변경) - web tsc 위젯 관련 에러 0·ultracite exit 0, 브라우저 실측: /api/support-chat 200·쿠키 발급, x-bambi-support-chat 실은 크로스 오리진 rpc 200 | 팀/미분류 |
 | `77834362682616a181497b065edabf4d2054ed8b` | 2026-08-18T11:47:05+09:00 | HyeonJun | fix: 문의 위젯 딥링크 Suspense hydration 불일치 해소 — useSearchParams 구독을 마운트 후에만 렌더 | 팀/미분류 |
 | `482319f55a20b1a149bf270c9ee0a110a1061b46` | 2026-08-18T11:39:51+09:00 | beyondsoft-dev | Merge pull request #195 from beyondsoft-kr/feat/crawled-job-bulk-management | 팀/미분류 |
@@ -741,7 +741,7 @@
 | `fa4a0510e9f771573196d133850627224bfe2bc0` | 2026-08-18T11:17:05+09:00 | HyeonJun | feat: 컨텍스트에 문의 채팅 신원(supportChat) 해석 추가 | 팀/미분류 |
 | `517c434e4b9bf0ea8c0082dc4545b167f4bf110d` | 2026-08-18T11:17:03+09:00 | HyeonJun | feat: 문의 채팅 스키마·알림 타입 추가 (마이그레이션 0093) | 팀/미분류 |
 | `6ba989671df33f012cb1b492d7feaeb5b7e926b7` | 2026-08-18T11:17:01+09:00 | HyeonJun | feat: 문의 채팅 익명 신원 토큰 서비스 추가 | 팀/미분류 |
-| `8e76a042e6e4efbc92f8856d815e98e9e067b708` | 2026-08-18T11:06:28+09:00 | 최성원 | feat: 수집 공고 관리 페이지 복귀와 일괄 삭제 개선 | 팀/미분류 |
+| `8e76a042e6e4efbc92f8856d815e98e9e067b708` | 2026-08-18T11:06:28+09:00 | 최성원 | feat: 수집 공고 관리 페이지 복귀와 일괄 삭제 개선 | 확인 계정 |
 | `c7f0dbdae8aa3d3ac746674a7600c465f216666b` | 2026-08-18T10:46:26+09:00 | HyeonJun | docs: 운영자 실시간 채팅 문의 설계·구현 계획 - 스펙: 익명 서명 쿠키(비회원)·기존 티켓과 별도 신설·공용 큐·1인 1방·폴링(A안) 확정, 데이터 모델(support_chat_room/message, 방 단위 워터마크 2개)·API·위젯·운영자 콘솔·알림 에지 트리거·보안 설계 - 계획: 11개 태스크(토큰 서비스→스키마/마이그레이션 0093→컨텍스트→순수 헬퍼→문의자/운영자 라우터→쿠키 발급 라우트→위젯→콘솔→알림 라벨→매뉴얼·검증), TDD 대상은 순수 헬퍼 2종 - 알림 actor_user_id nullable 전환 포함(비회원 발신엔 행위자 계정이 없음), 게스트 토큰과 필드명 분리(sid/gid)로 쿠키 상호 오용 차단 | 팀/미분류 |
 | `bf5eccbfa644741fb596f98c84712f5ba3740b66` | 2026-08-18T09:33:29+09:00 | HyeonJun | merge: 회원 댓글 도배 방지 속도 제한 | 팀/미분류 |
 | `a6b36b46567f9c65deabb818ef0d47bcfafacc34` | 2026-08-18T09:33:13+09:00 | HyeonJun | fix: 회원 댓글에도 도배 방지 속도 제한 적용 - 회원 댓글에는 한도가 없어 계정 하나로 무제한 연타가 가능했고, 게시판 댓글 포인트 적립이 붙으면서 어뷰징 동기까지 생긴 구멍을 막음 - commentWriteKeys 헬퍼 추가 — 회원은 계정당 한 축(community.createComment:<userId>), 비회원은 기존 gid·IP 두 축 그대로(쿠키 삭제 우회 차단) - createComment·createCrawledComment의 비회원 전용 가드 제거 — 두 경로가 같은 버킷 키를 공유해 대상을 갈아 가며 한도를 두 배로 쓰는 우회도 그대로 막힘 - 한도는 기존 비회원 값(1분 5회)을 회원과 공유, GUEST_COMMENT_LIMIT·GUEST_COMMENT_RATE_LIMIT_ERROR를 COMMENT_LIMIT·COMMENT_RATE_LIMIT_ERROR로 공용화(새 상수 0개) - 호출 위치는 기존대로 모든 검증을 통과한 뒤 — 금칙어·비밀번호 오류로 튕긴 시도가 1분 락을 먹지 않음 - createCrawledComment 설명 주석의 한도 서술을 회원 포함으로 정정 - DB 마이그레이션·웹 변경 없음(429 메시지는 비회원 경로가 쓰던 토스트 흐름 그대로), api check-types·ultracite 통과 | 팀/미분류 |
@@ -753,14 +753,14 @@
 | `83ad6b48ba4c03911ecfd3c49f6f2e3e41981d01` | 2026-08-14T16:44:58+09:00 | beyondsoft-dev | Merge pull request #189 from beyondsoft-kr/develop | 팀/미분류 |
 | `d5e37ca38e7d9ecd2c789fcd77cb6da7c57a38c5` | 2026-08-14T16:42:26+09:00 | HyeonJun | Merge branch 'develop' into feat/board-member-grades-points | 팀/미분류 |
 | `653392bc38dbfa26f0f10ca6833e0ac15eeff00b` | 2026-08-14T16:28:46+09:00 | beyondsoft-dev | Merge pull request #188 from beyondsoft-kr/fix/moderator-report-profile-actions | 팀/미분류 |
-| `a782d25f3a6f7db600de255d5abf6ab75a39cd98` | 2026-08-14T16:26:48+09:00 | 최성원 | fix: 프로필·신고 조치와 사업자 인증 흐름 개선 | 팀/미분류 |
+| `a782d25f3a6f7db600de255d5abf6ab75a39cd98` | 2026-08-14T16:26:48+09:00 | 최성원 | fix: 프로필·신고 조치와 사업자 인증 흐름 개선 | 확인 계정 |
 | `edcaa57cad07252345949324cc82b6c8f0b62d9d` | 2026-08-14T15:38:15+09:00 | beyondsoft-dev | Merge pull request #187 from beyondsoft-kr/develop | 팀/미분류 |
 | `1c3f18e303e12dfa71a7f0905b822bc566fa9c96` | 2026-08-14T15:37:58+09:00 | HyeonJun | merge: 회원 누적 포인트 상한(cap) 운영자 설정 | 팀/미분류 |
 | `1ece34dcd21ddd22860ae9318e13473be9cdfe21` | 2026-08-14T15:36:28+09:00 | HyeonJun | feat: 회원 누적 포인트 상한(cap) 운영자 설정 - 등급 관리 페이지에 회원 누적 포인트 상한 설정 UI 추가 — 비우면 무제한, 값이면 그 이상 적립되지 않음 - site_settings.max_member_points 컬럼(마이그레이션 0092) + memberGrades.getPointsCap/updatePointsCap 라우터 - 저장 가드: 상한이 최고 등급 기준 포인트보다 낮으면 거부(그 등급이 도달 불가가 되는 것 방지) - 적립 로직(reconcileContentPoints)에 cap 적용 — 잔액+델타가 상한을 넘으면 여유분만 잘라 적립하고 스냅샷에 반영, 회수는 상한과 무관 - applyPointsCap·isPointsCapAllowed 순수함수 분리 + 단위테스트 10건(총 25건 통과) | 팀/미분류 |
 | `c15b08f488970dbec13d3e9087a7e4f63cbfa100` | 2026-08-14T15:07:06+09:00 | HyeonJun | merge: develop 최신화 (#183 사업자 인증 서류 첨부) | 팀/미분류 |
 | `9509b1720c22669ab2ac7ad0bcf5d9d042f7164d` | 2026-08-14T15:04:06+09:00 | beyondsoft-dev | Merge pull request #183 from beyondsoft-kr/fix/business-document-initial-upload | 팀/미분류 |
 | `0a3662ead3ecbf76b171f6ee065560cc89a87a17` | 2026-08-14T14:58:27+09:00 | HyeonJun | fix: 운영자 등급 관리 입력 검증 에러 문구 한국어화 - 등급 생성/수정/삭제 실패 토스트가 orpc 입력 검증 시 영어 원문("Input validation failed")을 그대로 노출하던 문제 수정 - localizedGradeError 헬퍼 추가: 서버가 명시적으로 던진 한국어 문구(기준 포인트 중복·기본 등급 삭제 가드)만 통과시키고 그 외(검증 실패·빈 메시지)는 한국어 폴백으로 대체 - 등급명 1~20자·색 #RRGGBB 6자리 안내를 폴백 문구(GRADE_INPUT_ERROR)로 추가 - 판정 정규식을 모듈 상수(HANGUL_CHAR)로 승격 | 팀/미분류 |
-| `ccc271a4a4711719b4c118951958d8399e95b1e5` | 2026-08-14T14:26:10+09:00 | 최성원 | fix: 최초 사업자 인증 심사 중 서류 첨부 허용 | 팀/미분류 |
+| `ccc271a4a4711719b4c118951958d8399e95b1e5` | 2026-08-14T14:26:10+09:00 | 최성원 | fix: 최초 사업자 인증 심사 중 서류 첨부 허용 | 확인 계정 |
 | `54266b1bb8f4ef2285d5696fe340df84e0683db9` | 2026-08-14T13:50:54+09:00 | beyondsoft-dev | Merge pull request #181 from beyondsoft-kr/develop | 팀/미분류 |
 | `b848d4ab4972820e7361f10da48e22ec778613b5` | 2026-08-14T13:19:08+09:00 | HyeonJun | merge: develop 최신화 (#177 상세 텍스트·#178 탈퇴 가드·#180 신고 사유) | 팀/미분류 |
 | `67870e0ff2fb027062c257be07f521bbbdd375ce` | 2026-08-14T13:05:27+09:00 | HyeonJun | merge: 게시판 회원 등급·등급별 포인트 지급 | 팀/미분류 |
@@ -769,7 +769,7 @@
 | `b15f0515de0bc736d5adc97ce718524a195b8258` | 2026-08-14T12:30:35+09:00 | HyeonJun | feat: 게시판 포인트·등급 기반(스키마·마이그레이션·서비스) | 팀/미분류 |
 | `5a458d450b53a6dc8740614c515139b44bd36c6c` | 2026-08-14T12:21:53+09:00 | HyeonJun | docs: 게시판 등급·포인트 구현 계획 작성 | 팀/미분류 |
 | `aa5fcc975e44e5193d5fae27d7fe3e461db9ed6a` | 2026-08-14T12:18:36+09:00 | beyondsoft-dev | Merge pull request #180 from beyondsoft-kr/fix/report-rejection-reason-length | 팀/미분류 |
-| `dfe5939289c20be47cf7c2941bf1ae3372899052` | 2026-08-14T12:11:32+09:00 | 최성원 | fix: 신고 처리 사유와 팝업 노출 흐름 개선 | 팀/미분류 |
+| `dfe5939289c20be47cf7c2941bf1ae3372899052` | 2026-08-14T12:11:32+09:00 | 최성원 | fix: 신고 처리 사유와 팝업 노출 흐름 개선 | 확인 계정 |
 | `59173009ef936624c3caa1290893d0662baf1fe6` | 2026-08-14T12:09:30+09:00 | beyondsoft-dev | Merge pull request #178 from beyondsoft-kr/fix/withdrawn-org-feed-guard | 팀/미분류 |
 | `6b000191c229df8620e72cc210df941af51c4201` | 2026-08-14T12:09:16+09:00 | beyondsoft-dev | Merge pull request #177 from beyondsoft-kr/fix/job-detail-text-wrap | 팀/미분류 |
 | `8e6c7579e6d8247b8b0ae206038cc66675f079cf` | 2026-08-14T12:08:13+09:00 | HyeonJun | docs: 게시판 회원 등급·등급별 포인트 지급 설계 작성 | 팀/미분류 |
@@ -778,18 +778,18 @@
 | `b7d8bd1a3b7d7d66c34fcf4ac52e5939a09854e0` | 2026-08-14T09:49:12+09:00 | beyondsoft-dev | Merge pull request #176 from beyondsoft-kr/fix/report-done-target-copy | 팀/미분류 |
 | `17f866464ef50a30371a10c08c14b072fbd4ddb9` | 2026-08-14T09:47:43+09:00 | beyondsoft-dev | Merge pull request #175 from beyondsoft-kr/fix/comment-lock-popup-auth | 팀/미분류 |
 | `1d370ceb26e626ad9a018be8f557e198da0bf49b` | 2026-08-14T09:45:06+09:00 | HyeonJun | fix: 신고 완료 문구를 신고 대상별로 분기 (채팅 전용 문구 오노출 수정) | 팀/미분류 |
-| `3e43c33c3452f60fa7bc7b7993c3a32055b88892` | 2026-08-14T09:40:01+09:00 | 최성원 | fix: 댓글 제한 빈 영역 및 로그인 전 팝업 노출 개선 | 팀/미분류 |
+| `3e43c33c3452f60fa7bc7b7993c3a32055b88892` | 2026-08-14T09:40:01+09:00 | 최성원 | fix: 댓글 제한 빈 영역 및 로그인 전 팝업 노출 개선 | 확인 계정 |
 | `e2aef82fdb647ac8289c99f85e2fed2c24a2ee26` | 2026-08-13T18:06:18+09:00 | beyondsoft-dev | Merge pull request #172 from beyondsoft-kr/fix/test-site-admin-community-chat-issues | 팀/미분류 |
-| `c338e1d97fdacea84c6c9655f84437ca8f38f49a` | 2026-08-13T18:03:26+09:00 | 최성원 | fix: 운영자 채팅·커뮤니티 QA 문제 개선 | 팀/미분류 |
+| `c338e1d97fdacea84c6c9655f84437ca8f38f49a` | 2026-08-13T18:03:26+09:00 | 최성원 | fix: 운영자 채팅·커뮤니티 QA 문제 개선 | 확인 계정 |
 | `4a54566642f47291841439124f8e0f0112002748` | 2026-08-13T17:24:03+09:00 | beyondsoft-dev | Merge pull request #169 from beyondsoft-kr/fix/exposure-header-count | 팀/미분류 |
 | `50268ddc0174cd3c62e976ced4b6bc3a5fa043b1` | 2026-08-13T17:22:23+09:00 | HyeonJun | fix: 노출 섹션 헤더의 개수 표기 제거 | 팀/미분류 |
 | `183b307b7942952659205172007e8774f59cb821` | 2026-08-13T17:18:08+09:00 | beyondsoft-dev | Merge pull request #170 from beyondsoft-kr/fix/identity-test-channel-env | 팀/미분류 |
 | `908acdf817102f570a59b6d50188e2fa01bca86b` | 2026-08-13T17:11:31+09:00 | HyeonJun | fix: 배포 워크플로에 본인인증 테스트 채널 env 전달 | 팀/미분류 |
 | `f363a6828e25b50dd7f16337980f99aa3e37f436` | 2026-08-13T16:46:23+09:00 | beyondsoft-dev | Merge pull request #168 from beyondsoft-kr/feat/member-report-profile-popup-management | 팀/미분류 |
-| `d9730fd2a907336d121e7e6951869b9fc4612ea1` | 2026-08-13T16:40:25+09:00 | 최성원 | fix: 게시판 권한·팝업 위치 하드코딩 제거 | 팀/미분류 |
+| `d9730fd2a907336d121e7e6951869b9fc4612ea1` | 2026-08-13T16:40:25+09:00 | 최성원 | fix: 게시판 권한·팝업 위치 하드코딩 제거 | 확인 계정 |
 | `8e9e2ead89bdd8b3540a831b7eaa90687018b990` | 2026-08-13T16:28:57+09:00 | HyeonJun | fix: 노출 섹션 헤더 개수를 실제 렌더 카드 수로 표기 | 팀/미분류 |
-| `754842cc41bbc0e9a83608c9f63cb756bd4de586` | 2026-08-13T16:26:29+09:00 | 최성원 | fix: 팝업 위치 선택값을 한글 라벨로 표시 | 팀/미분류 |
-| `29b402ad770fa09f46cecdcdae799135b0027e6e` | 2026-08-13T16:19:19+09:00 | 최성원 | feat: 회원 프로필·신고 처리·커뮤니티 익명·팝업 관리 통합 | 팀/미분류 |
+| `754842cc41bbc0e9a83608c9f63cb756bd4de586` | 2026-08-13T16:26:29+09:00 | 최성원 | fix: 팝업 위치 선택값을 한글 라벨로 표시 | 확인 계정 |
+| `29b402ad770fa09f46cecdcdae799135b0027e6e` | 2026-08-13T16:19:19+09:00 | 최성원 | feat: 회원 프로필·신고 처리·커뮤니티 익명·팝업 관리 통합 | 확인 계정 |
 | `724fae7ee3e66696040082707e58204c646cac79` | 2026-08-13T16:15:10+09:00 | beyondsoft-dev | Merge pull request #166 from beyondsoft-kr/fix/guest-edit-password-gate | 팀/미분류 |
 | `bd9e9ebc5a2e9c05d30e6cfb882935dea64c208c` | 2026-08-13T16:12:19+09:00 | HyeonJun | Merge branch 'develop' into fix/guest-edit-password-gate | 팀/미분류 |
 | `ac5782bf23fd3b23e7145407b3d8d56d7a8df6fc` | 2026-08-13T16:10:51+09:00 | beyondsoft-dev | Merge pull request #165 from beyondsoft-kr/fix/payment-listing-capacity-race | 팀/미분류 |
@@ -824,18 +824,18 @@
 | `7d20f6822e0d0c1b2c6d1e17b7aec2a7dc0e55ca` | 2026-08-12T18:09:37+09:00 | beyondsoft-dev | Merge pull request #157 from beyondsoft-kr/fix/qa-employer-round-followups | 팀/미분류 |
 | `f31575a0901d800c867dc3edfd08eb499a7ff814` | 2026-08-12T18:07:21+09:00 | beyondsoft-dev | Merge pull request #156 from beyondsoft-kr/fix/seeker-job-card-information-order | 팀/미분류 |
 | `e4721128fb5b92de46a621abda4902d2e9c02b78` | 2026-08-12T18:04:52+09:00 | HyeonJun | merge: develop 최신분 반영 | 팀/미분류 |
-| `a2e97efc18ded386fd88d6491872aae047eb43d1` | 2026-08-12T18:03:56+09:00 | 최성원 | fix: 구직자 공고 카드 정보 순서 개선 | 팀/미분류 |
+| `a2e97efc18ded386fd88d6491872aae047eb43d1` | 2026-08-12T18:03:56+09:00 | 최성원 | fix: 구직자 공고 카드 정보 순서 개선 | 확인 계정 |
 | `bc88d579bad0ef8ce0b52a87c5674eb9d9cbe7f8` | 2026-08-12T17:42:14+09:00 | beyondsoft-dev | Merge pull request #154 from beyondsoft-kr/fix/mobile-interview-verification-scroll-qa | 팀/미분류 |
-| `1650550193192ce646d38e71927955a0a524e2ac` | 2026-08-12T17:41:14+09:00 | 최성원 | chore: worktree 전용 로컬 저장 경로 처리 제거 | 팀/미분류 |
-| `85e859ca1129aac73af8908868df72afdb8012e7` | 2026-08-12T17:35:23+09:00 | 최성원 | fix: 모바일 면접·사업자 인증·스크롤 QA 개선 | 팀/미분류 |
+| `1650550193192ce646d38e71927955a0a524e2ac` | 2026-08-12T17:41:14+09:00 | 최성원 | chore: worktree 전용 로컬 저장 경로 처리 제거 | 확인 계정 |
+| `85e859ca1129aac73af8908868df72afdb8012e7` | 2026-08-12T17:35:23+09:00 | 최성원 | fix: 모바일 면접·사업자 인증·스크롤 QA 개선 | 확인 계정 |
 | `87102f2b7fd361c62e72ee3ddfdc8cb970a00c54` | 2026-08-12T17:22:11+09:00 | HyeonJun | merge: 구인자 QA 후속 버그 일괄 수정 반영 | 팀/미분류 |
 | `42ec0f7539a2953afe284c1acf676ad71f356a60` | 2026-08-12T17:21:37+09:00 | HyeonJun | fix: 구인자 QA 후속 버그 일괄 수정 (폼 검증·면접 카드·고객센터·신고 재접수) | 팀/미분류 |
 | `f4ae203ecaf58c58c22d918dccaf4be7edb4f392` | 2026-08-12T15:35:49+09:00 | beyondsoft-dev | Merge pull request #150 from beyondsoft-kr/feat/ui-polish-and-chat-interview-notice | 팀/미분류 |
 | `050aa91bdf346fd4c5749fc970cb37c490e2d6e9` | 2026-08-12T15:28:55+09:00 | HyeonJun | merge: develop 최신분 반영 및 마이그레이션 0084 충돌 리넘버(0086) | 팀/미분류 |
 | `e62701269103c3e45258b4a5b8017557e1a5db43` | 2026-08-12T15:23:34+09:00 | beyondsoft-dev | Merge pull request #152 from beyondsoft-kr/fix/business-document-delete-confirmation | 팀/미분류 |
 | `6b17c628520aeac1f9831de751c937c65909d781` | 2026-08-12T15:22:37+09:00 | beyondsoft-dev | Merge pull request #149 from beyondsoft-kr/fix/chat-attachment-message-ui | 팀/미분류 |
-| `548cb17608180faedd26c2ab43591ce40cada5a7` | 2026-08-12T15:12:21+09:00 | 최성원 | merge: 최신 develop 반영 및 마이그레이션 충돌 해결 | 팀/미분류 |
-| `5b0e6772024889e8011f839286997a0ea468c6fd` | 2026-08-12T15:07:27+09:00 | 최성원 | feat: 사업자 인증 변경사항 미제출 흐름 추가 | 팀/미분류 |
+| `548cb17608180faedd26c2ab43591ce40cada5a7` | 2026-08-12T15:12:21+09:00 | 최성원 | merge: 최신 develop 반영 및 마이그레이션 충돌 해결 | 확인 계정 |
+| `5b0e6772024889e8011f839286997a0ea468c6fd` | 2026-08-12T15:07:27+09:00 | 최성원 | feat: 사업자 인증 변경사항 미제출 흐름 추가 | 확인 계정 |
 | `20ee94c3e0043b4b0918c341037eb6cedcf68d71` | 2026-08-12T15:05:25+09:00 | beyondsoft-dev | Merge pull request #147 from beyondsoft-kr/fix/test-site-qa-issues | 팀/미분류 |
 | `b590e3e63981db944476c295ac5556be91ec9b98` | 2026-08-12T14:56:37+09:00 | HyeonJun | merge: 커뮤니티 검색 수집 글 포함 반영 | 팀/미분류 |
 | `42d8741fdde0d5917e32b20e35db1b33c8ba890e` | 2026-08-12T14:56:12+09:00 | HyeonJun | fix: 커뮤니티 목록 검색이 수집 글도 잡도록 확장 | 팀/미분류 |
@@ -848,10 +848,10 @@
 | `b256a5872249774343c94894845641a8501f874f` | 2026-08-12T12:58:14+09:00 | HyeonJun | design: 운영자 모바일 신고 상세 카드 세로 스택·팝업 설정 좌우 여백 보강 | 팀/미분류 |
 | `f15aa802a2a37878f39f5ba2ec2c17fe050ec616` | 2026-08-12T12:58:12+09:00 | HyeonJun | feat: 외부 수집 표시 전면 제거 및 수집 커뮤니티 글 댓글 개방(0084) | 팀/미분류 |
 | `e34003e0740379f7d5b12c2f19ffd3d2b5129268` | 2026-08-12T12:58:09+09:00 | HyeonJun | design: 고객센터·알림·수다방 하위 경로에 모바일 하단 탭바 노출 | 팀/미분류 |
-| `3c134f9d96339af868e9914abd54506af3668c5e` | 2026-08-12T12:55:10+09:00 | 최성원 | fix: 채팅 첨부 UI와 동시 전송 순서 개선 | 팀/미분류 |
+| `3c134f9d96339af868e9914abd54506af3668c5e` | 2026-08-12T12:55:10+09:00 | 최성원 | fix: 채팅 첨부 UI와 동시 전송 순서 개선 | 확인 계정 |
 | `420d1ff21dcf1f5cf077117d994cba6c62ee2460` | 2026-08-12T11:59:25+09:00 | HyeonJun | merge: 모바일 로그인 게이트 카드 세로 중앙 정렬 | 팀/미분류 |
 | `451463c8f75d9bc5bf1ad57867ac2388ea37b4ab` | 2026-08-12T11:59:16+09:00 | HyeonJun | design: 모바일 로그인 게이트 카드를 뷰포트 세로 중앙에 배치 | 팀/미분류 |
-| `ce3b9245a7d12e98e44af48f13ce07df3279533a` | 2026-08-12T11:54:47+09:00 | 최성원 | fix: 결제관리 묶음 표시와 입력 오류 보완 | 팀/미분류 |
+| `ce3b9245a7d12e98e44af48f13ce07df3279533a` | 2026-08-12T11:54:47+09:00 | 최성원 | fix: 결제관리 묶음 표시와 입력 오류 보완 | 확인 계정 |
 | `eb8ab4fab7e5483fa9a8b2e4441b7c62782a957b` | 2026-08-12T11:49:53+09:00 | HyeonJun | merge: 탐색 바 전면 제거·모바일 검색 헤더 이동 피드백 반영 | 팀/미분류 |
 | `b1201bd5aa30272ab2b1f88a1044c1e4d073c888` | 2026-08-12T11:49:42+09:00 | HyeonJun | design: 탐색 바 전면 제거 및 모바일 검색을 헤더 알림 왼쪽으로 이동 | 팀/미분류 |
 | `47d7367237343d52ed6be3c8994259522a66d982` | 2026-08-12T10:53:04+09:00 | HyeonJun | merge: 필터 Sheet 푸터·탐색 바 그림자·준비 중 탭·검색 트리거 피드백 반영 | 팀/미분류 |
@@ -860,7 +860,7 @@
 | `35e18db4f5cfbcf75953bacb1d66fd05820ee934` | 2026-08-12T10:36:39+09:00 | HyeonJun | design: 필터 Sheet 3단 구조·탐색 바 세그먼트 재설계·모바일 채팅 목록 메신저식 행 개선 | 팀/미분류 |
 | `c75db23c1af199b381612b2a2801141f10a30bbc` | 2026-08-12T10:09:14+09:00 | HyeonJun | merge: 광고 상품 폼 하이드레이션 불일치 수정 반영 | 팀/미분류 |
 | `c8847b09ea84dc3007d4646753a607bf6c578bba` | 2026-08-12T10:09:06+09:00 | HyeonJun | fix: 광고 상품 폼 필드 id를 결정적으로 생성해 하이드레이션 불일치 해소 | 팀/미분류 |
-| `a964c2a05336358c670513ebbafedb1790fc9618` | 2026-08-12T09:51:18+09:00 | 최성원 | fix: 테스트 사이트 공고·결제관리 QA 결함 개선 | 팀/미분류 |
+| `a964c2a05336358c670513ebbafedb1790fc9618` | 2026-08-12T09:51:18+09:00 | 최성원 | fix: 테스트 사이트 공고·결제관리 QA 결함 개선 | 확인 계정 |
 | `b6fccbfb9809a02de94848dd9093c7b47d118bcd` | 2026-08-12T09:41:01+09:00 | HyeonJun | merge: UI 개선 4건·채팅 면접 제안 인라인 카드 반영 (#142 #143 #144 #145) | 팀/미분류 |
 | `fcd99c6fab3e56515b51cf11a8250e623d4b6636` | 2026-08-12T09:40:45+09:00 | HyeonJun | feat: UI 개선 4건 및 채팅 면접 제안 인라인 카드 구현 | 팀/미분류 |
 | `1f5541cdcf06305902bc337ff22300bd856c854a` | 2026-08-12T09:17:27+09:00 | HyeonJun | docs: UI 개선 4건·채팅 면접 제안 안내 구현 계획 작성 | 팀/미분류 |
@@ -869,21 +869,21 @@
 | `7b4b780eb69926c860bad77e3723347e8d747ed8` | 2026-08-11T17:57:03+09:00 | HyeonJun | merge: 대기열 제외 알림 딥링크 광고 관리 정정 - Phase C 브라우저 실측에서 발견된 remove_from_listing_queue 딥링크 폴백 결함 수정 | 팀/미분류 |
 | `1ec77ae00d948deef6a093e07addc81cdf2596d2` | 2026-08-11T17:56:41+09:00 | HyeonJun | fix: 대기열 제외 알림 딥링크를 광고 관리로 정정 - jobPostHref가 remove_from_listing_queue를 기본 폴백(공고 수정 페이지)으로 흘려 매뉴얼 기재(광고 관리)와 어긋났음 — 브라우저 실측(Phase C)에서 발견, 대기열 3종 분기에 포함 - href 테스트를 대기열 3종으로 확장(32건 통과) | 팀/미분류 |
 | `7b2090c5174be6a01207e232f17ab63939525d8d` | 2026-08-11T16:59:26+09:00 | beyondsoft-dev | Merge pull request #140 from beyondsoft-kr/fix/employer-analytics-placement-badges | 팀/미분류 |
-| `24645e6dd450c23a67cdcf01b959324e585d579a` | 2026-08-11T16:54:44+09:00 | 최성원 | fix: 성과 분석 게재 구분 뱃지 가독성 개선 | 팀/미분류 |
+| `24645e6dd450c23a67cdcf01b959324e585d579a` | 2026-08-11T16:54:44+09:00 | 최성원 | fix: 성과 분석 게재 구분 뱃지 가독성 개선 | 확인 계정 |
 | `f202401a98c11cc996263eab051b3eb0ceb20129` | 2026-08-11T16:54:05+09:00 | HyeonJun | merge: 내 공고 데스크톱 페이지네이션·리스팅 대기열 맞춤 알림 (#137 #138) - 데스크톱 내 공고 DataTable 페이징(10건), 대기열 접수(listing_queued)·자동 노출 시작(listing_activated)·대기열 제외 알림과 web 라벨·딥링크·테스트·매뉴얼 동기화 | 팀/미분류 |
 | `a3f5ce6265ab55fc6410d5ba957a23286d742b07` | 2026-08-11T16:53:44+09:00 | HyeonJun | feat: 내 공고 데스크톱 페이지네이션·리스팅 대기열 맞춤 알림 (#137 #138) - 구인관리 내 공고 데스크톱 DataTable에 pageSize(10) 배선 — DataTable 내장 페이징 UI 사용, MOBILE_JOB_PAGE_SIZE를 공용 JOB_PAGE_SIZE로 리네임(모바일 동작 불변) - 결제 확정(단건·일괄)이 만석 대기열 진입이면 사실과 다른 "게시됐어요" 대신 listing_queued 알림 발송 — isQueuedListingRow·buildListingPaymentNotification 헬퍼로 단건·일괄 분기 공용화, 순번은 getListingQueuePositions 1회 조회(metadata: exposureType·jobPostTitle·position) - 승격 틱(promoteSectionToCapacity)이 대기열 선두를 노출로 승격하면 listing_activated 알림 발송 — 시스템 이벤트라 소유자(createdByUserId)를 액터로 기록, best-effort라 틱을 실패시키지 않음 - web notification-labels: 동적 문구("｢제목｣이 스페셜 대기열 #N에 접수됐어요"·"｢제목｣ 스페셜 노출이 시작됐어요", listingQueueTitle 헬퍼로 인지복잡도 해소) + SSE(액션만 수신) 대비 정적 폴백 3종, remove_from_listing_queue 라벨·사유 본문 표시, 대기열 알림 딥링크 /employer/promotions - 섹션 라벨은 LISTING_QUEUE_SHORT_LABELS 재사용, DB enum·마이그레이션 변경 없음(기존 job_post targetType + metadata.action 파이프라인) - notification-labels 단위테스트 확장(32건 통과), 구인자 매뉴얼 알림 표·대기열 흐름 설명 동기화 | 팀/미분류 |
 | `98c2855e30870b312fab8ff0dfcc848ae21d0f4f` | 2026-08-11T16:45:22+09:00 | HyeonJun | docs: 내 공고 페이지네이션·대기열 맞춤 알림 구현 계획 추가 - 이슈 #137(데스크톱 페이지네이션)·#138(대기열 알림) 대응 계획, 공유 계약(action·metadata·문구) 고정 | 팀/미분류 |
 | `37997c19a112a97edb52f8981d2fd6f49a234531` | 2026-08-11T16:40:19+09:00 | beyondsoft-dev | Merge pull request #135 from beyondsoft-kr/feat/seo-search-metadata | 팀/미분류 |
-| `5a561e61868d98a62f4cf261cc34e2aa8ab825c1` | 2026-08-11T16:39:13+09:00 | 최성원 | fix: 추가 공공 구직정보 링크 제거 | 팀/미분류 |
-| `8382fb91008d473e0a069cd17393a0e441552b53` | 2026-08-11T16:38:19+09:00 | 최성원 | merge: 최신 develop 반영 | 팀/미분류 |
-| `66578b320e8965125820ac669210687431068432` | 2026-08-11T16:35:33+09:00 | 최성원 | fix: 추가 공공 구직정보 링크 제거 | 팀/미분류 |
-| `e5b00a97bf25bc2b1718e0da65e1e022294a64f3` | 2026-08-11T16:26:20+09:00 | 최성원 | fix: 필수 구직정보 링크와 SEO 핵심 문구 보완 | 팀/미분류 |
-| `c5d4388aeb33a3e6d0c8bfa80002a149553b5116` | 2026-08-11T16:15:13+09:00 | 최성원 | feat: 공개 영역 SEO와 구직자 보호 정보 보강 | 팀/미분류 |
+| `5a561e61868d98a62f4cf261cc34e2aa8ab825c1` | 2026-08-11T16:39:13+09:00 | 최성원 | fix: 추가 공공 구직정보 링크 제거 | 확인 계정 |
+| `8382fb91008d473e0a069cd17393a0e441552b53` | 2026-08-11T16:38:19+09:00 | 최성원 | merge: 최신 develop 반영 | 확인 계정 |
+| `66578b320e8965125820ac669210687431068432` | 2026-08-11T16:35:33+09:00 | 최성원 | fix: 추가 공공 구직정보 링크 제거 | 확인 계정 |
+| `e5b00a97bf25bc2b1718e0da65e1e022294a64f3` | 2026-08-11T16:26:20+09:00 | 최성원 | fix: 필수 구직정보 링크와 SEO 핵심 문구 보완 | 확인 계정 |
+| `c5d4388aeb33a3e6d0c8bfa80002a149553b5116` | 2026-08-11T16:15:13+09:00 | 최성원 | feat: 공개 영역 SEO와 구직자 보호 정보 보강 | 확인 계정 |
 | `a4b539c283ef2aedf5bbf2aa6d64d2f9317b74af` | 2026-08-11T16:31:29+09:00 | beyondsoft-dev | Merge pull request #136 from beyondsoft-kr/feat/exposure-section-configuration | 팀/미분류 |
-| `d874a77ea66de712a6087f39c3805e7981f07ffb` | 2026-08-11T16:26:20+09:00 | 최성원 | fix: 필수 구직정보 링크와 SEO 핵심 문구 보완 | 팀/미분류 |
+| `d874a77ea66de712a6087f39c3805e7981f07ffb` | 2026-08-11T16:26:20+09:00 | 최성원 | fix: 필수 구직정보 링크와 SEO 핵심 문구 보완 | 확인 계정 |
 | `d5bb782a3b6b68c2c2d99a4d15e91613436be448` | 2026-08-11T16:16:15+09:00 | HyeonJun | merge: 구인자 대기열 배지 섹션 라벨 접두(스페셜/추천 대기열 #N) - 내 공고 상태 배지가 어떤 섹션 대기열인지 표기하도록 라벨 접두 | 팀/미분류 |
 | `6f862fc9c5800a8ecbb51f8fbbfcd7c8f7e98560` | 2026-08-11T16:16:03+09:00 | HyeonJun | feat: 구인자 대기열 배지에 섹션 라벨 접두(스페셜/추천 대기열 #N) - getQueueStatusLabel이 LISTING_QUEUE_SHORT_LABELS로 섹션 라벨을 접두해 어떤 대기열인지 표기(순번 없으면 "스페셜 대기열", 맵 밖 타입은 기존 표기 방어) | 팀/미분류 |
-| `2f7fac104f864e3b309d76f0c340fdce67191d5c` | 2026-08-11T16:15:13+09:00 | 최성원 | feat: 공개 영역 SEO와 구직자 보호 정보 보강 | 팀/미분류 |
+| `2f7fac104f864e3b309d76f0c340fdce67191d5c` | 2026-08-11T16:15:13+09:00 | 최성원 | feat: 공개 영역 SEO와 구직자 보호 정보 보강 | 확인 계정 |
 | `4924bcff7b9e10736ab69d5db7be5a256f9e54a8` | 2026-08-11T16:09:32+09:00 | HyeonJun | merge: 정원 카드 대기열 목록 Popover 전환(통계 블록 트리거 버튼화·스크롤 목록) - 스페셜/추천 통계 블록 클릭 시 팝오버로 대기열 표시, 빈 상태·max-h 스크롤로 카드 높이 고정 | 팀/미분류 |
 | `ed4994e2da7b29524be7d550f16de6e271a86ec1` | 2026-08-11T16:09:11+09:00 | HyeonJun | feat: 정원 카드 대기열 목록을 Popover로 이동(섹션 통계 블록을 트리거 버튼화) - 스페셜/추천 정원 통계 블록을 ghost 버튼 Popover 트리거로 전환(chevron 어포던스, 라벨·배지·만석/대기 위계 유지), 프리미엄은 정적 블록 유지 - 대기열 목록은 팝오버 안에서 렌더: 제목 "{섹션} 대기열"·대기 0건 빈 상태 문구·max-h-64 스크롤로 대기 수십 건에도 카드 높이 고정 - 통계 본문을 CapacityStatBody로 추출해 정적/트리거 공유, 데이터 흐름(useQuery 3종·30초 갱신)은 무변경 | 팀/미분류 |
 | `f78155401a65831842ea2e6d4483df7ca514c2e7` | 2026-08-11T15:57:39+09:00 | HyeonJun | merge: 리스팅 대기열 공고 비공개 처리·대기 순번 표시(공개 3경로 차단·구인자/운영자 순번 배지·대기 목록) - 대기(결제됨·미활성) 스페셜/추천 공고를 공개 목록·검색·상세에서 제외(notQueuedListingFilter 공용화) - 구인자 "대기열 #N"·운영자 "스페셜/추천 #N" 배지, 정원 카드 섹션별 대기열 목록(listListingQueues)·매뉴얼 동기화 | 팀/미분류 |
@@ -901,12 +901,12 @@
 | `5befd68bf90c7e30c099b5fce9d8ee997d89cbb3` | 2026-08-11T11:27:02+09:00 | HyeonJun | merge: 노출 섹션 운영자 제어 통합 — 급구 숨김·정원 대기열·베스트글 아이콘 | 팀/미분류 |
 | `0405e9251de076fc5544764367e6ceac0307d02e` | 2026-08-11T11:25:08+09:00 | HyeonJun | feat: 노출 섹션 운영자 제어 — 급구 숨김·스페셜/추천 정원 대기열·베스트글 아이콘 - 급구 채용 섹션 운영자 토글 숨김(#126): bambi_site_settings.urgent_section_hidden(기본 숨김)·getExposureSectionConfig/updateExposureSectionConfig(공개/운영자)·메인 렌더 조건부 스킵·운영자 사이트설정 "노출 섹션 관리" 카드 - 스페셜(12)/추천(20) 광고 배너식 정원제(#127): bambi-premium-capacity 일반화(computeCapacityQueue·deriveListingQueue·assertListingApprovalWithinCapacity)·섹션별 advisory lock·moderation 승인 게이트 배선·ad-products/promotions 정원·큐 노출·jobs 방어적 slice·고정 슬롯 렌더(공고+"광고 모집중" 패딩) - 슬롯 수=정원 운영자 설정 조정(special_capacity·recommended_capacity), 정원=슬롯이라 로테이션 불필요·초과 신청은 파생 대기열 - 베스트글 가상 게시판 아이콘 운영자 지정(#128): best_board_icon 컬럼·community overview·listActive 주입·updateBestBoardIcon·운영자 community-boards 베스트 전용 아이콘 행 - 마이그레이션 0081: bambi_site_settings 4컬럼 추가(dev 적용·검증 완료) - 정원/대기열 순수 로직 단위 테스트 확장(10 passed) | 팀/미분류 |
 | `f39b68d8b6725a7638ba77600bc27b41bd969ce1` | 2026-08-11T10:54:58+09:00 | HyeonJun | docs: 노출 섹션 설정·정원 대기열·베스트글 아이콘 설계 스펙 - 급구 섹션 숨김(운영자 토글)·스페셜/추천 정원 대기열(프리미엄 정원 모델 일반화)·베스트글 아이콘 지정 설계 문서 추가 - 확정 결정·Part 1/2/3 터치포인트·마이그레이션·테스트·완료 기준 정리 | 팀/미분류 |
-| `d92886b304c9ab6dd9e43204b2e13d02d8d56a22` | 2026-08-11T10:50:40+09:00 | 최성원 | fix: 전체공고 48건 배치·끌어올리기 현황 UX 개선 | 팀/미분류 |
+| `d92886b304c9ab6dd9e43204b2e13d02d8d56a22` | 2026-08-11T10:50:40+09:00 | 최성원 | fix: 전체공고 48건 배치·끌어올리기 현황 UX 개선 | 확인 계정 |
 | `413038e943185da9223f0e96d315f2da5d4d6a3a` | 2026-08-11T09:41:21+09:00 | HyeonJun | style: 마켓플레이스 카드 배지·급여행 정렬 정리 - 광고 등록 문의 카드(AdSlotInquiryContent) 배경·글자색을 시급 배지와 동일하게(bg-destructive/10·text-destructive) 변경하고 rounded-lg border border-coral-300(연한 코럴, VisualJobCard special과 동일) 테두리 추가 - 기존 코럴 단색(bg-coral-500·text-white) 제거 — 한 곳 수정으로 가로 그리드·좌측 가로 레일·우측 세로 레일 세 곳 반영 - 채용 카드(VisualJobCard) 급여행 박스(border border-border·bg-background·rounded-md·px-[14px]) 제거, unit·pay를 썸네일 왼쪽 라인에 좌측 정렬 - 급여행 h-9는 카드 높이·그리드 자리표시 정합 유지 위해 존치 | 팀/미분류 |
 | `2692346463b22fe100644ca6f1f1057d34598cd9` | 2026-08-11T09:12:17+09:00 | beyondsoft-dev | Merge pull request #123 from beyondsoft-kr/feat/ga4-promotion-click-tracking | 팀/미분류 |
 | `c413b60c91ddc5800a3e6ff219c9dda3e03000b0` | 2026-08-11T09:08:26+09:00 | beyondsoft-dev | Merge pull request #124 from beyondsoft-kr/feat/detail-design-addon | 팀/미분류 |
 | `ffcce3fc7b1d273bfbaf126573947650318b55ef` | 2026-08-10T18:13:43+09:00 | HyeonJun | merge: develop 최신분 반영 — 광고 관리 모바일 카드·컴포넌트 추출과 끌올 옵션 통합 | 팀/미분류 |
-| `127c679cef43f88a2097e1edea6525b00f6e7288` | 2026-08-10T18:04:32+09:00 | 최성원 | feat: GA4 프로모션·핵심 행동 계측 확장 및 배너 편집 UX 개선 | 팀/미분류 |
+| `127c679cef43f88a2097e1edea6525b00f6e7288` | 2026-08-10T18:04:32+09:00 | 최성원 | feat: GA4 프로모션·핵심 행동 계측 확장 및 배너 편집 UX 개선 | 확인 계정 |
 | `60004abee2ffe62ae08bdd962653da3e240bdb19` | 2026-08-10T17:55:21+09:00 | HyeonJun | chore: 커밋 메시지 임시 파일 무시 규칙 추가 | 팀/미분류 |
 | `803daf2b397b6a64e7b98fa3192cbe2106e97777` | 2026-08-10T17:55:11+09:00 | HyeonJun | merge: 끌어올리기 옵션 체크박스 세로 정렬 수정 | 팀/미분류 |
 | `d3b13c500ddcc9042e75ebf2ac6b1810b3338aa9` | 2026-08-10T17:51:50+09:00 | HyeonJun | fix: 끌어올리기 옵션 체크박스와 라벨 세로 중앙 정렬 | 팀/미분류 |
@@ -922,7 +922,7 @@
 | `6b56184d441b0cfb5437179649e4dd8118a34d51` | 2026-08-10T16:24:59+09:00 | HyeonJun | merge: develop 최신분 반영 — 모바일 채팅 첨부 레이아웃 수정(#121) 통합 | 팀/미분류 |
 | `7248d2e512896ef3492b0143f8d277860a5800b5` | 2026-08-10T16:23:09+09:00 | HyeonJun | fix: 끌올 옵션 다이얼로그 에러 표시·기본 폭 복원 | 팀/미분류 |
 | `5f5129ed1f6a8df6f719725d48024a4ad3575c2b` | 2026-08-10T16:22:16+09:00 | beyondsoft-dev | Merge pull request #121 from beyondsoft-kr/fix/mobile-chat-attachment-layout | 팀/미분류 |
-| `147f5c53e4ae16b9d600c0b064361847a637d933` | 2026-08-10T16:16:24+09:00 | 최성원 | fix: 모바일 채팅 첨부 레이아웃·구인 관리 카드 UX 개선 | 팀/미분류 |
+| `147f5c53e4ae16b9d600c0b064361847a637d933` | 2026-08-10T16:16:24+09:00 | 최성원 | fix: 모바일 채팅 첨부 레이아웃·구인 관리 카드 UX 개선 | 확인 계정 |
 | `1a053ea4eb383c1768b3175baf358f4d0d3961ac` | 2026-08-10T16:14:15+09:00 | HyeonJun | feat: 광고 관리에 끌올 옵션 뱃지·구매 다이얼로그 추가 | 팀/미분류 |
 | `0f078ea63e904b2a3e2bb741589ea83a2d4c16c8` | 2026-08-10T16:13:41+09:00 | HyeonJun | fix: 끌올 옵션 배선 안전 가드 보강 | 팀/미분류 |
 | `c27fe1d8cb922264d4af4682273a53f5da628d54` | 2026-08-10T16:09:49+09:00 | HyeonJun | merge: develop 최신분 반영 — 테스트 파일 test/ 분리(#117) 통합 | 팀/미분류 |
@@ -1001,8 +1001,8 @@
 | `3b764558fbda2e4971b3c3331d2998b0cb17216c` | 2026-08-07T17:48:51+09:00 | HyeonJun | fix: 모바일 채팅방 카카오톡식 풀스크린 재설계 (#109) | 팀/미분류 |
 | `c0f4bc51213a0dda6952aa8114c8c6802cd30faa` | 2026-08-07T17:44:48+09:00 | beyondsoft-dev | Merge pull request #112 from beyondsoft-kr/develop | 팀/미분류 |
 | `5fe8f6c65406f5fa8e897530418cd77f6c6ccfa1` | 2026-08-07T17:38:54+09:00 | beyondsoft-dev | Merge pull request #111 from beyondsoft-kr/fix/popup-image-live-resize | 팀/미분류 |
-| `64f40e71639e29eede18bdbd14398ab7115ac016` | 2026-08-07T17:31:17+09:00 | 최성원 | merge: develop 최신분 반영 — 회원가입 본인인증 복귀 수정 통합 | 팀/미분류 |
-| `66f5f27aba5989d96076d01890aad7c405603a58` | 2026-08-07T17:27:29+09:00 | 최성원 | fix: 모바일 팝업 이미지 크기 조절 실시간 반영 | 팀/미분류 |
+| `64f40e71639e29eede18bdbd14398ab7115ac016` | 2026-08-07T17:31:17+09:00 | 최성원 | merge: develop 최신분 반영 — 회원가입 본인인증 복귀 수정 통합 | 확인 계정 |
+| `66f5f27aba5989d96076d01890aad7c405603a58` | 2026-08-07T17:27:29+09:00 | 최성원 | fix: 모바일 팝업 이미지 크기 조절 실시간 반영 | 확인 계정 |
 | `835ee19716f171280216f1f31a26ac9597321203` | 2026-08-07T17:22:52+09:00 | beyondsoft-dev | Merge pull request #108 from beyondsoft-kr/develop | 팀/미분류 |
 | `97dc69e9aece4b7e0f02f41cf737df5a51da0966` | 2026-08-07T17:21:54+09:00 | HyeonJun | docs: 모바일 채팅방 카카오톡식 재설계 디자인 스펙 추가 | 팀/미분류 |
 | `219f57b41fe978a7757e26ad773677b00a35eb75` | 2026-08-07T17:20:34+09:00 | beyondsoft-dev | Merge pull request #107 from beyondsoft-kr/fix/signup-identify-verification | 팀/미분류 |
@@ -1010,9 +1010,9 @@
 | `60adfdaf309bc142fcc5e7d23e01af31340f830b` | 2026-08-07T17:11:47+09:00 | HyeonJun | fix: 회원가입 전환을 URL(auth 쿼리)에 동기화 — 인증 복귀 시 로그인 폼 회귀 해소 - 증상: 로그인 폼에서 "회원가입" 전환 후 본인인증(모바일 리디렉션) 성공 → 복귀하면 가입 폼 대신 로그인 폼, 다시 "회원가입"을 눌러야 가입 폼 진입 - 원인: 모드 전환(toggleMode 등)이 React state만 바꾸고 URL의 auth 파라미터를 갱신하지 않음 — 기본 진입이 auth=login으로 바뀐 뒤(e7ff36ff) URL에 auth=signup이 없는 전환 경로가 생겼고, 리디렉션 복귀는 URL만 보고 모드를 복원하므로 로그인 폼으로 재생성. 남은 인증 결과 쿼리는 intent 불일치(GUEST≠SIGNUP)로 미처리 상태였다가 재전환 시점에 처리됨 - 직전 수정(4dcbf16a)은 복귀 처리 중 replace가 auth=signup을 지우는 경로만 막았고, 애초에 URL에 없는 경로는 이번 건이 근본 수정 - getAuthModeUrl 순수 헬퍼 신설(lib/bambi/auth-mode-url.ts): 기존 쿼리 보존·레거시 mode 삭제·auth=signup\|login 기록, 단위 테스트 5건(TDD red 확인 후 구현) - AuthPanel에 changeMode 도입: setMode + router.replace(scroll:false), 호출 4곳 교체(toggleMode·recovery onSignUp/onUseLoginId·hasAccount 분기) — setMode 직접 호출 0건 - auth-verify-step 상단 주석을 새 동작(모드는 auth-panel이 쿼리에 기록)에 맞게 한 줄 정정, SIGNUP_INTENT 필요 사유는 유지 - web check-types·auth 관련 vitest 17건(신규 5건 포함)·ultracite 통과, 실기기 시각 확인은 사용자 검수 대상 | 팀/미분류 |
 | `acb1f0ab2e6c06aba310d0faba4659750ab5adbd` | 2026-08-07T16:22:43+09:00 | beyondsoft-dev | Merge pull request #106 from beyondsoft-kr/develop | 팀/미분류 |
 | `49876e88cd66c699bcfb418269e110deca9eb07c` | 2026-08-07T16:17:09+09:00 | beyondsoft-dev | Merge pull request #100 from beyondsoft-kr/fix/mobile-auth-chat-moderator-qa | 팀/미분류 |
-| `9e09faa8a4f4e4d53811dae430e5c56f4566beab` | 2026-08-07T16:16:32+09:00 | 최성원 | fix: 사업자 인증 서류 원본 저장·미리보기·다운로드 복구 | 팀/미분류 |
-| `111d459fd5f10f2b5e593fbc06bf031e3312167b` | 2026-08-07T15:45:31+09:00 | 최성원 | merge: develop 최신분 반영 — 게시판 관리·SEO 변경 통합 및 모바일 QA 충돌 해소 | 팀/미분류 |
-| `d146083f0270407c3deb1c3eccb14d15d1cbd986` | 2026-08-07T15:20:45+09:00 | 최성원 | fix: 채팅 마지막 미읽음·사업자 서류 업로드 오류 수정 | 팀/미분류 |
+| `9e09faa8a4f4e4d53811dae430e5c56f4566beab` | 2026-08-07T16:16:32+09:00 | 최성원 | fix: 사업자 인증 서류 원본 저장·미리보기·다운로드 복구 | 확인 계정 |
+| `111d459fd5f10f2b5e593fbc06bf031e3312167b` | 2026-08-07T15:45:31+09:00 | 최성원 | merge: develop 최신분 반영 — 게시판 관리·SEO 변경 통합 및 모바일 QA 충돌 해소 | 확인 계정 |
+| `d146083f0270407c3deb1c3eccb14d15d1cbd986` | 2026-08-07T15:20:45+09:00 | 최성원 | fix: 채팅 마지막 미읽음·사업자 서류 업로드 오류 수정 | 확인 계정 |
 | `fa3805616f7c3a88bddc334c600e9883b5ba82e5` | 2026-08-07T14:42:31+09:00 | beyondsoft-dev | Merge pull request #105 from beyondsoft-kr/feat/dynamic-community-boards | 팀/미분류 |
 | `9e67231ac999a32c19bc1eb093e5e8fed45465f1` | 2026-08-07T14:35:03+09:00 | HyeonJun | merge: 게시물 조치 일괄 영구 삭제·전 탭 행 선택·체크박스 비활성 스타일 소생 - H3 소견 근본 원인 해소 — 체크박스는 정상이었고 "전부 삭제 상태라 정당하게 비활성인데 비활성 표시가 죽은 CSS(:disabled가 span에 미매칭)라 멀쩡해 보인" 문제: data-disabled: variant로 정정(공용 컴포넌트, 형제들과 동일 관례) - 삭제 글도 행 선택 가능 + "선택 영구 삭제 (N)" 일괄 버튼(확인 다이얼로그·부분 실패 집계) — 게시판 필터로 모아 한 번에 비우는 흐름 완성, 댓글·고객센터 문의 탭에도 선택 열·일괄 삭제 확장(기존 단건 프로시저 루프, 서버 무변경) - web check-types·moderator 스위트·ultracite 통과, Playwright 실측으로 원인 규명·스타일 검증 | 팀/미분류 |
 | `d077654166a2f707ff20b287a84d4dfbee259f22` | 2026-08-07T14:34:38+09:00 | HyeonJun | feat: 게시물 조치 행 선택 전 탭 확장·일괄 영구 삭제 - 커뮤니티 글: 삭제 상태 글도 행 선택 가능(기존엔 선택 차단), 일괄 바에 "선택 삭제 (N)"(삭제 아닌 글만)·"선택 영구 삭제 (N)"(삭제 글만) 병기 — 대상 0건이면 각자 비활성, 라벨 건수로 뭐가 지워질지 예측 가능. 일괄 영구 삭제는 AlertDialog 확인("선택한 N건을 영구 삭제할까요?") 후 hardDeleteCommunityPost 클라이언트 루프(묶음 프로시저 신설 없음), 부분 실패 시 "X건 처리, Y건 실패" 토스트 — soft 삭제로 쌓인 글을 게시판 필터로 모아 한 번에 비우는 흐름 완성 - 커뮤니티 댓글·고객센터 문의 탭에도 선택 열 + "선택 삭제 (N)" 추가 — setCommentStatusByAdmin·setInquiryStatusByAdmin 기존 단건 프로시저 루프, 사유 Dialog 3탭 공유, 영구 삭제는 글 전용 유지 - 단건 조치 mutation 3종을 setStatusOnce+Promise.allSettled 일괄 경로로 통합(행 ⋯ 액션도 ids 1건으로 같은 길) — 1건일 땐 기존 문구·서버 원문 오류 그대로, 조치 후 선택 해제(대상 상태가 낡아지므로) - 헤더 전체 선택은 고를 행 없으면 비활성(죽은 컨트롤로 보이던 문제), 주석 정비 - moderator-manual·moderator-test-flow 동기화(선택 규칙·일괄 영구 삭제로 게시판 비우기 흐름) - web check-types·moderator 스위트(payments 2건은 기저 실패)·ultracite 통과 | 팀/미분류 |
@@ -1025,8 +1025,8 @@
 | `aeea8753856272c12414ca73836286d1425b7fc0` | 2026-08-07T13:08:49+09:00 | HyeonJun | fix: 전화번호 렌더 하이픈 포맷(010-XXXX-XXXX) 일괄 적용 - 포트원(KCP) 본인인증 번호가 하이픈 없는 원값 그대로 렌더되던 문제 — 저장 정규화는 본인인증 로그 unique 키(원값 기준) 때문에 금지, 렌더 시점 formatPhone 유틸(bambi-format.ts)로만 해결 - formatPhone: 영문 포함 시 원문 유지(카카오ID 방어), 숫자만 추출해 알려진 패턴 정확 일치 시에만 재조립 — 01X 11자리 3-4-4/10자리 3-3-4, 02 2-3-4/2-4-4, 지역·070 3-3-4/3-4-4, 050X 12자리 4-4-4, 15XX·16XX·18XX 4-4. 불일치(콜핀 합성 "1566-1945 + 0000"·+82·자리표시자·050 11자리)는 원문 그대로, 멱등 - 적용 8지점: 계정 설정 인증 번호, 구인자 내 정보, 공고·수집 공고 상세 업소 연락처 타일(EmployerPhoneTile 한 곳으로 2화면), 채팅 면접카드 인증 연락처·연락처 공개 시스템 메시지, 연락처 공개 카드(phone 방식만·카카오/이메일 원문), 법률자문 글 연락처 — tel: href는 전부 원값 유지 - 운영자 자유 입력(푸터·개인정보 문의·광고 배너 대표번호)·native 입력 필드는 범위 밖(렌더 지점 없음/형식 자유) - formatPhone 단위 테스트 8건 신설, web check-types·스크린 스위트 392건·ultracite 통과 | 팀/미분류 |
 | `1730748765244fc923ace629e0c431413ba219e9` | 2026-08-07T13:08:36+09:00 | HyeonJun | feat: 운영자 출석 관리에 포인트 잔액·지급/차감 추가 - adminList 각 행에 pointBalance(bambi_point_transaction 합산, coalesce 0) 동반 — 기존 상관 서브쿼리 패턴, 정렬·커서·요약 계약 불변, DB 스키마 무변경(원장 재사용) - adminAdjustPoints 신설: { userId, amount ±1~100,000 정수(0 거부), reason 1~200자 } → 트랜잭션에서 잔액 합산·검증 후 원장 insert, 새 잔액 반환. 차감 결과 음수면 거부("잔액보다 많이 차감할 수 없습니다."), 대상은 구직자·업소 회원만, reason은 "운영자 지급/차감: {사유}" 프리픽스로 출석 적립과 구분 - 운영자 출석 목록에 포인트 열(1,200P)·관리 열 추가, 지급·차감 다이얼로그(지급\|차감 토글 + 양수 입력 + 사유 필수 + 현재/조정 후 잔액 표시) — 성공 시 목록 무효화, 실패는 서버 문구 토스트 - 구직자·업주 출석 화면은 원장 합산(getMine)이라 무수정으로 자동 반영, attendance.test.ts 기대값 추가(실행은 dev DB 보호 지침에 따라 생략) - api·server·web check-types·ultracite 통과 | 팀/미분류 |
 | `145ff64509bd710e371a530c9b6e4ab203cdcfcc` | 2026-08-07T13:08:20+09:00 | HyeonJun | feat: 게시판 아이콘 지정·빈 게시판 삭제 — 운영자 게시판 관리 보강 - community_board에 icon 컬럼(nullable) 추가 — 마이그레이션 0076(ALTER 한 줄, 시드 없음·빌트인 시각 불변), drizzle-kit check·재generate 무변경 검증 - communityBoards: create/update 입력에 icon(큐레이션 lucide 12종 enum, update는 null로 제거 가능), listActive·overview 출력에 icon 동반(best 가상 항목은 null) - remove 프로시저 신설 — 기본 게시판 5종 거부(BAD_REQUEST), 글 있는 게시판 거부(CONFLICT, 노출 끄기 안내), 빈 커스텀 게시판만 delete - 운영자 페이지: 추가 폼·수정 다이얼로그에 아이콘 Select(실아이콘 미리보기+없음), 목록 아이콘 열, 비빌트인 행 삭제 버튼(AlertDialog 확인, 실패는 서버 문구 토스트) - 웹 렌더: 아이콘 이름→컴포넌트 명시 Record(community-board-icons.ts, 미지 이름 무시), 카드·게시판 헤더에 지정 아이콘 > 공지 확성기 > 액센트 바 우선순위, isBuiltinBoardKey 헬퍼(COMMUNITY_BOARDS 파생 — 최종 판정은 서버) - db·api·server·web check-types, community.test 등 27건, ultracite 통과 | 팀/미분류 |
-| `c1dae57843cc1d290db6c29e0d219dd4cca509d5` | 2026-08-07T12:39:54+09:00 | 최성원 | feat: 사업자 인증 서류 제출·검수 및 SEO 키워드 확장 | 팀/미분류 |
-| `5507179e96b6636d2987242d8ccbe45155baef45` | 2026-08-07T12:30:48+09:00 | 최성원 | merge: develop 최신분 반영 — 알림·출석 기능 통합 및 모바일 QA 충돌 해소 | 팀/미분류 |
+| `c1dae57843cc1d290db6c29e0d219dd4cca509d5` | 2026-08-07T12:39:54+09:00 | 최성원 | feat: 사업자 인증 서류 제출·검수 및 SEO 키워드 확장 | 확인 계정 |
+| `5507179e96b6636d2987242d8ccbe45155baef45` | 2026-08-07T12:30:48+09:00 | 최성원 | merge: develop 최신분 반영 — 알림·출석 기능 통합 및 모바일 QA 충돌 해소 | 확인 계정 |
 | `93944ca47f9638eb0dc0543b9e4f92334eff2370` | 2026-08-07T11:57:56+09:00 | HyeonJun | merge: develop 동기화(#98·#101 수용) — 마이그레이션 0072→0075 재번호 - develop 30162f77(메인 팝업 관리 #98, 알림·출석 #101) 병합 — PR #101이 0072~0074를 점유해 우리 0072_dynamic-community-board를 0075로 재생성(when 1786070697018 > 0074, 스냅샷 체인 0071→0072→0073→0074→0075 재연결, drizzle-kit check 통과·재generate "No schema changes"로 누적성 검증) - 0075 SQL은 기존 수기 순서 유지: community_post.board text 전환 → DROP TYPE community_board → 테이블 생성 → 시드 5행 → FK. 문서의 옛 번호 참조 2곳(moderator-test-flow 사전조건, seeker-test-flow 11.2)을 0075로 갱신 - community.ts buildBoardOrder: 우리 string 시그니처 + develop의 notice 이벤트 정렬(desc(isEvent)) 합본, reviews.ts는 allowLeftRoom과 알림 발행 블록 공존, index.ts에 communityBoards+attendance/notifications/mainPopups 전부 등록 확인 - schema/bambi.ts: develop notificationTargetType enum + 우리 communityBoard 테이블 공존(develop 측 communityBoard pgEnum은 폐기) - moderator-manual: develop이 말미에 붙인 출석 관리를 콘솔 내비 순서(3.8)로 이동·3.9~3.17 재번호(TOC·앵커 동기화, 깨진 앵커 0건), seeker-test-flow A-3은 theirs·A-4는 ours 채택 - 모바일 운영자 더보기(MOD_MORE_GROUPS)에 게시판 관리 누락 보완 — 우리 브랜치 결함으로 모바일에서 신규 페이지 도달 불가였던 것을 매뉴얼 서술과 일치화(데스크톱 내비에는 기존재) - db·api·server·web check-types 통과, web vitest 524/531(실패 7건은 양쪽 부모 공통 기저 실패 — 옛 경로를 읽는 소스 스캔 테스트), ultracite 통과 | 팀/미분류 |
 | `30162f779cd64f21c8498e036b226b722ebffd97` | 2026-08-07T11:36:50+09:00 | beyondsoft-dev | Merge pull request #101 from beyondsoft-kr/feat/notifications-attendance | 팀/미분류 |
 | `0cbabaa6b0e3e3eb8f4daa2066cf98ce7cffc0ef` | 2026-08-07T11:18:58+09:00 | HyeonJun | merge: develop 최신분 반영 — 메인 팝업 관리·채팅 QA 등 11커밋 + 마이그레이션 번호 충돌 해소 - develop(8b9103b9, PR #93·#97·#98)을 feat/notifications-attendance에 병합 — 메인 팝업 노출·운영자 팝업 편집·기간 할인 등 유입 - drizzle 마이그레이션 번호 충돌 해소: 양쪽이 각자 0072를 추가 — 생성 타임스탬프 시간순(우리 0072_minor_monster_badoon이 팝업 2건보다 먼저)대로 우리 것을 0072로 유지하고 develop의 0072_messy_wallop→0073, 0073_nebulous_black_queen→0074로 리넘버(when·SQL 내용 불변이라 각 DB의 워터마크 동작에 영향 없음, 이미 0072를 적용한 dev DB도 팝업 2건만 이어서 적용됨) - 스냅샷 누적성 복원: 팝업 스냅샷 2개(0073·0074)에 우리 델타 4건(bambi_notification 변경, bambi_attendance·bambi_point_transaction 추가, notification_target_type enum) 이식, prevId 체인 0071→0072(우리)→0073→0074로 재연결 — drizzle-kit generate가 "No schema changes"로 무손실 검증됨 - @bambi-app/api·server check-types 통과, web은 메인 체크아웃의 낡은 .next 라우트 타입 오탐만 잔존(삭제된 login·welcome 페이지 참조 — dev 서버 기동 시 재생성으로 해소, 소스 에러 아님) | 팀/미분류 |
@@ -1036,14 +1036,14 @@
 | `d647a0f9209d6cdabfc9807ac6640c44c40ec094` | 2026-08-07T10:57:23+09:00 | HyeonJun | feat: 수다방 게시판 DB 동적화 + 운영자 게시판 관리 - 게시판 정의 3중 하드코딩(DB pgEnum·서버 zod enum·웹 상수)을 community_board 테이블 단일 진실원으로 — 운영자가 코드 배포 없이 게시판 추가 가능, 라우팅은 기존 [board] 동적 세그먼트 그대로 - 마이그레이션 0072_dynamic-community-board: community_post.board enum→text 전환 → DROP TYPE(pg 타입·테이블 이름공간 충돌 회피) → 테이블 생성 → 기존 5개 게시판 시드(notice/free/work_talk/market/legal, 라벨·slug·설명은 웹 상수 값) → FK. db:migrate 미실행(사용자 지시 대기), drizzle-kit check 통과. drizzle 생성 SQL에 딸려 나온 crawled_job_post 이미지 편집 DDL은 0069~0071 재번호 때 생긴 스냅샷 드리프트로 0068 기적용분이라 제거 - communityBoards 라우터 신설(banned-words 패턴): listActive(공개)/list/create/update/setActive(adminProcedure) — key=slug(/^[a-z0-9_-]{2,30}$/), 예약어 best·crawled·write 거부, key·slug 변경 불가, 삭제 없음(비활성=숨김) - community.ts: 게시판 zod enum → 문자열 + assertBoard(존재·활성·forWrite면 쓰기 가능까지 DB 검증), overview를 고정 6키 응답 → boards 배열(best 가상 선두, sortOrder asc). notice/free/legal/work_talk/best·공개 /board 3종·게스트 쓰기 분기는 전부 리터럴 유지 — 신규 게시판은 표준 동작(회원 열람·작성) - 웹: useCommunityBoards/useBoardBySlug 훅 신설(listActive, staleTime 5분), seeker/community/[board]/** 4페이지 훅 기반 해석(로딩 스켈레톤 → 로드 후 미존재 시 404), 홈·미리보기 overview 배열 소비(notice 전폭·market/legal 페어 유지, 신규는 solo 카드, accent 미지 키 폴백), 글 목록 필터 노출을 화이트리스트 → 블랙리스트(best·notice·legal 제외)로 전환해 신규 게시판에 표준 필터 제공 - 운영자 /moderator/community-boards 신설(목록 DataTable + 추가 폼 + 수정 다이얼로그 + 글쓰기·노출 Switch) + 내비 콘텐츠 그룹 등록 + 폭 규약 테스트 편입, 게시물 조치 상세 라벨은 communityBoards.list 기반(폴백 유지) - 공개 /board·sitemap·public-community는 무수정(공개 SEO 영역은 기존 3종 고정 — 범위 밖), seeds의 enum 타입 참조는 string으로 전환 - db·api·server·web check-types, web vitest, drizzle-kit check, ultracite 통과 (packages/api 라우터 스위트는 dev DB 보호 지침에 따라 미실행 — community.test.ts 기대값은 수기 갱신) | 팀/미분류 |
 | `24d97db68439816127dfbc37e546d7fa2c6f9370` | 2026-08-07T10:57:06+09:00 | HyeonJun | feat: 후기 남기기를 내 정보 예정된 면접으로 이관 - 후기 작성 진입점을 채팅방 우측 사이드바(모바일에선 대화 아래로 밀려 사실상 숨김)에서 내 정보 예정된 면접 아코디언으로 이동 — 구직자 && 확정/완료 면접에서 노출, 기존 후기는 읽기 카드(등록된 후기/검수 중인 후기) - InterviewListItem에 chatRoomId 노출(서버 listMyUpcomingInterviews가 스프레드로 이미 내려주던 필드, API 계약 무변경), InterviewReviewSection 신설 — reviews.listMine으로 기존 후기 판정, review-form.tsx 그대로 재사용, 성공 시 listMine 무효화 + "후기가 등록됐어요." - 채팅방 화면의 후기 코드 전부 제거(ReviewSidebarCard·createReviewMutation·reviewListQuery·canCreateReview·handleReviewSubmit·렌더) — 오류 문구 맵(getReviewMutationErrorMessage)은 아코디언 쪽으로 이동, 고아가 된 eligibleSchedule도 정리 - reviews.create에 allowLeftRoom 허용 — 아코디언은 나간 방 면접도 노출하므로(면접 완료 전환과 동일한 예외, chats.ts 선례) 나간 방에서도 등록 가능. 나머지 가드(구직자 본인·확정/완료 면접 존재·방당 1건 유니크)는 불변 - 소스 스캔 테스트 2건 갱신: 채팅방에 후기 진입점 부재 가드 추가, 아코디언 후기 가드 패턴 추가 - web vitest 스크린 스위트·web/api/server check-types·ultracite 통과 | 팀/미분류 |
 | `6b7928aa4e6d915fcbbdf9a1e8cd7f0ff3a3c523` | 2026-08-07T10:56:43+09:00 | HyeonJun | fix: 모바일 필터 시트 Enter 입력 시 패널 닫기 - 모바일 필터 패널에서 조건 입력 후 Enter를 치면 시트가 닫히고 결과가 바로 보이도록 — 필터 적용은 기존 onChange 즉시 반영이라 닫기만 추가 - MarketplaceFilterSheet의 SheetContent에 onKeyDown 하나: Enter && input 타깃 && IME 조합 아님 → onOpenChange(false). Select·체크박스는 base-ui가 button으로 렌더해 자연 배제, Select 팝업은 포털이라 버블링 자체가 없음 - 공용 시트 한 곳 수정으로 공개·구직자 마켓플레이스 두 화면 모두 커버(호출부·시그니처 무변경) - web check-types·ultracite 통과 | 팀/미분류 |
-| `637d43fdc34f2eef76fda5920fb4114aed72ffaa` | 2026-08-07T10:49:54+09:00 | 최성원 | fix: 모바일 채팅 키보드 레이아웃 안정화 | 팀/미분류 |
-| `4825e8707d661e5d6292fbb812f1630e1b045d57` | 2026-08-07T10:49:48+09:00 | 최성원 | fix: 신고 채팅 양측 차단과 읽음 정합성 보완 | 팀/미분류 |
-| `4dcbf16a0e1d25c82958b0a66545d3c79f5530da` | 2026-08-07T10:49:40+09:00 | 최성원 | fix: 모바일 인증 복귀와 운영자 메뉴 보완 | 팀/미분류 |
+| `637d43fdc34f2eef76fda5920fb4114aed72ffaa` | 2026-08-07T10:49:54+09:00 | 최성원 | fix: 모바일 채팅 키보드 레이아웃 안정화 | 확인 계정 |
+| `4825e8707d661e5d6292fbb812f1630e1b045d57` | 2026-08-07T10:49:48+09:00 | 최성원 | fix: 신고 채팅 양측 차단과 읽음 정합성 보완 | 확인 계정 |
+| `4dcbf16a0e1d25c82958b0a66545d3c79f5530da` | 2026-08-07T10:49:40+09:00 | 최성원 | fix: 모바일 인증 복귀와 운영자 메뉴 보완 | 확인 계정 |
 | `3bcaaf337a27e7c4faed2d74082a36624eb7ba11` | 2026-08-07T10:29:24+09:00 | HyeonJun | merge: 알림 QA 피드백 반영 — 문구·딥링크·비우기·운영자 수정 즉시 반영 - 승인 알림 3분기(재공개/입금 대기/즉시 게시)·결제 승인 문구 호응, 노출 조정·삭제·후기·권한 변경에 공고명·업소명 동적 문구(enum 원값 해소, 구버전 행 폴백) - 면접 알림 전부 /seeker/me/interviews, 권한 변경 알림 이동 없음, 팀 합류 승인 초대자 알림 추가 - 알림 비우기(clearAll — 공유 알림은 한 명이 비우면 전원 삭제) + 알림함 확인 다이얼로그 - 운영자 공고 수정 즉시 반영(moderatorEdit — 검수·결제 상태·노출 종료일 유지), 검수큐 "승인" 문구 통일, 로그인 "비회원으로 인증하기" - notification-labels 29건·순수 vitest·check-types 3종·ultracite 통과, 매뉴얼·test-flow 동기화 | 팀/미분류 |
 | `a54a3149eb292cfeaa0ffa74a062e387cf0dacf0` | 2026-08-07T10:29:01+09:00 | HyeonJun | fix: 알림 QA 피드백 반영 — 문구·딥링크·비우기·운영자 수정 즉시 반영 - 공고 승인 알림 3분기: 재공개(hidden→published) "공고가 재공개됐어요", 유료 입금 대기 "공고가 승인됐어요. 입금 확인 후 게시됩니다", 무료 즉시 게시는 기존 문구 — setJobPostStatus·bulkSetJobPostStatus가 previousStatus·paymentPending metadata 동반, 결제 승인 문구도 "입금이 확인돼 공고가 게시됐어요"로 호응 - 동적 문구 계층(dynamicTitle) 신설: 노출 조정 "｢공고명｣ 공고의 노출 기간이 N일 연장/단축", 삭제·새 후기에 공고명 포함, 권한 변경 "{업소명}에서 권한이 {한글 라벨}(으)로 변경"(staff·manager enum 원값 노출 해소) — metadata 재료가 없으면 기존 정적 문구로 폴백해 구버전 알림 행 보호 - 면접 알림 딥링크 전부 /seeker/me/interviews로 변경(채팅방 삭제 시 착지 불가 해소), 권한 변경 알림은 이동 없음(notificationHref null 반환 + 알림함 가드), 팀 합류 승인을 초대자에게도 발신("{닉네임}님이 팀에 합류했어요", 초대자=합류자면 생략) - 알림 비우기 추가: clearAll 프로시저(buildVisibleFilter 재사용 — 개인+공유 행 삭제, 공유는 한 명이 비우면 전원 소거로 읽음과 동일 의미론, 채팅 핀 비영향) + 알림함 outline 버튼·AlertDialog 확인·성공 시 벨 배지 캐시 0 반영 - 운영자 공고 수정 즉시 반영: applyJobPostUpdate keepStatus→moderatorEdit 확장 — 검수 상태만이 아니라 결제 상태·노출 종료일도 유지(운영자 수정 시 노출 상품·기간 변경으로 게시 중 유료 공고가 미결제로 떨어져 검수큐·결제관리 어디에도 안 떠 복구 불가하던 결함 해소), 구인자 본인 수정의 재검수·재결제 정책 불변 - 검수큐 판정 버튼 "승인 후 게시"→"승인"·보류 처리 "승인 후 공개"→"승인" 통일, 승인 사유 시트에 무료/유료 게시 시점 안내, 로그인 비회원 버튼 "비회원으로 목록만 보기"→"비회원으로 인증하기" - notification-labels.test.ts 29건·api 순수 알림 테스트 통과, web·server·@bambi-app/api check-types·ultracite 통과(clearAll DB 케이스는 dev DB 의존이라 실행 보류), 매뉴얼 3종·test-flow 2종 문구 동기화 | 팀/미분류 |
 | `8b9103b9bdd6aa8f40839e5da099245da7cf44c2` | 2026-08-07T10:01:37+09:00 | beyondsoft-dev | Merge pull request #98 from beyondsoft-kr/feat/main-popup-management | 팀/미분류 |
-| `1ae588a37d53ba450ebec00bd7af8776596d997b` | 2026-08-06T18:14:27+09:00 | 최성원 | feat: 팝업 대상 노출·이벤트 공지·기간 할인 운영 확장 (#97) | 팀/미분류 |
-| `97305de06e32b15c5d2ce4be7662d1858fc1ffbb` | 2026-08-06T17:50:23+09:00 | 최성원 | Merge remote-tracking branch 'origin/develop' into feat/main-popup-management | 팀/미분류 |
+| `1ae588a37d53ba450ebec00bd7af8776596d997b` | 2026-08-06T18:14:27+09:00 | 최성원 | feat: 팝업 대상 노출·이벤트 공지·기간 할인 운영 확장 (#97) | 확인 계정 |
+| `97305de06e32b15c5d2ce4be7662d1858fc1ffbb` | 2026-08-06T17:50:23+09:00 | 최성원 | Merge remote-tracking branch 'origin/develop' into feat/main-popup-management | 확인 계정 |
 | `6c10409f644d006c5c40603939573b2ea8396b71` | 2026-08-06T17:44:43+09:00 | HyeonJun | merge: 구직자 출석체크 페이지를 내 정보 사이드바 안으로 통합 - /seeker/attendance를 MyPageShell(title="출석체크")로 감싸 좌측 내 정보 사이드바·모바일 복귀 링크 제공, AttendancePanel embedded prop으로 자체 여백·h1 제거(설명 문단 유지) - /employer/attendance·/moderator/attendance는 기존 단독 레이아웃 유지 - web check-types·ultracite 통과 | 팀/미분류 |
 | `5237ff53be9cfcca6b5fa52d5c212f4e2c91bff4` | 2026-08-06T17:44:29+09:00 | HyeonJun | fix: 구직자 출석체크 페이지를 내 정보 사이드바(MyPageShell) 안으로 통합 - /seeker/attendance를 다른 내 정보 하위 화면과 동일하게 MyPageShell(title="출석체크")로 감싸 좌측 프로필·메뉴·로그아웃 사이드바와 모바일 "내 정보" 복귀 링크 제공 - AttendancePanel에 embedded prop 추가 — 셸 안에서는 자체 mx-auto·패딩과 h1을 빼고(셸 제목과 중복) 설명 문단·max-w-2xl은 유지, 로딩·에러·정상 3개 경로 공통 containerClass로 일원화 - 구인자 콘솔 /employer/attendance와 /moderator/attendance는 기존 단독 레이아웃 유지(상단 내비 진입이라 내 정보 셸 대상 아님) - web check-types·ultracite 통과, AttendancePanel 참조 테스트 없음 확인, 시각 확인은 사용자 검수 대상 | 팀/미분류 |
 | `8f9a60dcad2632c7ae668d94a6db5f9e9ccaea55` | 2026-08-06T17:34:04+09:00 | HyeonJun | merge: 데스크톱 헤더 우측 액션 재구성 — 검색·채팅·알림·역할전환·내 정보 순 - 채팅 버튼을 알림 벨과 동일한 아이콘 버튼으로 전환(Message 아이콘·안읽음 배지 유지), 우측 액션 순서를 채팅 → 알림 → 구인 관리/운영자 모드 → 내 정보로 변경, 운영자 셸은 알림 벨 → 운영자 모드 배지 순 - web check-types·ultracite·관련 vitest 26건 통과 | 팀/미분류 |
@@ -1114,24 +1114,24 @@
 | `3703263056e874986fee216708053c06582313d4` | 2026-08-06T11:16:36+09:00 | HyeonJun | feat: 채팅 서버 — 재문의 방 부활·메시지 멱등성·커서·전용 동기화 큐 (마이그레이션 0069) - 재문의 방 부활: startFromJobPost 기존 방 재사용 시 한쪽이라도 나갔으면 양쪽 deletedAt 리셋 후 양측 목록 갱신 신호 — 업주가 나간 방도 구직자 재문의로 재개(일반 발신의 상대 나감 차단은 유지), participation에 부활 헬퍼 추가 - 메시지 멱등성: sendMessage·sendMediaMessage 입력에 messageId(uuid, optional) 추가 — 클라이언트 사전 생성 id로 INSERT, PK onConflictDoNothing, 충돌 시 방·발신자 일치 검증 후 기존 행 반환(부수효과 재실행 없음, 첨부는 기존 행 동반 반환), contact_request도 같은 유틸로 id 생성 - 커서 페이지네이션: getById에 (createdAt, id) keyset 커서 입력·nextCursor 응답 추가, 전 조회 정렬을 (created_at, id) 총순서로 통일(listMine 포함) — 이력 열람 상한 500 해제, 500은 응답 크기 상한으로만 유지 - 채팅 메시지 전용 동기화 큐(transactional outbox): chat_message_sync_queue 테이블 신설, 메시지 INSERT 3지점을 "tx { 메시지 + 발신자 방 복원 + 큐 행 }" 구조로 전환, 커밋 직후 인프로세스 drain(직렬화 체인)·부팅 1회·60초 스윕, 성공 즉시 삭제·실패 attempts+1·3회 초과 로그, 인터페이스는 enqueue/drain 두 함수로 좁혀 Redis Stream 교체 이음새 확보 - 전파 로직(notifyChatMessageCreated)은 라우터에서 큐 서비스로 이동(로직 무변경), 안읽음 정본은 DB anti-join 집계 유지 - 마이그레이션 0069 dev DB 적용·검증 완료(컬럼·인덱스·저널 71건 확인) - 순수 vitest 15건 신규 포함 서비스 스위트 통과, api·db·server check-types·ultracite 통과 - chats.test.ts에 부활·멱등성·커서 케이스 8건 추가(DB 의존 스위트라 실행은 보류 — 안전한 DB에서 확인 필요) | 팀/미분류 |
 | `cb4133abdd10e1baf22ab431ad84ceb6704242d0` | 2026-08-06T11:02:55+09:00 | HyeonJun | fix: 가입 폼 정렬·jobs/board 푸터 제거·게시판 비회원 인증 CTA 제거 - 가입 폼 아이디 안내 문구가 옆 닉네임 입력창을 아래로 밀던 문제 — 행 그리드 기본 stretch가 원인이라 auth-panel 행 컨테이너에 items-start 한 줄로 해결(문구 길이가 변해도 정렬 유지) - /jobs/*·/board/* 레이아웃에서만 SiteFooter 렌더 제거(랜딩·legal 등 다른 영역 푸터 유지), 고아 import 정리 - 게시판 목록의 비회원 "본인인증하고 글쓰기" CTA 제거(회원·기인증 게스트 글쓰기 버튼은 유지), 비회원이 write URL 직접 진입 시 인증 게이트 대신 로그인 안내(EmptyState 공용 패턴 재사용) - GuestVerifyCard 컴포넌트는 게시글 수정·댓글에서 아직 사용 중이라 유지, 수다방 비회원 흐름 무변경 - ultracite·web check-types 통과, 시각 확인은 사용자 검수 대상 | 팀/미분류 |
 | `b9cbaf73934359637e5c05f1e84855eecb6e6b8d` | 2026-08-06T11:00:01+09:00 | HyeonJun | docs: 채팅 QA 2차 설계 스펙 + 메시지 id 유틸 계약 - QA 6건(토스트 제거·내부 스크롤·자동 읽음·재문의 방 부활·가입 폼 정렬·푸터/게시판 CTA)과 구조 개선 2건(메시지 id 승격·채팅 메시지 전용 동기화 큐) 설계 확정 문서 - 재문의 정책은 "방 부활(양쪽 deletedAt 리셋)"로 확정 — 기존 "영구 불가" 정책 전환 - bambi-chat-message-id 신설: UUIDv7 생성 유틸(브라우저·Node 공용, 의존성 없음) — 클라이언트 사전 생성 id로 재시도 멱등성, (created_at, id) 커서 정렬의 계약 고정 | 팀/미분류 |
-| `105fcf65780c4a0d9e482a3f06baaca152c98176` | 2026-08-06T10:38:54+09:00 | 최성원 | Merge branch 'feat/main-popup-management' into temp/graphify-latest | 팀/미분류 |
-| `a3bc44838d4ea699da3a627d13a35b6d5f41110d` | 2026-08-06T10:38:05+09:00 | 최성원 | Merge branch 'fix/seeker-mobile-qa-issues' into temp/graphify-latest | 팀/미분류 |
-| `20f78a03113d3df45d9d412b3a784e1df7bce56c` | 2026-08-06T09:34:36+09:00 | 최성원 | fix: 이미지 편집 마이그레이션 순번 정리 | 팀/미분류 |
-| `33c877505c62410f228b2c0af434155e831d1a38` | 2026-08-06T09:28:10+09:00 | 최성원 | docs: 최신 develop 동기화 충돌 해결 계획 | 팀/미분류 |
-| `2fe29cb4715bd983588fa44b416e60dfbb8d1a7f` | 2026-08-05T14:56:56+09:00 | 최성원 | fix: 이미지 저장 용량 초과 안내 개선 | 팀/미분류 |
-| `969ed5bec90915fe3f2f4fd88e050473c2e10f87` | 2026-08-05T14:41:49+09:00 | 최성원 | fix: 긴 이미지 자르기 저장 실패 해결 | 팀/미분류 |
-| `87e6d0756df50662f067d5c83f4343c6ee8cf87e` | 2026-08-05T11:45:54+09:00 | 최성원 | fix: 리사이즈 반대 경계 고정 | 팀/미분류 |
-| `9caa3c35e4cf075fca61eb496a1f1d1c67f70f0b` | 2026-08-05T11:09:48+09:00 | 최성원 | fix: 이미지 변 리사이즈 축 분리 | 팀/미분류 |
-| `65799315306d653d367fa7106a84697e28f06a4b` | 2026-08-05T10:53:50+09:00 | 최성원 | fix: 다중 이미지 리사이즈 반응성 개선 | 팀/미분류 |
-| `21373774fa8b676eee7cfa7aedefb614e9f1122a` | 2026-08-05T10:30:32+09:00 | 최성원 | fix: 크기 조절 후 이미지 선택 유지 | 팀/미분류 |
-| `e87fef91511844b4bc1246a3cf6b26babbf4c961` | 2026-08-05T10:00:25+09:00 | 최성원 | fix: 이미지 선택과 리사이즈 상태 안정화 | 팀/미분류 |
-| `5bcea19b8e4c153140809e7d0b652ec28246d841` | 2026-08-05T09:45:01+09:00 | 최성원 | feat: 이미지 자르기 8방향 조절 지원 | 팀/미분류 |
-| `ef3ecd6d0c30257a1444f2249cdb6a5bea460e5a` | 2026-08-05T09:38:42+09:00 | 최성원 | fix: 이미지 선택과 크기 조절 UI 개선 | 팀/미분류 |
-| `1f3b126609db4872f7383d5148001e33967f4345` | 2026-08-05T09:24:22+09:00 | 최성원 | fix: 이미지 자르기 모달 상호작용 수정 | 팀/미분류 |
-| `94e5da257892304b4e669c85e4f374a5068993af` | 2026-08-04T18:15:54+09:00 | 최성원 | feat: 수집 공고 편집 이미지를 공개 상세에 반영 | 팀/미분류 |
-| `e4333bd694c357d27db7bb14898a08fe40eee545` | 2026-08-04T18:15:24+09:00 | 최성원 | feat: 수집 공고 이미지 편집 화면 추가 | 팀/미분류 |
-| `9bcb009b8738ee481a23f0ebf1b3b233d993295e` | 2026-08-04T18:15:10+09:00 | 최성원 | feat: 수집 공고 이미지 편집 저장 구조 추가 | 팀/미분류 |
-| `17c8782b439932cca7a8505eff13080521d76a73` | 2026-08-04T17:01:34+09:00 | 최성원 | docs: 수집 공고 이미지 편집기 설계 추가 | 팀/미분류 |
+| `105fcf65780c4a0d9e482a3f06baaca152c98176` | 2026-08-06T10:38:54+09:00 | 최성원 | Merge branch 'feat/main-popup-management' into temp/graphify-latest | 확인 계정 |
+| `a3bc44838d4ea699da3a627d13a35b6d5f41110d` | 2026-08-06T10:38:05+09:00 | 최성원 | Merge branch 'fix/seeker-mobile-qa-issues' into temp/graphify-latest | 확인 계정 |
+| `20f78a03113d3df45d9d412b3a784e1df7bce56c` | 2026-08-06T09:34:36+09:00 | 최성원 | fix: 이미지 편집 마이그레이션 순번 정리 | 확인 계정 |
+| `33c877505c62410f228b2c0af434155e831d1a38` | 2026-08-06T09:28:10+09:00 | 최성원 | docs: 최신 develop 동기화 충돌 해결 계획 | 확인 계정 |
+| `2fe29cb4715bd983588fa44b416e60dfbb8d1a7f` | 2026-08-05T14:56:56+09:00 | 최성원 | fix: 이미지 저장 용량 초과 안내 개선 | 확인 계정 |
+| `969ed5bec90915fe3f2f4fd88e050473c2e10f87` | 2026-08-05T14:41:49+09:00 | 최성원 | fix: 긴 이미지 자르기 저장 실패 해결 | 확인 계정 |
+| `87e6d0756df50662f067d5c83f4343c6ee8cf87e` | 2026-08-05T11:45:54+09:00 | 최성원 | fix: 리사이즈 반대 경계 고정 | 확인 계정 |
+| `9caa3c35e4cf075fca61eb496a1f1d1c67f70f0b` | 2026-08-05T11:09:48+09:00 | 최성원 | fix: 이미지 변 리사이즈 축 분리 | 확인 계정 |
+| `65799315306d653d367fa7106a84697e28f06a4b` | 2026-08-05T10:53:50+09:00 | 최성원 | fix: 다중 이미지 리사이즈 반응성 개선 | 확인 계정 |
+| `21373774fa8b676eee7cfa7aedefb614e9f1122a` | 2026-08-05T10:30:32+09:00 | 최성원 | fix: 크기 조절 후 이미지 선택 유지 | 확인 계정 |
+| `e87fef91511844b4bc1246a3cf6b26babbf4c961` | 2026-08-05T10:00:25+09:00 | 최성원 | fix: 이미지 선택과 리사이즈 상태 안정화 | 확인 계정 |
+| `5bcea19b8e4c153140809e7d0b652ec28246d841` | 2026-08-05T09:45:01+09:00 | 최성원 | feat: 이미지 자르기 8방향 조절 지원 | 확인 계정 |
+| `ef3ecd6d0c30257a1444f2249cdb6a5bea460e5a` | 2026-08-05T09:38:42+09:00 | 최성원 | fix: 이미지 선택과 크기 조절 UI 개선 | 확인 계정 |
+| `1f3b126609db4872f7383d5148001e33967f4345` | 2026-08-05T09:24:22+09:00 | 최성원 | fix: 이미지 자르기 모달 상호작용 수정 | 확인 계정 |
+| `94e5da257892304b4e669c85e4f374a5068993af` | 2026-08-04T18:15:54+09:00 | 최성원 | feat: 수집 공고 편집 이미지를 공개 상세에 반영 | 확인 계정 |
+| `e4333bd694c357d27db7bb14898a08fe40eee545` | 2026-08-04T18:15:24+09:00 | 최성원 | feat: 수집 공고 이미지 편집 화면 추가 | 확인 계정 |
+| `9bcb009b8738ee481a23f0ebf1b3b233d993295e` | 2026-08-04T18:15:10+09:00 | 최성원 | feat: 수집 공고 이미지 편집 저장 구조 추가 | 확인 계정 |
+| `17c8782b439932cca7a8505eff13080521d76a73` | 2026-08-04T17:01:34+09:00 | 최성원 | docs: 수집 공고 이미지 편집기 설계 추가 | 확인 계정 |
 | `37e2cc3de2871cd85e0eb3f69179596a81df5118` | 2026-08-06T09:10:16+09:00 | HyeonJun | merge: 채팅·신고 조회 인덱스 마이그레이션 0068 - chat_message (chat_room_id, created_at) 복합 인덱스 추가·단독 인덱스 제거, report (reporter_user_id, status) 인덱스 추가 - dev DB 적용·검증 완료, 배포 시 migrate로 prod 반영 필요 | 팀/미분류 |
 | `ea9bfbe29200016fd7ba2986c87ae9e280b1d6a0` | 2026-08-06T09:09:57+09:00 | HyeonJun | perf: 채팅·신고 조회 인덱스 정비 (마이그레이션 0068) - chat_message에 (chat_room_id, created_at) 복합 인덱스 추가 — 방 이력 페이지네이션·안읽음 anti-join 집계가 정렬 포함으로 인덱스만 타도록 - 접두 중복이 된 chat_room_id 단독 인덱스 제거(복합 인덱스가 대체), SQL은 공백 없도록 CREATE 후 DROP 순서로 조정 - report에 (reporter_user_id, status) 인덱스 추가 — 채팅 listMine의 본인 신고(open/reviewing) 필터 경로 - dev DB 적용·검증 완료: 신규 인덱스 2건 존재, 구 인덱스 제거, 저널 70건 확인 | 팀/미분류 |
 | `31818f44ebda8738440472f0f88af6edd275a0a4` | 2026-08-05T19:36:17+09:00 | HyeonJun | merge: 채팅 결함·SSE 알림·prod QA 배치 + 채팅 하드닝 (#87~#92) - 채팅 이용 흐름 결함 3건: 나간 방 발신 차단·신고 시 실제 숨김·조치 대기 라벨 정리 (#87) - 채팅 알림 SSE 실시간 채널 신설 (#88) - 운영자 콘솔: 재삭제 방지·고객센터 안내·전체 채팅 열람 (#89) - 회원가입 아이디 하이픈 허용·한국어 안내 + 푸터 연락처 링크 (#90) - 본인인증 429: 신뢰 홉 기반 클라이언트 IP·레이트리밋 정책 정비 (#91) - 탈퇴 회원 원본 보존·운영자 복구 (#92) - 채팅 하드닝: 5축 감사(다중 인스턴스·연결 수명·남용 한도·DB 비용·권한) 확정 20건 적용 — 재연결 자가치유·연결/발신 상한·N+1 해소·markRead 기준선 전환·권한 보강 - DB 스키마 변경 없음(복합 인덱스 1건은 마이그레이션 지시 대기), 4패키지 check-types·ultracite·순수 vitest 통과 | 팀/미분류 |
@@ -1142,71 +1142,71 @@
 | `afee0430391ba06fb069c9510239a20d8fede7ad` | 2026-08-05T18:14:59+09:00 | HyeonJun | fix: 회원가입 아이디 하이픈 허용·한국어 안내 + 푸터 연락처 링크 (#90) - 아이디 규칙 단일 진실원 login-id 모듈 신설(3~30자, 영문 소문자·숫자·마침표·밑줄·하이픈, 소문자 정규화) — 기존 기본 규칙의 순수 확대라 기존 계정 회귀 없음 - better-auth username 플러그인에 usernameValidator·min/max 적용, displayUsernameNormalization 유지 - 영어 "Username is invalid" 노출 근본 원인 해소 — 플러그인 before 훅 throw가 i18n after 훅을 우회하므로 최상위 hooks.before 선행 검사로 한국어 메시지 보장(중복 아이디 포함) - ko.ts username 문구를 규칙과 일치하게 정비, 사전이 닿는 경로/안 닿는 경로 주석화 - 회원가입 폼: 입력 즉시 인라인 검증·규칙 안내, 제출 검증 공용 함수화, 플레이스홀더 "예: bambi-alba" - 푸터: 고객센터 → /support 링크, TEL → tel: 링크(실번호 설정 시 활성), 이메일 → mailto: 링크 — 기존 푸터 링크 톤 유지 - login-id 순수 vitest 18케이스 통과 | 팀/미분류 |
 | `a459fabc3977d3fef5831b27f6ba9033c5d13ea1` | 2026-08-05T18:14:58+09:00 | HyeonJun | feat: 채팅 알림 SSE 실시간 채널 (#88) - 사용자별 구독 레지스트리 + SSE 프레임 직렬화 서비스 bambi-notification-stream 신설(bambi-chat-realtime의 configure/emit/reset 패턴 준용, 구독자 예외 격리·로거 주입) - createBambiNotification 성공 시 수신자에게 즉시 emit — 페이로드는 식별자만(본문·연락처 미포함), 정본은 클라이언트 재조회 - 서버 GET /sse/notifications 플러그인 신설 — better-auth 세션 인증(비로그인 401로 EventSource 재시도 루프 차단), reply.hijack 후 text/event-stream 직접 기록, 30초 하트비트·retry 힌트·종료 정리·onClose 일괄 종료 - hijack 경로라 @fastify/cors 헤더가 실리지 않아 CORS(origin·credentials·Vary)를 플러그인에서 직접 부착 - 웹 EventSource 싱글턴 훅(use-bambi-notification-stream) — 안 읽음·채팅 목록 쿼리 무효화, 새 메시지 토스트("보러 가기", 해당 방 열람 중 생략), 기존 소켓·폴링은 폴백 유지 - 전 화면 셸이 공유하는 use-unread-message-count에 한 줄 배선(헤더·모바일 탭바 공용) - 순수 로직 vitest 11건(전달/격리/해제/예외 격리/프레임 포맷) 통과 | 팀/미분류 |
 | `a36531334fcf19c25c8bdc53de3cf0dee64592db` | 2026-08-05T18:14:55+09:00 | HyeonJun | fix: 채팅 이용 흐름 결함 정비 — 나간 방 전송 차단·신고 숨김·라벨 정리 (#87) - 참여 상태 판정 순수 서비스 bambi-chat-participation 신설(어느 쪽인지·상대 나감 여부·복원 대상 컬럼), DB 미접속 테스트 포함 - 발신 계열 7개 프로시저(메시지·미디어·첨부 업로드·면접 제안·연락처 공개/요청/응답)에 counterpart_left 가드 — 상대가 나간 방은 FORBIDDEN + "상대방이 채팅방을 나가서 더 이상 메시지를 보낼 수 없어요." - 전송 시 방 부활을 "양쪽 deletedAt 리셋"에서 "보낸 사람 본인 컬럼만 리셋"으로 변경, startFromJobPost 기존 방 재사용도 동일 정책(상대 나감 차단·본인만 복원) - 진입 가드는 지난 대화 열람을 위해 발신 가드와 분리(읽기 허용·발신만 차단), setInterviewStatus는 남은 일정 정리를 위해 발신 가드에서 제외 - listMine이 내가 낸 open/reviewing 신고(chat_room + 방 메시지 역매핑)가 걸린 방을 목록에서 제외, getById도 신고자 본인에게 pending_report 사유로 차단 — 신고 처리 시 자동 재노출 - "신고 완료 · 조치 대기 중" 라벨(hasPendingMyReport)과 관련 배선 제거 - 웹: 차단 사유 해석을 chat-block.ts 한 곳으로 통일, 입력창·첨부·면접 제안·연락처 버튼 잠금 + "상대방 나감/차단됨" 상태 배지, 신고 창 닫힘 시 쿼리 무효화로 즉시 숨김 반영 - 공고 채팅 프리플라이트가 차단 사유를 우선 안내하도록 수정(엉뚱한 프로필 인증 안내 방지) - chats.test.ts 소프트삭제 기대값을 새 동작으로 갱신(구인자 전송 FORBIDDEN·본인만 재노출) | 팀/미분류 |
-| `af9f7190e85376434c88a1df610ea36d0527b7e6` | 2026-08-05T17:43:21+09:00 | 최성원 | fix: 모바일 신고 입력창 키보드 가림 수정 | 팀/미분류 |
-| `1750cf7b6588219a06df70d0de3ecb63b2b6c266` | 2026-08-05T17:41:02+09:00 | 최성원 | fix: 비회원 문구와 모바일 채팅 헤더 정리 | 팀/미분류 |
-| `0a4b646b0a86c09077f37d8c0f553f475b7c5dfc` | 2026-08-05T17:38:35+09:00 | 최성원 | fix: 면접 예정 목록 상태 갱신 보완 | 팀/미분류 |
+| `af9f7190e85376434c88a1df610ea36d0527b7e6` | 2026-08-05T17:43:21+09:00 | 최성원 | fix: 모바일 신고 입력창 키보드 가림 수정 | 확인 계정 |
+| `1750cf7b6588219a06df70d0de3ecb63b2b6c266` | 2026-08-05T17:41:02+09:00 | 최성원 | fix: 비회원 문구와 모바일 채팅 헤더 정리 | 확인 계정 |
+| `0a4b646b0a86c09077f37d8c0f553f475b7c5dfc` | 2026-08-05T17:38:35+09:00 | 최성원 | fix: 면접 예정 목록 상태 갱신 보완 | 확인 계정 |
 | `5445bcfcb7612ec2917bb96923d36caba465a920` | 2026-08-05T15:18:24+09:00 | beyondsoft-dev | Merge pull request #84 from beyondsoft-kr/develop | 팀/미분류 |
 | `a9eb83602aa1597f0711a3362fd998cb86c701ca` | 2026-08-05T15:10:36+09:00 | beyondsoft-dev | Merge pull request #83 from beyondsoft-kr/feat/guest-community-post | 팀/미분류 |
-| `2f6878d03a097492313311ecae128f43450840dc` | 2026-08-05T14:56:56+09:00 | 최성원 | fix: 이미지 저장 용량 초과 안내 개선 | 팀/미분류 |
+| `2f6878d03a097492313311ecae128f43450840dc` | 2026-08-05T14:56:56+09:00 | 최성원 | fix: 이미지 저장 용량 초과 안내 개선 | 확인 계정 |
 | `96b2671b68c69aa13608b329f9d717721ef38e82` | 2026-08-05T14:54:50+09:00 | HyeonJun | merge: 역할별 매뉴얼 3종 동기화(비회원·법률자문가) | 팀/미분류 |
 | `1c9d886e5b8bf0f875624a46a1601b5caff14c27` | 2026-08-05T14:54:49+09:00 | HyeonJun | docs: 역할별 매뉴얼 3종 전면 동기화(비회원·법률자문가 반영) - 구직자 매뉴얼 — 비회원(여성 성인인증) 참여 범위 전면 정정: 화면별 참여 표(/board=자유수다·밤문화, 수다방=+무료 법률 자문), 답글 가능으로 정정, 신고·이미지 업로드만 회원 한정, 공개 게시판↔수다방 차이 블록, FAQ 3건 - 구직자 매뉴얼에 3-11 "법률자문가 계정" 절 신설 — 지정·해제는 운영자, legal 게시판 단일 이용(카드 보이되 클릭 안내), 마스킹 해제·연락처 열람·법률자문 배지, 채팅 신규 개설·채팅 신고 불가(기존 대화방 유지), 해제 시 구직자 복귀 - 구인자 매뉴얼 — 수다방 자격에 "입금 확인까지 끝나 공개 중" 명시·비회원 참여 인용 블록, 무료 법률 자문 작성 자격, 탈퇴 즉시 처리/보관 기간(기본 30일) 후 자동 파기 재구성, FAQ 2건 - 운영자 매뉴얼 — 법률자문 지정·해제 절 보강(지정 결과·대상 제한), 파기 배치 10분 도래 판정·수동 실행 관계·시각 변경 엣지 케이스, 수다방 비회원 글 관리 소절 신설, 용어 사전 비회원 행, FAQ 4건 - 교차 검토로 3문서 정합: 법률자문/법률자문가 화면별 라벨 다리 문장, 파기 보관 기간 서술 통일, 도배 제한 주체 정정(글은 전원 1분 1건), 작성인 표기·필터 서술 정정 - 각 서술은 graphify로 구조 특정 후 코드 실측으로 검증, 개발자 전용 사항·미병합 기능(PR #82) 미기재 | 팀/미분류 |
-| `fba22bd513957423655cf8abed7e54d11d2fbab2` | 2026-08-05T14:41:49+09:00 | 최성원 | fix: 긴 이미지 자르기 저장 실패 해결 | 팀/미분류 |
-| `37d49797228899470ae8a0db6e9ca16478eb0d48` | 2026-08-05T14:13:51+09:00 | 최성원 | feat: 메인 팝업 노출과 로그인 복귀 추가 | 팀/미분류 |
-| `cf2135caae0c4b89b6c3efff79529e5e093f8d97` | 2026-08-05T14:13:49+09:00 | 최성원 | feat: 운영자 팝업 편집 화면 추가 | 팀/미분류 |
-| `d3214d1a3f939a6c7db74c325b243446e36139fc` | 2026-08-05T14:13:48+09:00 | 최성원 | feat: 운영자 팝업 저장 API 추가 | 팀/미분류 |
+| `fba22bd513957423655cf8abed7e54d11d2fbab2` | 2026-08-05T14:41:49+09:00 | 최성원 | fix: 긴 이미지 자르기 저장 실패 해결 | 확인 계정 |
+| `37d49797228899470ae8a0db6e9ca16478eb0d48` | 2026-08-05T14:13:51+09:00 | 최성원 | feat: 메인 팝업 노출과 로그인 복귀 추가 | 확인 계정 |
+| `cf2135caae0c4b89b6c3efff79529e5e093f8d97` | 2026-08-05T14:13:49+09:00 | 최성원 | feat: 운영자 팝업 편집 화면 추가 | 확인 계정 |
+| `d3214d1a3f939a6c7db74c325b243446e36139fc` | 2026-08-05T14:13:48+09:00 | 최성원 | feat: 운영자 팝업 저장 API 추가 | 확인 계정 |
 | `d9a4f6f603922f3df986a0444a19a1bd4f2c93a6` | 2026-08-05T13:40:07+09:00 | HyeonJun | merge: 파기 배치 실행 스케줄 운영자 설정 | 팀/미분류 |
 | `689bfe5769197b50295528016ed1dcf4bfabf5a7` | 2026-08-05T13:40:05+09:00 | HyeonJun | feat: 파기 배치 실행 스케줄 운영자 설정 - bambi_site_settings에 withdrawal_purge_hour(0~23, 기본 새벽 4시)·withdrawal_purge_last_run_at 추가 — 마이그레이션 0067 generate→migrate로 dev DB 적용·컬럼 SQL 실검증 - 스케줄러를 부팅+5분/24h 고정에서 10분 틱 + DB 도래 판정으로 교체(crawl 플러그인 선례) — isWithdrawalPurgeDue 순수 함수(KST 하루 시작+설정 시각 기준, now>=dueAt && lastRunAt<dueAt)로 재시작 캐치업·중복 방지를 조건 하나로 처리, 단위 테스트 9건 - 마지막 실행 시각은 배치 진입 시 upsert(touchLastRunAt) — 수동 "지금 실행"도 같이 찍어 그날 예약 실행 생략(crawl과 동일, 0건·실패에도 기록해 매 틱 재시도 방지), 실패한 날은 다음 날 예약이나 수동 버튼이 받음 - getMemberPolicy/updateMemberPolicy에 실행 시각 필드(nullish: 생략=유지·null=기본값), 마지막 실행은 조회 전용 - 사이트 정보 파기 섹션에 실행 시각 숫자 입력(페이지 관례)·"마지막 실행" 표시 추가, 안내 문구를 "매일 설정 시각"으로 갱신 - 4패키지 check-types·ultracite·bambi-policy 테스트 26건 통과, 매뉴얼·테스트 플로우 동기화 | 팀/미분류 |
-| `34267ba9020bb54b2433f362e85dd94c1f23f6b3` | 2026-08-05T13:38:05+09:00 | 최성원 | docs: 팝업 이미지 교체형 붙여넣기 확정 | 팀/미분류 |
-| `152b039ea4413b078267ec96f034ef8322d24078` | 2026-08-05T13:36:56+09:00 | 최성원 | docs: 팝업 높이와 예약 유효성 확정 | 팀/미분류 |
-| `dfaf2d470448402644b1c684197574a959d8c48f` | 2026-08-05T13:26:40+09:00 | 최성원 | docs: 팝업 글쓰기 예약 반응형 설계 확정 | 팀/미분류 |
+| `34267ba9020bb54b2433f362e85dd94c1f23f6b3` | 2026-08-05T13:38:05+09:00 | 최성원 | docs: 팝업 이미지 교체형 붙여넣기 확정 | 확인 계정 |
+| `152b039ea4413b078267ec96f034ef8322d24078` | 2026-08-05T13:36:56+09:00 | 최성원 | docs: 팝업 높이와 예약 유효성 확정 | 확인 계정 |
+| `dfaf2d470448402644b1c684197574a959d8c48f` | 2026-08-05T13:26:40+09:00 | 최성원 | docs: 팝업 글쓰기 예약 반응형 설계 확정 | 확인 계정 |
 | `49c3c563f72d00a6a2e22213a2292eb339d9004e` | 2026-08-05T13:18:32+09:00 | HyeonJun | merge: 탈퇴 회원 파기 배치 자동 실행 스케줄러 | 팀/미분류 |
 | `39bd90fc059e7da43bf3b9544a4c871a7980b7fa` | 2026-08-05T13:18:30+09:00 | HyeonJun | feat: 탈퇴 회원 파기 배치 서버 스케줄러 자동 실행 - purgeWithdrawnAccounts 핸들러 본문을 purgeWithdrawnAccountsBatch 서비스로 추출 — 운영자 수동 버튼과 스케줄러가 같은 함수 하나를 호출(응답 {purgedCount} 무변경) - apps/server plugins/withdrawal-purge.ts 신설 — 부팅 +5분 1회 + 24시간 setInterval, 재진입 가드·onClose 정리(auto-boost 문법), purgedAt IS NULL 조건으로 멱등이라 중복 실행 안전 - 보존기간은 매 실행 시 resolveWithdrawalRetentionDays() 재조회(운영자 설정 변경 즉시 반영), 정리 건수>0일 때만 info 로그·실패는 error 후 다음 회차 재시도 - 경계 계산 resolveWithdrawalPurgeCutoff 순수 함수를 bambi-policy.ts로 분리·단위 테스트 2건 추가(env 의존 없는 순수 모듈 유지) - 사이트 정보 화면의 "자동 실행이 없어 주기적으로 눌러야" 안내를 "매일 1회 자동 실행+즉시 실행 버튼"으로 교체(API·스키마 무변경) - 새 라이브러리 없음, api·server·web check-types·ultracite·순수 테스트 17건 통과, 매뉴얼·테스트 플로우 동기화 | 팀/미분류 |
-| `6833e1092728c0406f878f9016a28649cab2c8fb` | 2026-08-05T13:17:27+09:00 | 최성원 | docs: 팝업 운영자 설정과 이미지 편집 설계 확정 | 팀/미분류 |
-| `f2f550bb539eb30cc5fa2790cdc3d01639c0b65e` | 2026-08-05T13:10:55+09:00 | 최성원 | docs: 메인 팝업 관리 부분 설계 추가 | 팀/미분류 |
+| `6833e1092728c0406f878f9016a28649cab2c8fb` | 2026-08-05T13:17:27+09:00 | 최성원 | docs: 팝업 운영자 설정과 이미지 편집 설계 확정 | 확인 계정 |
+| `f2f550bb539eb30cc5fa2790cdc3d01639c0b65e` | 2026-08-05T13:10:55+09:00 | 최성원 | docs: 메인 팝업 관리 부분 설계 추가 | 확인 계정 |
 | `7714aa1eaa54046341a7bc4de94a2f2de782d2cd` | 2026-08-05T13:07:09+09:00 | HyeonJun | merge: 법률자문 수다방 UI 클릭 가드 전환 | 팀/미분류 |
 | `65eb45d65d31126d85f1d1701557510f2449ef18` | 2026-08-05T13:07:05+09:00 | HyeonJun | fix: 법률자문 수다방 UI 숨김을 클릭 가드 안내로 전환 - legalOnly 숨김 제거 — 법률자문 계정에게도 공지·베스트·자유수다·밤문화·중고거래·legal 카드 전부 원복 렌더(스켈레톤 분기 포함 prop 삭제) - 기존 onBlockedNavigate 훅 포인트 재사용한 useLegalAdvisorNavGuard 신설 — 비-법률자문은 undefined(가로채기 없음), 법률자문은 legal·수다방 홈 경로만 router.push 통과, 그 외 클릭 시 서버 가드와 동일 문구 토스트 - community.ts에 COMMUNITY_ROOT_PATH·LEGAL_ADVISOR_BOARD_NOTICE·isLegalAdvisorAllowedPath 추가(홈 섹션 로컬 COMMUNITY_ROOT 중복 상수 제거), 순수 판정 테스트 추가 - 수다방 홈·seeker 홈 섹션 배선(미자격자 기존 토스트 동작 우선 유지), 비-legal URL 직접 진입 시 legal replace는 유지 - seeker 매뉴얼·테스트 플로우의 "legal 카드만 노출" 서술을 "전부 보이되 클릭 시 안내"로 갱신 - web check-types·ultracite 클린, community.test.ts 15건 통과(기저 실패 3건은 본 변경 무관 확인) | 팀/미분류 |
 | `3a68518240787ee53b6aaa1690a89a2219e983f2` | 2026-08-05T12:53:05+09:00 | HyeonJun | merge: 법률자문·인증로그 QA 피드백 4건 | 팀/미분류 |
 | `7f45f70973300b67d81514ef7f7a899ccff88eaa` | 2026-08-05T12:52:59+09:00 | HyeonJun | fix: 법률자문·인증로그 QA 피드백 4건 - 인증 로그를 인증 건당 1행에서 사람당 1행으로 — upsert 키를 (birth_date, phone_number) 부분 unique(WHERE phone_number IS NOT NULL)로 변경, iv_id는 일반 인덱스로 강등·최신 값 갱신, 재인증 시 새 행 누적 해소 - 마이그레이션 0066 맨 앞에 기존 중복 행 dedupe DELETE(그룹당 updated_at 최신 1행 유지) 후 generate→migrate로 dev DB 적용·인덱스/중복 0 SQL 실검증, kind 보존 로직 유지·phone null은 plain insert - 법률자문 지정/해제 UI를 회원 상세에서 /moderator/users 목록으로 이동 — 체크박스 1명 선택 시 액션 줄+ReasonConfirmSheet, 상세의 onSetRole 영역·배선 제거, 매뉴얼·테스트 플로우 갱신 - legal_advisor 게시판 격리 — assertLegalAdvisorBoardScope 가드를 community 라우터 7개소(listPosts·getPost·createPost·updatePost·toggleLike·listComments·createComment)에 적용, legal 외 전 보드(best 포함) FORBIDDEN, 여성 법률자문도 예외 없음, 기존 역할·게스트 판정 불변(테스트 29건) - 웹 동선 격리 — BambiRole에 legal_advisor 정식 추가, CommunityOverviewGrid legalOnly(홈·수다방 legal 카드만), 비-legal 보드 URL은 legal로 replace - 수다방 차단 문구 "여성…" → "일반 여성…" 일괄 치환(api 2·web 2·문서 8개소) - 내정보 역할 라벨 — my-page-shell·employer/me 라벨 맵에 legal_advisor "법률자문가" 추가, 폴백의 enum 원값 누출 제거 - 4패키지 check-types·ultracite 16파일·vitest(api 29·web 18+) 통과 | 팀/미분류 |
 | `ff17e8827708086196263c67fd8fc3885d46b18e` | 2026-08-05T12:09:35+09:00 | HyeonJun | merge: 수다방 무료 법률 자문 게시판·법률자문 역할 (#80) | 팀/미분류 |
 | `54824c7e86832860c41153af8ac0e759539ce0f8` | 2026-08-05T12:09:16+09:00 | HyeonJun | feat: 수다방 무료 법률 자문 게시판·법률자문 역할 (#80) - community_board에 legal, bambi_user_role에 legal_advisor append, community_post.contact_phone 추가 — 마이그레이션 0065 generate→migrate로 dev DB 적용·SQL 실검증 - legal 보드 강제 잠금(resolveLockedForBoard, update는 저장된 board 기준이라 해제 불가) + 비밀번호 4자 필수, 연락처는 legal 전용(타 보드 400)·getPost 잠금 해제 응답에만 반환 - canBypassLock을 authz 서비스로 이동·board 인자 추가 — legal_advisor는 legal 보드 잠금글만 우회(상세·댓글·목록 마스킹 동일 축), resolveCommunityAccess 입장 허용 - 게스트 쓰기 보드에 legal 추가(잠금 금지 가드 예외), 게스트는 legal 잠금글에 본인(gid 일치) 글에만 댓글·추천 가능(타인 글 FORBIDDEN) - legal_advisor가 구인자 API를 뚫던 뒤집힌 판정 교정 — isEmployerLikeRole 허용 목록으로 6개 라우터(analytics·jobs·promotions·organizations·teams·onboarding) 치환 - moderation.setUserRole(adminProcedure) 신설 — 구직자↔법률자문 양방향만 허용, admin_moderation_action에 set_role:* 감사 기록, 운영자 회원 상세 지정/해제 UI·역할 필터 - 홈·수다방 CommunityOverviewGrid 중고거래 칸 반분할(중고거래\|무료 법률 자문, 모바일 스택), 글쓰기 폼 잠금 스위치 숨김·연락처 필드, 상세 연락처 표시·법률자문 배지 - 베스트 큐레이션 legal 제외(notInArray), 공개 /board 미포함(PUBLIC_COMMUNITY_BOARDS 무변경) - 4패키지 check-types·ultracite 31파일·vitest 60건 통과, 매뉴얼·테스트 플로우 문서 동기화 | 팀/미분류 |
-| `8ce24bb090e035c41479227da80244758e100d0d` | 2026-08-05T11:45:54+09:00 | 최성원 | fix: 리사이즈 반대 경계 고정 | 팀/미분류 |
+| `8ce24bb090e035c41479227da80244758e100d0d` | 2026-08-05T11:45:54+09:00 | 최성원 | fix: 리사이즈 반대 경계 고정 | 확인 계정 |
 | `e4b4b91f2c9b91c6ffc87b8d270446deff63c282` | 2026-08-05T11:21:30+09:00 | HyeonJun | merge: 본인인증 수집 로그 테이블 (#79) | 팀/미분류 |
 | `a3432de639eb2b0ec60ffd685fb9021a0d2966c9` | 2026-08-05T11:21:28+09:00 | HyeonJun | feat: 본인인증 수집 로그 테이블 (#79) - bambi_identity_verification_log 신설 — 인증 건당 1행(identity_verification_id unique upsert), 번호·생년월일(YYYYMMDD)·성별·구분(kind, 기존 bambi_user_role 재사용) 수집, 이름 미저장 - 마이그레이션 0064 generate→migrate로 dev DB 적용, 컬럼·유니크 인덱스 SQL 실검증(행 0) - recordIdentityVerification upsert 헬퍼 — checkIdentityForSignup(source:'guest'면 kind 비회원)·createBambiProfile(가입 역할로 갱신)·verifyMyPhone(재인증, 프로필 role) 3곳 기록 - /api/guest가 source:'guest' 전달, kind 없는 호출은 기존 kind 보존, mock 흐름 자연 제외 - 조회 프로시저·관리자 화면·relations 없음(개발자 SQL 전용), 4패키지 check-types·ultracite 통과 | 팀/미분류 |
 | `e2b0212444f528e7a6d940986f97e9600d159f52` | 2026-08-05T11:09:50+09:00 | HyeonJun | merge: 여성 성인인증 게스트 회원 수다방 개방 (#78 후속) | 팀/미분류 |
-| `7e5e4592a08238e390bb30e9f04620329e9d792a` | 2026-08-05T11:09:48+09:00 | 최성원 | fix: 이미지 변 리사이즈 축 분리 | 팀/미분류 |
+| `7e5e4592a08238e390bb30e9f04620329e9d792a` | 2026-08-05T11:09:48+09:00 | 최성원 | fix: 이미지 변 리사이즈 축 분리 | 확인 계정 |
 | `e12c3f958af2ac18a25cdffd3caaffb7465584ef` | 2026-08-05T11:09:44+09:00 | HyeonJun | feat: 여성 성인인증 게스트 회원 수다방 개방 - listPosts·getPost·getCrawledTopic을 publicProcedure+resolveCommunityActor로 전환 — 게스트 전체 보드 읽기, 회원 분기·응답 shape 무변경 - listComments 게스트 분기 requirePostReadAccess 재사용 — 전체 보드·비밀글(비번) 댓글 읽기 회원 동일, createMediaUpload는 회원 전용 유지 - resolve-gate에 isCommunityGuest 추가 — 여성 gid 게스트만 /seeker/community 하위 통과, 타 seeker 경로·남성·구토큰 차단 유지 - 회원 수다방 화면 게스트 대응 — 글쓰기 guest 모드(자유수다·일수다 한정), 비밀번호 소유권 다이얼로그, 이미지 업로드 회원 한정 안내 - 홈 수다방 섹션 자격 판정 — 여성 게스트 통과, 미자격 회원 토스트 유지, 이동 경로는 영역(pathname) 기반으로 통일 - /board 공개 영역 무변경(diff 0), 4패키지 check-types·ultracite·게이트/가드 테스트 62건 통과 | 팀/미분류 |
 | `d6c6cdab0e2d8cc1636ce8d53924681c33995072` | 2026-08-05T11:05:31+09:00 | HyeonJun | docs: 인증 수집 로그·무료 법률 자문 게시판 설계 스펙 - 인증 테이블: bambi_identity_verification_log(인증 건당 1행, 개발자 SQL 전용) 설계 — 기록 지점 3곳·구분 갱신 규칙·비노출 원칙 - 법률 자문 게시판: legal 보드·legal_advisor 역할·강제 잠금+비밀번호·연락처 필드·운영자 역할 지정 설계 | 팀/미분류 |
-| `71f1ff8001917459410512d53d79138db2170673` | 2026-08-05T10:53:50+09:00 | 최성원 | fix: 다중 이미지 리사이즈 반응성 개선 | 팀/미분류 |
-| `e3e7abbd4c2be2166fe87d46f3a4130d1d23f0f7` | 2026-08-05T10:30:32+09:00 | 최성원 | fix: 크기 조절 후 이미지 선택 유지 | 팀/미분류 |
-| `405d4fe1c74e6668d1ea43eea4c9b712a950e5be` | 2026-08-05T10:00:25+09:00 | 최성원 | fix: 이미지 선택과 리사이즈 상태 안정화 | 팀/미분류 |
+| `71f1ff8001917459410512d53d79138db2170673` | 2026-08-05T10:53:50+09:00 | 최성원 | fix: 다중 이미지 리사이즈 반응성 개선 | 확인 계정 |
+| `e3e7abbd4c2be2166fe87d46f3a4130d1d23f0f7` | 2026-08-05T10:30:32+09:00 | 최성원 | fix: 크기 조절 후 이미지 선택 유지 | 확인 계정 |
+| `405d4fe1c74e6668d1ea43eea4c9b712a950e5be` | 2026-08-05T10:00:25+09:00 | 최성원 | fix: 이미지 선택과 리사이즈 상태 안정화 | 확인 계정 |
 | `7182cf7b8aa897d493e12c5a3f292d3b7b2b391b` | 2026-08-05T09:45:19+09:00 | HyeonJun | merge: 비회원 공개 상세 대댓글 작성 UI (#78 후속) | 팀/미분류 |
 | `72177e229e29a3d423894460ed567d691a97b061` | 2026-08-05T09:45:17+09:00 | HyeonJun | feat: 비회원 공개 상세 대댓글 작성 UI | 팀/미분류 |
-| `f73273d5a007a680b0b022a26b5af14cb6686c08` | 2026-08-05T09:45:01+09:00 | 최성원 | feat: 이미지 자르기 8방향 조절 지원 | 팀/미분류 |
-| `d85cfefa2c64742970e9ccaec59506b8da3d7ad6` | 2026-08-05T09:38:42+09:00 | 최성원 | fix: 이미지 선택과 크기 조절 UI 개선 | 팀/미분류 |
+| `f73273d5a007a680b0b022a26b5af14cb6686c08` | 2026-08-05T09:45:01+09:00 | 최성원 | feat: 이미지 자르기 8방향 조절 지원 | 확인 계정 |
+| `d85cfefa2c64742970e9ccaec59506b8da3d7ad6` | 2026-08-05T09:38:42+09:00 | 최성원 | fix: 이미지 선택과 크기 조절 UI 개선 | 확인 계정 |
 | `940419588513b2ec3f59e6cfbaf16686e4d9d4a7` | 2026-08-05T09:36:02+09:00 | HyeonJun | merge: 비회원 성인인증 수다방 글·댓글·추천 작성 (#78) | 팀/미분류 |
 | `8f8e83e239708fe944b5cd3c8d265e855507c510` | 2026-08-05T09:35:51+09:00 | HyeonJun | feat: /board 공개 영역 게스트 글·댓글·추천 UI·매뉴얼 반영 | 팀/미분류 |
 | `b3110a373cf2e3d408f3aded29f6dae3e5698328` | 2026-08-05T09:35:50+09:00 | HyeonJun | feat: 커뮤니티 API 게스트 쓰기 개방 — resolveCommunityActor·비번 소유권 | 팀/미분류 |
 | `cc794d59f06ebe5447f462cdb222f6f0f16b04e2` | 2026-08-05T09:35:23+09:00 | HyeonJun | feat: 게스트 신원 기반 — 토큰 공유화·API 전달·커뮤니티 스키마 확장 | 팀/미분류 |
-| `32fc2bc4e08498e85b31802dfdd9eef71647a76f` | 2026-08-05T09:24:22+09:00 | 최성원 | fix: 이미지 자르기 모달 상호작용 수정 | 팀/미분류 |
-| `16634a2e5eda3bfa850b1394dc1d7ddf1d00f1ff` | 2026-08-04T18:15:54+09:00 | 최성원 | feat: 수집 공고 편집 이미지를 공개 상세에 반영 | 팀/미분류 |
-| `175654869e401774177d5f2258f666c8e784de5c` | 2026-08-04T18:15:24+09:00 | 최성원 | feat: 수집 공고 이미지 편집 화면 추가 | 팀/미분류 |
-| `9d4f82d47e1dd23b88b0dfd65bd2a445b84b1c9a` | 2026-08-04T18:15:10+09:00 | 최성원 | feat: 수집 공고 이미지 편집 저장 구조 추가 | 팀/미분류 |
+| `32fc2bc4e08498e85b31802dfdd9eef71647a76f` | 2026-08-05T09:24:22+09:00 | 최성원 | fix: 이미지 자르기 모달 상호작용 수정 | 확인 계정 |
+| `16634a2e5eda3bfa850b1394dc1d7ddf1d00f1ff` | 2026-08-04T18:15:54+09:00 | 최성원 | feat: 수집 공고 편집 이미지를 공개 상세에 반영 | 확인 계정 |
+| `175654869e401774177d5f2258f666c8e784de5c` | 2026-08-04T18:15:24+09:00 | 최성원 | feat: 수집 공고 이미지 편집 화면 추가 | 확인 계정 |
+| `9d4f82d47e1dd23b88b0dfd65bd2a445b84b1c9a` | 2026-08-04T18:15:10+09:00 | 최성원 | feat: 수집 공고 이미지 편집 저장 구조 추가 | 확인 계정 |
 | `5d6831bff4bf09808058f49ec8aefc30dbb6d103` | 2026-08-04T17:57:50+09:00 | HyeonJun | docs: 비회원 성인인증 수다방 글·댓글·추천 작성 설계 스펙 | 팀/미분류 |
-| `0a6e73bbc9678e38dc644ed96e5d5114635777fe` | 2026-08-04T17:01:34+09:00 | 최성원 | docs: 수집 공고 이미지 편집기 설계 추가 | 팀/미분류 |
-| `8f54e6a9652767856ddc5a2bfe3da1b923882fc0` | 2026-08-04T17:01:34+09:00 | 최성원 | docs: 수집 공고 이미지 편집기 설계 추가 | 팀/미분류 |
+| `0a6e73bbc9678e38dc644ed96e5d5114635777fe` | 2026-08-04T17:01:34+09:00 | 최성원 | docs: 수집 공고 이미지 편집기 설계 추가 | 확인 계정 |
+| `8f54e6a9652767856ddc5a2bfe3da1b923882fc0` | 2026-08-04T17:01:34+09:00 | 최성원 | docs: 수집 공고 이미지 편집기 설계 추가 | 확인 계정 |
 | `a2e4fbf46723f2fabdc6b784954f2dc6fcc2069d` | 2026-08-04T17:40:07+09:00 | beyondsoft-dev | Merge pull request #77 from beyondsoft-kr/fix/qa-role-feedback | 팀/미분류 |
 | `075eaee8a5c82538f339f3934b1dcc43756e1ee0` | 2026-08-04T17:36:20+09:00 | HyeonJun | merge: develop 동기화 — PR #71 수다방 내비게이션·이름 정책·채팅 안 읽음 반영 | 팀/미분류 |
 | `462b26dd6c73b25f863039cf925590f27577dcf2` | 2026-08-04T17:27:38+09:00 | beyondsoft-dev | Merge pull request #71 from beyondsoft-kr/fix/community-name-policy-chat-unread | 팀/미분류 |
-| `1d7687babfceefd795376fb9f3acec099f6ea118` | 2026-08-04T17:16:57+09:00 | 최성원 | chore: 닉네임 금칙어 마이그레이션 적용 확인 | 팀/미분류 |
-| `7503f23602e8290638eec52e6892e5d36da2a58a` | 2026-08-04T17:01:34+09:00 | 최성원 | docs: 수집 공고 이미지 편집기 설계 추가 | 팀/미분류 |
+| `1d7687babfceefd795376fb9f3acec099f6ea118` | 2026-08-04T17:16:57+09:00 | 최성원 | chore: 닉네임 금칙어 마이그레이션 적용 확인 | 확인 계정 |
+| `7503f23602e8290638eec52e6892e5d36da2a58a` | 2026-08-04T17:01:34+09:00 | 최성원 | docs: 수집 공고 이미지 편집기 설계 추가 | 확인 계정 |
 | `95da498e430aedf51b890e286e36aa8972392042` | 2026-08-04T16:46:43+09:00 | HyeonJun | merge: 사이트맵 확장·공개 영역 상호 링크·BreadcrumbList 구조화 데이터 (#76) | 팀/미분류 |
 | `5023cde84935ab7d308a8196d09015330f69e3ad` | 2026-08-04T16:46:38+09:00 | HyeonJun | feat: 사이트맵 확장·공개 영역 상호 링크·BreadcrumbList 구조화 데이터 (#76) | 팀/미분류 |
 | `3d0a84e66e427ea81fe924846d42e7e2bc34c388` | 2026-08-04T16:35:23+09:00 | HyeonJun | fix: 공개 랜딩 카드 썸네일을 메인 채용공고 카드와 동일 규격으로 (#74) | 팀/미분류 |
 | `f6451f72454948dcc906fcdfda8565413e629fec` | 2026-08-04T16:28:33+09:00 | HyeonJun | fix: 공개 게시글 본문 링크 href 프로토콜 화이트리스트 (#75) | 팀/미분류 |
 | `fb90803dcf214424ace4c791e6c69fca2e1cff48` | 2026-08-04T16:26:04+09:00 | HyeonJun | merge: 커뮤니티 일부 게시판 읽기 전용 공개 — 사이트링크 SEO 1단계 (#75) | 팀/미분류 |
 | `e9bb3c9d961d7b4c632a086144e68e993564f9d4` | 2026-08-04T16:24:58+09:00 | HyeonJun | merge: 공개 공고 랜딩(지역·업종) — 사이트링크 SEO 1단계 (#74) | 팀/미분류 |
-| `020a07a5fab00cda94a5857b8acd40535e5851c7` | 2026-08-04T14:02:51+09:00 | 최성원 | fix: 채팅 안 읽은 메시지 총합 집계 | 팀/미분류 |
-| `d504c421c50509322c405b228e487bae42cf33a1` | 2026-08-04T14:02:16+09:00 | 최성원 | feat: 예약 이름과 자유수다 비밀글 정책 적용 | 팀/미분류 |
+| `020a07a5fab00cda94a5857b8acd40535e5851c7` | 2026-08-04T14:02:51+09:00 | 최성원 | fix: 채팅 안 읽은 메시지 총합 집계 | 확인 계정 |
+| `d504c421c50509322c405b228e487bae42cf33a1` | 2026-08-04T14:02:16+09:00 | 최성원 | feat: 예약 이름과 자유수다 비밀글 정책 적용 | 확인 계정 |
 | `bbe01cbb0fb1dd6d0b9fcbf76d67e0d6b20845d8` | 2026-08-04T16:22:41+09:00 | HyeonJun | feat: 커뮤니티 일부 게시판 읽기 전용 공개 — 사이트링크 SEO 1단계 (#75) | 팀/미분류 |
 | `398757b1a59cd1f3effa8faea5b14b34527f4dc2` | 2026-08-04T16:22:39+09:00 | HyeonJun | feat: 공개 공고 랜딩(지역·업종) 신설 — 사이트링크 SEO 1단계 (#74) | 팀/미분류 |
 | `1948f823ad0d16f5b12480f4b01e34a1ffda41aa` | 2026-08-04T15:37:52+09:00 | HyeonJun | chore: job_post_status on_hold 마이그레이션 추가 (#72) | 팀/미분류 |
@@ -1214,7 +1214,7 @@
 | `de71a83d9013be2203bb457de2e51786dbe467c3` | 2026-08-04T15:34:51+09:00 | HyeonJun | merge: 검수 보류 상태 분리·상세 사유 입력·광고 상품 노출 영역 필터 (#72) | 팀/미분류 |
 | `631f25b898bf56779b7ddd46c22c4ce86e2c18d8` | 2026-08-04T15:34:49+09:00 | HyeonJun | feat: 글로벌 404 페이지 추가 (#73) | 팀/미분류 |
 | `6196ba437519290f7a759028bae6cde3caab6ff0` | 2026-08-04T15:34:47+09:00 | HyeonJun | fix: 검수 보류 on_hold 분리·상세 사유 입력·광고 노출 영역 필터·공개 상세 링크 (#72) | 팀/미분류 |
-| `59d9ecd78aa896665a8509ba1b68fec84ef36870` | 2026-08-04T14:01:59+09:00 | 최성원 | fix: 수다방 페이지 히스토리와 게시판 명칭 정리 | 팀/미분류 |
+| `59d9ecd78aa896665a8509ba1b68fec84ef36870` | 2026-08-04T14:01:59+09:00 | 최성원 | fix: 수다방 페이지 히스토리와 게시판 명칭 정리 | 확인 계정 |
 | `d52e353b06ab80ab20e6c13c8278c3ea2b927b60` | 2026-08-04T13:40:14+09:00 | HyeonJun | chore: invitation.invite_reason 마이그레이션 추가 (#65) | 팀/미분류 |
 | `c6d5bd972bfe44551950915526b7b7402a39dbbd` | 2026-08-04T13:32:24+09:00 | HyeonJun | merge: 고객센터 문의 종료 흐름 정리 (#67) | 팀/미분류 |
 | `80b2e7dfa304f0b1e82987673138c3455b71dbce` | 2026-08-04T13:32:22+09:00 | HyeonJun | fix: 문의 종료를 운영자 전용으로 전환 (#67) | 팀/미분류 |
