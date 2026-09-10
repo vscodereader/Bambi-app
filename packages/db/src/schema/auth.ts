@@ -33,6 +33,12 @@ export const user = pgTable("user", {
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())
 		.notNull(),
+	// 로그인 사용자의 마지막 인정 활동. 자동 polling·SSE heartbeat는 갱신하지 않고,
+	// 사용자 행동으로 표시된 인증 API 요청만 packages/api의 presence 서비스가 갱신한다.
+	lastActivityAt: timestamp("last_activity_at"),
+	// 살아 있는 마지막 Web/Native 연결이 정상 종료된 시각. 이 뒤에 새 활동이나 연결이
+	// 생기면 null로 되돌린다. 종료 신호가 유실돼도 lastActivityAt 만료가 최종 상한이다.
+	presenceDisconnectedAt: timestamp("presence_disconnected_at"),
 	// 회원 탈퇴(소프트 삭제) 시각. null이면 활성 계정. 값이 서면 로그인이 차단되고
 	// 보존기간(운영자 설정, 기본 30일) 경과 후 파기 배치 대상이 된다.
 	deletedAt: timestamp("deleted_at"),
@@ -219,7 +225,6 @@ export const userRelations = relations(user, ({ many }) => ({
 	members: many(member),
 	invitations: many(invitation),
 }));
-
 export const sessionRelations = relations(session, ({ one }) => ({
 	user: one(user, {
 		fields: [session.userId],

@@ -1,5 +1,6 @@
 import type { CrawledCommunityCommentRecord } from "@bambi-app/db/schema/bambi";
 import { load } from "cheerio";
+import { CRAWLED_SOURCE_COMMENT_MAX_LENGTH } from "./bambi-crawled-community-policy";
 
 // 댓글 레코드 타입의 정본은 db 스키마(jsonb 컬럼의 $type)다 — db는 api를 못 가져오므로
 // 저쪽에 두고 여기서 다시 내보낸다. 파서 결과를 쓰는 라우터(W2)가 어느 쪽에서 import해도 같은
@@ -59,7 +60,6 @@ export const toQueenalbaAbsoluteUrl = (
 		return null;
 	}
 };
-
 // 공고 이미지로 인정하는 경로. 아이콘·버튼·스페이서를 하나씩 빼는 블랙리스트로 가면 상대가
 // 장식 이미지를 새로 추가할 때마다 그게 공고 이미지로 새어 들어온다 — 반대로 화이트리스트는
 // 새 경로를 놓칠 뿐 쓰레기를 저장하지 않으므로 이쪽이 안전하다.
@@ -604,8 +604,7 @@ const parseCount = (raw: string | undefined): number | null => {
 // 이 표기가 유일한 반응 지표다.
 const TITLE_COMMENT_COUNT_PATTERN = /\s*\[(\d+)\]\s*$/;
 
-// 게시판 목록. 상세는 받지 않는다 — 본문은 개별 작성자의 저작물이라 저장하지 않고,
-// "어떤 주제가 반응을 얻는가"만 제목·반응 지표로 남긴다(crawled_community_topic).
+// 게시판 목록 파서. 본문과 댓글은 별도 상세 파서에서 가져온다.
 //
 // 행은 [뱃지][첨부][제목][글쓴이][날짜][댓글수][조회수] 일곱 칸인데, 뒤 두 칸은 공지에만
 // 채워지고 일반 글은 비어 있다. 앞쪽 칸도 글 종류에 따라 붙었다 빠졌다 해서 위치 인덱스가
@@ -689,7 +688,7 @@ const VIEW_COUNT_PATTERN = /조회\s*:\s*([\d,]+)/;
 
 // 댓글 저장 상한. 본문과 같은 이유로 천장을 둔다 — 홍보성 댓글이 수백 개 달린 글이 있어
 // 상한이 없으면 한 행의 jsonb 페이로드와 목록 응답이 흔들린다.
-const MAX_COMMENT_LENGTH = 1000;
+const MAX_COMMENT_LENGTH = CRAWLED_SOURCE_COMMENT_MAX_LENGTH;
 const MAX_COMMENTS = 100;
 
 // 댓글 작성일시. 본문 날짜(parseDate)와 달리 시:분:초까지 온다. jsonb에 담으므로 Date가
@@ -760,6 +759,7 @@ const readComments = (
 			// 파싱 실패 id는 맨 뒤로 보낸다(정상 흐름에선 안 생긴다).
 			num: Number.isNaN(num) ? Number.MAX_SAFE_INTEGER : num,
 			record: {
+				id: `source:${num}`,
 				authorName: cleanText($(cells.first()).text()),
 				body,
 				sourcePostedAt: parseCommentDate($(cells.last()).text()),

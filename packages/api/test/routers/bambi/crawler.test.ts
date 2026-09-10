@@ -89,6 +89,7 @@ const createFixture = async (
 	const [topic] = await db
 		.insert(crawledCommunityTopic)
 		.values({
+			boardKey: "work_talk",
 			sourceExternalId: testExternalId(),
 			// 목록이 원 게시일 최신순이라 날짜를 지금으로 둬 첫 페이지에 오게 한다.
 			sourcePostedAt: new Date(),
@@ -327,7 +328,6 @@ describe("crawler 공고 삭제·복구", () => {
 		}
 	});
 });
-
 describe("crawler 커뮤니티 글 삭제·복구", () => {
 	it("삭제는 removedAt을 찍고 복구는 비운다", async () => {
 		const fixture = await createFixture();

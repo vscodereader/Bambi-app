@@ -5,8 +5,7 @@ import {
 	readInterviewProposalMetadata,
 } from "@bambi-app/api/services/bambi-chat-system-messages";
 import { Ionicons } from "@expo/vector-icons";
-import { Button, Chip, Dialog, Surface, useThemeColor } from "heroui-native";
-import { useState } from "react";
+import { Button, Chip, Surface, useThemeColor } from "heroui-native";
 import { Text, View } from "react-native";
 
 import type { ChatTimelineMessage } from "@/src/lib/chat/chat-optimistic";
@@ -161,7 +160,6 @@ export function ChatSystemCard({
 	schedules: readonly ChatRoomSchedule[];
 }) {
 	const muted = useThemeColor("muted");
-	const [confirmReveal, setConfirmReveal] = useState(false);
 
 	if (message.kind === "contact_request") {
 		const metadata = readContactRequestMetadata(message.metadata);
@@ -179,74 +177,31 @@ export function ChatSystemCard({
 		}[metadata.status];
 
 		return (
-			<>
-				<CardShell
-					createdAt={message.createdAt}
-					icon="call-outline"
-					rightSlot={
-						canRespond ? (
-							<ResponseButtons
-								confirmLabel="연락처 공개"
-								declineLabel="연락처 공개 거절"
-								isBusy={isBusy}
-								onConfirm={() => setConfirmReveal(true)}
-								onDecline={() => onRespondContact(message.id, "decline")}
-							/>
-						) : (
-							<Chip
-								color={statusChipColor(metadata.status)}
-								size="sm"
-								variant="soft"
-							>
-								<Chip.Label>{statusLabel}</Chip.Label>
-							</Chip>
-						)
-					}
-					subtitle={contactNotice(metadata.status, counterpartName)}
-					title="연락처 공개 요청"
-				/>
-				{canRespond ? (
-					<Dialog
-						isOpen={confirmReveal}
-						onOpenChange={(open) => !open && setConfirmReveal(false)}
-					>
-						<Dialog.Portal>
-							<Dialog.Overlay />
-							<Dialog.Content>
-								<View className="gap-4">
-									<View className="gap-1.5">
-										<Dialog.Title>연락처를 공개할까요?</Dialog.Title>
-										<Dialog.Description>
-											{`${counterpartName ?? "상대방"}에게 내 전화번호가 전달돼요. 되돌릴 수 없어요.`}
-										</Dialog.Description>
-									</View>
-									<View className="flex-row gap-3">
-										<View className="flex-1">
-											<Button
-												onPress={() => setConfirmReveal(false)}
-												variant="tertiary"
-											>
-												<Button.Label>취소</Button.Label>
-											</Button>
-										</View>
-										<View className="flex-1">
-											<Button
-												isDisabled={isBusy}
-												onPress={() => {
-													onRespondContact(message.id, "reveal");
-													setConfirmReveal(false);
-												}}
-											>
-												<Button.Label>공개</Button.Label>
-											</Button>
-										</View>
-									</View>
-								</View>
-							</Dialog.Content>
-						</Dialog.Portal>
-					</Dialog>
-				) : null}
-			</>
+			<CardShell
+				createdAt={message.createdAt}
+				icon="call-outline"
+				rightSlot={
+					canRespond ? (
+						<ResponseButtons
+							confirmLabel="연락처 공개"
+							declineLabel="연락처 공개 거절"
+							isBusy={isBusy}
+							onConfirm={() => onRespondContact(message.id, "reveal")}
+							onDecline={() => onRespondContact(message.id, "decline")}
+						/>
+					) : (
+						<Chip
+							color={statusChipColor(metadata.status)}
+							size="sm"
+							variant="soft"
+						>
+							<Chip.Label>{statusLabel}</Chip.Label>
+						</Chip>
+					)
+				}
+				subtitle={contactNotice(metadata.status, counterpartName)}
+				title="연락처 공개 요청"
+			/>
 		);
 	}
 

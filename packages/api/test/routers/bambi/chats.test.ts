@@ -11,7 +11,6 @@ import { resetRateLimits } from "@/services/rate-limit";
 dotenv.config({
 	path: "../../apps/server/.env",
 });
-
 const [{ db }, authSchema, bambiSchema, { chatsRouter }] = await Promise.all([
 	import("@bambi-app/db"),
 	import("@bambi-app/db/schema/auth"),
@@ -26,6 +25,7 @@ const {
 	chatAttachment,
 	chatMessage,
 	chatMessageReadReceipt,
+	chatResponseActivity,
 	chatRoom,
 	contactRevealConsent,
 	interviewSchedule,
@@ -436,6 +436,48 @@ describe("bambi chats router interview proposals", () => {
 			await cleanupChatFixture(fixture);
 		}
 	});
+
+	it("records an interview status action as the seeker's response", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const proposeInterview = createProcedureClient(
+				chatsRouter.proposeInterview,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "chats", "proposeInterview"],
+				}
+			);
+			const setInterviewStatus = createProcedureClient(
+				chatsRouter.setInterviewStatus,
+				{
+					context: createContextForUser(fixture.jobSeekerUserId),
+					path: ["bambi", "chats", "setInterviewStatus"],
+				}
+			);
+			const schedule = await proposeInterview({
+				chatRoomId: fixture.chatRoomId,
+				scheduledAt: futureScheduledAt(),
+			});
+			await setInterviewStatus({
+				interviewScheduleId: schedule.id,
+				status: "confirmed",
+			});
+
+			const activities = await db
+				.select()
+				.from(chatResponseActivity)
+				.where(eq(chatResponseActivity.chatRoomId, fixture.chatRoomId))
+				.orderBy(chatResponseActivity.id);
+			expect(activities).toHaveLength(2);
+			expect(activities[1]).toMatchObject({
+				actorUserId: fixture.jobSeekerUserId,
+			});
+			expect(activities[1]?.responseSeconds).toBeGreaterThanOrEqual(0);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
 });
 
 describe("bambi chats router analytics", () => {
@@ -498,6 +540,14 @@ describe("bambi chats router analytics", () => {
 				contactMethod: "phone",
 				contactValue: "010-1234-5678",
 				interviewScheduleId: scheduleId,
+			});
+			const [activity] = await db
+				.select()
+				.from(chatResponseActivity)
+				.where(eq(chatResponseActivity.chatRoomId, fixture.chatRoomId));
+			expect(activity).toMatchObject({
+				actorUserId: fixture.employerUserId,
+				responseSeconds: null,
 			});
 
 			const [event] = await db
@@ -980,6 +1030,64 @@ const sendMessageFor = (userId: string) =>
 		path: ["bambi", "chats", "sendMessage"],
 	});
 
+describe("bambi chats router 응답시간 activity", () => {
+	it("도입 후 액션만 이어 보고 연속 발신 묶음의 첫 시각부터 첫 답장을 한 번 센다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			// migration 전 이력과 같은 직접 메시지는 activity가 없어 첫 응답 기준이 되지 않는다.
+			await seedMessage(fixture, fixture.employerUserId);
+			const seekerSend = sendMessageFor(fixture.jobSeekerUserId);
+			const employerSend = sendMessageFor(fixture.employerUserId);
+			await seekerSend({
+				body: "첫 문의",
+				chatRoomId: fixture.chatRoomId,
+			});
+			await seekerSend({
+				body: "추가 문의",
+				chatRoomId: fixture.chatRoomId,
+			});
+			await employerSend({
+				body: "첫 답변",
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			const activities = await db
+				.select()
+				.from(chatResponseActivity)
+				.where(eq(chatResponseActivity.chatRoomId, fixture.chatRoomId))
+				.orderBy(chatResponseActivity.id);
+			expect(activities).toHaveLength(3);
+			expect(activities[0]?.responseSeconds).toBeNull();
+			expect(activities[1]?.responseSeconds).toBeNull();
+			expect(activities[2]?.promptStartedAt).toEqual(activities[0]?.occurredAt);
+			expect(activities[2]?.responseSeconds).toBeGreaterThanOrEqual(0);
+
+			const [room] = await listMineFor(fixture.jobSeekerUserId)({});
+			expect(room?.counterpartResponseBucket).toBe("ten_minutes");
+
+			await db
+				.delete(chatResponseActivity)
+				.where(eq(chatResponseActivity.chatRoomId, fixture.chatRoomId));
+			const oldResponseAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+			await db.insert(chatResponseActivity).values({
+				activityKey: `test-old-response:${randomUUID()}`,
+				actorUserId: fixture.employerUserId,
+				chatRoomId: fixture.chatRoomId,
+				occurredAt: oldResponseAt,
+				promptStartedAt: new Date(oldResponseAt.getTime() - 60_000),
+				responseSeconds: 60,
+			});
+			const [withoutExpiredAverage] = await listMineFor(
+				fixture.jobSeekerUserId
+			)({});
+			expect(withoutExpiredAverage?.counterpartResponseBucket).toBeNull();
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
 describe("bambi chats router 신고된 방 양방향 제한", () => {
 	it("신고가 활성 상태면 양쪽 목록·열람·발신·안 읽음에서 숨기고 기각 시 복구한다", async () => {
 		const fixture = await createChatFixture();
@@ -1195,6 +1303,15 @@ describe("bambi chats router contact reveal response", () => {
 			});
 
 			expect(updated.metadata).toMatchObject({ status: "revealed" });
+			const activities = await db
+				.select()
+				.from(chatResponseActivity)
+				.where(eq(chatResponseActivity.chatRoomId, fixture.chatRoomId))
+				.orderBy(chatResponseActivity.id);
+			expect(activities).toHaveLength(2);
+			expect(activities[0]?.actorUserId).toBe(fixture.employerUserId);
+			expect(activities[1]?.actorUserId).toBe(fixture.jobSeekerUserId);
+			expect(activities[1]?.responseSeconds).toBeGreaterThanOrEqual(0);
 		} finally {
 			await cleanupChatFixture(fixture);
 		}

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
 	configureBambiChatRealtime,
 	emitChatListUpdated,
+	emitChatParticipantPresence,
+	emitChatPresenceResync,
 	emitMessageCreated,
 	emitRoomUpdated,
 	getActiveParticipantIds,
@@ -18,6 +20,10 @@ import {
 
 class FakeRealtimeServer {
 	events: Array<{ event: string; payload: unknown; room: string }> = [];
+
+	emit(event: string, payload: unknown) {
+		this.events.push({ event, payload, room: "*" });
+	}
 
 	to(room: string) {
 		return {
@@ -206,6 +212,57 @@ describe("bambi chat realtime", () => {
 				event: "chat:room:updated",
 				payload: { roomId: "room-1" },
 				room: "chat:room-1",
+			},
+		]);
+	});
+
+	it("emits minimal participant presence only to allowed user channels", () => {
+		resetBambiChatRealtimeForTests();
+		const server = new FakeRealtimeServer();
+		configureBambiChatRealtime(server);
+
+		emitChatParticipantPresence(["user-1", "user-2", "user-1"], {
+			isOnline: false,
+			presenceRefreshAt: null,
+			userId: "user-2",
+		});
+
+		expect(server.events).toEqual([
+			{
+				event: "chat:participant:presence",
+				payload: {
+					isOnline: false,
+					presenceRefreshAt: null,
+					userId: "user-2",
+				},
+				room: "user:user-1",
+			},
+			{
+				event: "chat:participant:presence",
+				payload: {
+					isOnline: false,
+					presenceRefreshAt: null,
+					userId: "user-2",
+				},
+				room: "user:user-2",
+			},
+		]);
+		expect(JSON.stringify(server.events)).not.toContain("lastActivityAt");
+		expect(JSON.stringify(server.events)).not.toContain("sessionId");
+	});
+
+	it("emits a data-free resync signal after policy or listener changes", () => {
+		resetBambiChatRealtimeForTests();
+		const server = new FakeRealtimeServer();
+		configureBambiChatRealtime(server);
+
+		emitChatPresenceResync({ reason: "policy_changed" });
+
+		expect(server.events).toEqual([
+			{
+				event: "chat:participant:presence:resync",
+				payload: { reason: "policy_changed" },
+				room: "*",
 			},
 		]);
 	});

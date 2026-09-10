@@ -5,9 +5,11 @@ import {
 	communityBoardHomeLayout,
 	communityBoardLayoutSurface,
 	communityPost,
+	crawledCommunityTopic,
+	crawlRun,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { asc, eq, max } from "drizzle-orm";
+import { and, asc, eq, max } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, publicProcedure } from "../../index";
@@ -117,7 +119,6 @@ export const assertLayoutBoardsUnique = (rows: string[][]): void => {
 		});
 	}
 };
-
 // 운영자가 코드 배포 없이 수다방 게시판을 늘리고 감추는 라우터. 삭제(remove)는 글이 하나도
 // 없는 운영자 생성 게시판에만 열려 있다 — 글이 FK로 매달린 게시판은 지우면 과거 글이 함께
 // 사라지므로 숨김(setActive(false))으로 안내한다.
@@ -296,7 +297,24 @@ export const communityBoardsRouter = {
 			.from(communityPost)
 			.where(eq(communityPost.board, input.key))
 			.limit(1);
-		if (post) {
+		const [topic] = await db
+			.select({ id: crawledCommunityTopic.id })
+			.from(crawledCommunityTopic)
+			.where(eq(crawledCommunityTopic.boardKey, input.key))
+			.limit(1);
+		const [setting] = await db
+			.select({ id: bambiSiteSettings.id })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.crawlCommunityBoardKey, input.key))
+			.limit(1);
+		const [running] = await db
+			.select({ id: crawlRun.id })
+			.from(crawlRun)
+			.where(
+				and(eq(crawlRun.boardKey, input.key), eq(crawlRun.status, "running"))
+			)
+			.limit(1);
+		if (post || topic || setting || running) {
 			throw new ORPCError("CONFLICT", {
 				message:
 					"글이 있는 게시판은 삭제할 수 없습니다. 노출을 끄는 방식을 사용해 주세요.",
