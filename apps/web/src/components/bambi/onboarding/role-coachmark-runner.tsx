@@ -14,9 +14,22 @@ import {
 } from "@/lib/bambi/onboarding";
 import { Coachmark, type SpotlightRect } from "./coachmark";
 
+const resolveSpotlightTarget = (target: HTMLElement): HTMLElement =>
+	target.matches("button, a, [role='button']")
+		? target
+		: (target.querySelector<HTMLElement>("button, a, [role='button']") ??
+			target);
+
 const measureTarget = (target: HTMLElement): SpotlightRect => {
-	const rect = target.getBoundingClientRect();
+	const spotlightTarget = resolveSpotlightTarget(target);
+	const rect = spotlightTarget.getBoundingClientRect();
+	const parsedRadius = Number.parseFloat(
+		window.getComputedStyle(spotlightTarget).borderTopLeftRadius
+	);
 	return {
+		borderRadius: Number.isFinite(parsedRadius)
+			? Math.min(parsedRadius, rect.width / 2, rect.height / 2)
+			: 0,
 		height: rect.height,
 		width: rect.width,
 		x: rect.left,
@@ -64,7 +77,6 @@ export function RoleCoachmarkRunner({
 			target.scrollIntoView({ behavior: "auto", block: "center" });
 			frame = window.requestAnimationFrame(() => {
 				setRect(measureTarget(target));
-				clearCoachmarkIntent();
 				setIsRunning(true);
 			});
 			return true;

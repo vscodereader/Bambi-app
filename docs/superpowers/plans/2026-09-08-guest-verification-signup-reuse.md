@@ -12,6 +12,8 @@
 
 본인인증을 마치고 `/seeker`를 이용하는 비회원이 공고 상세처럼 회원 전용 경로에 진입하면 게이트가 `/seeker?auth=signup&guestBlocked=1`로 보낸다. 이 이동 자체는 맞지만 `AuthPanel`의 회원가입 단계가 항상 `verify`로 초기화되기 때문에, 유효한 비회원 인증 쿠키와 서버 인증 기록이 있어도 다시 본인인증을 요구한다.
 
+브라우저 실측에서 가입 후 역할별 온보딩을 끝내고 `/seeker`로 이동하면 신규회원 코치마크와 메인 팝업이 동시에 열리는 회귀도 확인됐다. 코치마크는 스타일 없는 저수준 `DialogPopup`을 직접 사용해 설명 카드가 깨지고, 메인 팝업의 `z-index`가 코치마크 암막보다 높아 여러 레이어가 겹치면서 검은 화면처럼 보인다.
+
 기존 가입용 `identityVerificationId`는 발급 후 30분 동안만 쓸 수 있고 최종 가입에서 한 번 소비하도록 만든 값이다. 이를 30일 동안 쿠키에 보관하거나 만료 검사를 우회해서는 안 된다. 비회원 인증 쿠키에는 서명된 임의 식별자 `gid`가 있고, 서버의 `bambi_identity_verification_log`에는 이 `gid`와 검증된 이름·생년월일·전화번호·성별이 연결되어 있으므로 이 정본을 사용한다.
 
 ## 확정 요구사항
@@ -24,6 +26,11 @@
 - 본인인증을 마친 비회원은 여전히 비회원이다. 아이디·비밀번호 등 가입 정보를 제출해 계정과 프로필 생성이 끝나야 회원이 된다.
 - 현재 비회원에게 허용된 `/seeker` 목록과 공개 수다방 접근·게스트 쓰기 정책은 그대로 유지한다. 회원 전용 경로만 기존 `resolveGate` 정책대로 회원가입 화면으로 보낸다.
 - 가입 완료 뒤에는 기존 역할별 온보딩 이동을 유지한다.
+- 역할별 온보딩의 `시작하기`로 코치마크가 실행되는 동안 메인 팝업을 표시하지 않고, 코치마크가 끝나거나 닫히면 현재 페이지의 메인 팝업을 표시한다.
+- 코치마크 설명 카드는 공용 Dialog 콘텐츠 스타일을 재사용해 화면 중앙에 정상적인 크기와 간격으로 표시한다.
+- 코치마크 암막은 기존 ink 디자인 토큰에 투명도를 적용해 강조 대상 밖의 화면 구조와 안내 맥락도 식별할 수 있게 한다.
+- 코치마크 spotlight는 강조 대상 안의 실제 버튼·링크가 가진 반경을 읽어 같은 둥근 테두리로 표시한다. 원형 아이콘 버튼과 둥근 텍스트 버튼을 고정 반경으로 가정하지 않는다.
+- `/seeker` 메인의 추천·스페셜·급구·일반 공고 카드는 지역·세부지역·업종 뱃지를 사용하지 않고 기존 위치 아이콘과 `지역 · 업종` 한 줄 표기로 되돌린다. 공고 상세 화면의 메타데이터 뱃지는 유지한다.
 - 기존 회원가입 인증, 비회원 둘러보기, 로그인, 계정 찾기 흐름은 유지한다.
 
 ## 설계
@@ -86,6 +93,12 @@ DB 로그에는 CI·DI 해시가 저장되지 않으므로 새 값을 추측하�
 
 `apps/web/src/lib/bambi/resolve-gate.ts`, `apps/web/src/proxy.ts`, 공개 수다방 권한 서비스는 변경하지 않는다. 이번 수정은 회원가입 패널의 단계 선택과 프로필 생성 증명 방식만 다룬다. 따라서 비회원 허용 행동에 회원가입 게이트가 새로 붙지 않는다.
 
+### 6. 온보딩 코치마크와 메인 팝업 조정
+
+기존 `COACHMARK_INTENT_KEY`를 코치마크 실행 생명주기의 정본으로 유지한다. 코치마크가 시작될 때 의도를 먼저 지우지 않고, 사용자가 완료하거나 닫을 때 제거한다. 의도 저장·제거 시 같은 탭에서도 들을 수 있는 이벤트를 보내 `MainPopupLayer`가 즉시 표시 여부를 다시 계산한다.
+
+`MainPopupLayer`는 유효한 코치마크 의도가 남아 있는 동안 공개 팝업 목록을 렌더하지 않는다. 코치마크 종료 이벤트를 받으면 기존 쿼리 결과로 팝업을 다시 표시한다. 코치마크 설명창은 공용 Dialog 콘텐츠 클래스 값을 재사용하되, spotlight SVG를 유지하기 위해 공용 backdrop을 추가하지 않는다.
+
 ## 예상 변경 파일
 
 - `docs/superpowers/plans/2026-09-08-guest-verification-signup-reuse.md`
@@ -97,7 +110,13 @@ DB 로그에는 CI·DI 해시가 저장되지 않으므로 새 값을 추측하�
 - `apps/web/src/components/bambi/auth/auth-panel.tsx`
 - `apps/web/src/components/bambi/auth/use-guest-signup-verification.ts`
 - `apps/web/src/lib/bambi/guest-signup.ts`
+- `apps/web/src/lib/bambi/onboarding.ts`
+- `apps/web/src/components/bambi/onboarding/role-coachmark-runner.tsx`
+- `apps/web/src/components/bambi/onboarding/coachmark.tsx`
+- `apps/web/src/components/bambi/main-popup/main-popup-layer.tsx`
 - `apps/web/test/components/bambi/auth/guest-signup-reuse.test.ts`
+- `apps/web/test/components/bambi/main-popup/main-popup-layer.test.ts`
+- `packages/ui/src/components/dialog.tsx`
 
 구현 중 새 파일이 필요하거나 위 파일이 불필요해지면 이 목록과 구현 결과를 함께 갱신한다.
 
@@ -111,6 +130,8 @@ DB 로그에는 CI·DI 해시가 저장되지 않으므로 새 값을 추측하�
 - 제출 시 만료되면 계정을 만들기 전에 입력값을 비우고 인증 단계로 돌아가는지 확인한다.
 - 일반 익명 방문자는 기존 본인인증 단계, 새 본인인증 직후 가입은 기존 `identityVerificationId` 경로를 유지하는지 확인한다.
 - `resolve-gate` 기존 테스트를 실행해 비회원 허용·차단 경로가 달라지지 않았는지 확인한다.
+- 코치마크 의도가 남아 있는 동안 메인 팝업이 숨겨지고, 의도 제거 이벤트 뒤 다시 표시되는지 확인한다.
+- 코치마크가 공용 Dialog 콘텐츠 스타일을 사용하고 메인 팝업보다 위의 레이어에서 정상 표시되는지 확인한다.
 - 관련 API/web 테스트, 두 패키지 TypeScript 검사, 변경 경로 Ultracite 검사, `git diff --check`를 실행한다.
 - 빌드·dev 서버는 실행하지 않는다. 사용자 실측에서는 비회원 인증 → `/seeker` → 공고 클릭 → 재인증 없이 가입 폼 → 가입 → 기존 온보딩 이동을 확인한다.
 
@@ -132,3 +153,15 @@ DB 로그에는 CI·DI 해시가 저장되지 않으므로 새 값을 추측하�
 - [x] 변경 파일 `pnpm exec ultracite check ...` — 오류 0
 - [x] `git diff --check` — 오류 0
 - [ ] 사용자 브라우저 실측: 비회원 인증 → `/seeker` → 공고 클릭 → 가입 폼 복원 → 가입 → 기존 온보딩 이동
+
+### 온보딩 종료 후 검은 화면 회귀 수정
+
+- [x] 코치마크 의도를 실행 종료까지 유지하고, 실행 중에는 메인 팝업을 숨기도록 수정
+- [x] 코치마크 설명창이 공용 Dialog 콘텐츠 배치와 최상위 레이어를 사용하도록 수정
+- [x] 완전 불투명하던 코치마크 암막을 반투명 처리해 배경 화면이 보이도록 수정
+- [x] 각진 spotlight를 실제 강조 버튼의 계산된 테두리 반경과 일치하도록 수정
+- [x] 메인 공고 카드만 메타데이터 뱃지를 제거하고 기존 `지역 · 업종` 텍스트 표기로 복원
+- [x] 관련 web 테스트 3파일 12건 통과
+- [x] web 및 공용 UI TypeScript 검사 통과
+- [x] 변경 파일 Ultracite 검사와 `git diff --check` 통과
+- [ ] 사용자 브라우저 실측: 온보딩 `시작하기` → `/seeker` 코치마크 정상 표시 → 코치마크 종료 후 메인 팝업 표시
