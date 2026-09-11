@@ -5,6 +5,10 @@ import { useThemeColor } from "heroui-native";
 import type { ComponentProps } from "react";
 import type { ColorValue } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+	CoachmarkTarget,
+	CoachmarkTargetProvider,
+} from "@/src/components/onboarding/coachmark-targets";
 import { FeatureCoachmark } from "@/src/components/onboarding/feature-coachmark";
 import { SeekerHomeHeader } from "@/src/components/seeker-header";
 import {
@@ -48,7 +52,8 @@ const ROLE_TAB_ICONS: Record<
 // 활성 탭은 채운 글리프, 비활성은 outline — 색 틴트 단독으로 상태를 전달하지 않는다.
 function tabIcon(
 	active: ComponentProps<typeof Ionicons>["name"],
-	inactive: ComponentProps<typeof Ionicons>["name"]
+	inactive: ComponentProps<typeof Ionicons>["name"],
+	coachmarkTarget?: "chats" | "me"
 ) {
 	return ({
 		color,
@@ -58,9 +63,16 @@ function tabIcon(
 		color: ColorValue;
 		focused: boolean;
 		size: number;
-	}) => (
-		<Ionicons color={color} name={focused ? active : inactive} size={size} />
-	);
+	}) => {
+		const icon = (
+			<Ionicons color={color} name={focused ? active : inactive} size={size} />
+		);
+		return coachmarkTarget ? (
+			<CoachmarkTarget name={coachmarkTarget}>{icon}</CoachmarkTarget>
+		) : (
+			icon
+		);
+	};
 }
 
 export default function SeekerTabsLayout() {
@@ -83,7 +95,7 @@ export default function SeekerTabsLayout() {
 	const roleTabIcons = roleTab ? ROLE_TAB_ICONS[roleTab.href] : null;
 
 	return (
-		<>
+		<CoachmarkTargetProvider>
 			<FeatureCoachmark />
 			<Tabs
 				screenOptions={{
@@ -119,7 +131,8 @@ export default function SeekerTabsLayout() {
 						},
 						tabBarIcon: tabIcon(
 							"chatbubble-ellipses",
-							"chatbubble-ellipses-outline"
+							"chatbubble-ellipses-outline",
+							"chats"
 						),
 						title: "채팅",
 					}}
@@ -160,11 +173,11 @@ export default function SeekerTabsLayout() {
 				<Tabs.Screen
 					name="me"
 					options={{
-						tabBarIcon: tabIcon("person", "person-outline"),
+						tabBarIcon: tabIcon("person", "person-outline", "me"),
 						title: "내 정보",
 					}}
 				/>
 			</Tabs>
-		</>
+		</CoachmarkTargetProvider>
 	);
 }

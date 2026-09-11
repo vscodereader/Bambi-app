@@ -12,13 +12,13 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { type Href, router } from "expo-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 
 import { authClient } from "@/lib/auth-client";
 import { isIdentityVerificationConfigured } from "@/src/components/identity-verification-modal";
 import { type SignupSubmitValues, validateSignupInput } from "./bambi-native";
-import { clearGuestToken } from "./guest-store";
+import { clearGuestToken, useGuestVisitor } from "./guest-store";
 import { signupSuccessRoute } from "./onboarding-guide";
 import { client, queryClient } from "./orpc";
 import {
@@ -33,15 +33,34 @@ export const isSignupAvailable = isIdentityVerificationConfigured;
 // 역할에 맞는 프로필을 만든다. verifiedId를 넘기면 서버가 성별 등을 인증 건에서 파생 저장한다.
 async function createProfileForRole(
 	role: SignupSubmitValues["role"],
-	verifiedId: null | string
+	verifiedId: null | string,
+	reuseGuestVerification: boolean
 ): Promise<void> {
-	const payload = verifiedId ? { identityVerificationId: verifiedId } : {};
+	let payload:
+		| { identityVerificationId: string }
+		| { reuseGuestVerification: true }
+		| Record<string, never> = {};
+	if (verifiedId) {
+		payload = { identityVerificationId: verifiedId };
+	} else if (reuseGuestVerification) {
+		payload = { reuseGuestVerification: true };
+	}
 	if (role === "employer") {
 		await client.bambi.onboarding.createEmployerProfile(payload);
 	} else {
 		await client.bambi.onboarding.createJobSeekerProfile(payload);
 	}
 }
+
+const checkReusableGuestVerification = async (
+	enabled: boolean
+): Promise<null | "account_exists" | "reauthenticate"> => {
+	if (!enabled) {
+		return null;
+	}
+	const result = await client.bambi.onboarding.getGuestSignupStatus();
+	return result.status === "available" ? null : result.status;
+};
 
 // signUp.email 한 번 호출. 성공이면 null, 실패면 오류 문구.
 async function runSignUp(values: SignupSubmitValues): Promise<null | string> {
@@ -98,10 +117,16 @@ function mapProfileError(
 }
 
 export function useSignup() {
+	const guest = useGuestVisitor();
 	const [step, setStep] = useState<"form" | "verify">("verify");
 	// 본인인증에서 확정된 인증 건 ID. 폼 제출 시 createProfile로 넘겨 서버가 성별 등을
 	// 파생 저장하게 한다.
 	const verifiedIdRef = useRef<null | string>(null);
+	const reuseGuestVerificationRef = useRef(false);
+	const checkedGuestTokenRef = useRef<null | string>(null);
+	const [isGuestStatusPending, setIsGuestStatusPending] = useState(
+		Boolean(guest)
+	);
 	// signUp.email 200 이후를 기억한다 — 프로필 생성만 실패해 재제출하면 signUp을
 	// 건너뛰어야 한다(안 그러면 USER_ALREADY_EXISTS로 영구 막힘).
 	const signedUpRef = useRef(false);
@@ -130,16 +155,112 @@ export function useSignup() {
 				);
 				return;
 			}
+			reuseGuestVerificationRef.current = false;
 			verifiedIdRef.current = id;
 			setStep("form");
 		},
 	});
+
+	useEffect(() => {
+		if (!guest) {
+			setIsGuestStatusPending(false);
+			return;
+		}
+		if (checkedGuestTokenRef.current === guest.token) {
+			return;
+		}
+		checkedGuestTokenRef.current = guest.token;
+		let active = true;
+		setIsGuestStatusPending(true);
+		client.bambi.onboarding
+			.getGuestSignupStatus()
+			.then((result) => {
+				if (!active) {
+					return;
+				}
+				if (result.status === "available") {
+					reuseGuestVerificationRef.current = true;
+					verifiedIdRef.current = null;
+					setStep("form");
+					return;
+				}
+				reuseGuestVerificationRef.current = false;
+				if (result.status === "account_exists") {
+					Alert.alert(
+						"이미 가입된 계정이 있어요",
+						"이미 가입된 계정이 있어요. 로그인해 주세요.",
+						[{ onPress: () => router.back(), text: "로그인" }]
+					);
+					return;
+				}
+				clearGuestToken().catch(() => undefined);
+				setStep("verify");
+			})
+			.catch(() => {
+				if (active) {
+					reuseGuestVerificationRef.current = false;
+					setStep("verify");
+				}
+			})
+			.finally(() => {
+				if (active) {
+					setIsGuestStatusPending(false);
+				}
+			});
+		return () => {
+			active = false;
+		};
+	}, [guest]);
 
 	// messages: {} → identityErrorMessage의 기본맵/폴백 경로가 처리한다(발급 오류용).
 	const modal = useIdentityModal({
 		messages: {},
 		onVerified: (id) => check.mutate(id),
 	});
+	const validateGuestReuseForSubmit = async (): Promise<null | string> => {
+		const reusableError = await checkReusableGuestVerification(
+			reuseGuestVerificationRef.current
+		);
+		if (!reusableError) {
+			return null;
+		}
+		reuseGuestVerificationRef.current = false;
+		setStep("verify");
+		if (reusableError === "account_exists") {
+			return "이미 가입된 계정이 있어요. 로그인해 주세요.";
+		}
+		await clearGuestToken().catch(() => undefined);
+		return "기존 인증 정보가 만료되었습니다. 다시 본인인증해 주세요.";
+	};
+	const recoverIdentityConflict = async (error: unknown): Promise<boolean> => {
+		if (errorCode(error) !== "CONFLICT") {
+			return false;
+		}
+		await authClient.signOut().catch(() => undefined);
+		queryClient.clear();
+		doneRef.current = true;
+		setIsSignedUp(false);
+		Alert.alert(
+			"이미 가입된 계정이 있어요",
+			"이미 가입된 계정이 있어요. 로그인해 주세요.",
+			[{ onPress: () => router.back(), text: "로그인" }]
+		);
+		return true;
+	};
+	const handleProfileFailure = async (
+		error: unknown,
+		alreadySignedUp: boolean
+	): Promise<null | string> => {
+		if (await recoverIdentityConflict(error)) {
+			return null;
+		}
+		const mapped = mapProfileError(error, alreadySignedUp);
+		if (mapped.resetToVerify) {
+			verifiedIdRef.current = null;
+			setStep("verify");
+		}
+		return mapped.message;
+	};
 
 	const submit = async (values: SignupSubmitValues): Promise<null | string> => {
 		const validationError = validateSignupInput(values);
@@ -150,6 +271,10 @@ export function useSignup() {
 		// signUp이 이미 끝난 뒤의 재제출인지(프로필 생성만 실패했던 경우) 판별.
 		const isResubmit = signedUpRef.current;
 		try {
+			const reusableError = await validateGuestReuseForSubmit();
+			if (reusableError) {
+				return reusableError;
+			}
 			if (!signedUpRef.current) {
 				const signUpError = await runSignUp(values);
 				if (signUpError) {
@@ -167,7 +292,11 @@ export function useSignup() {
 				? Boolean((await client.bambi.onboarding.getMine()).bambiProfile)
 				: false;
 			if (!hasProfile) {
-				await createProfileForRole(values.role, verifiedIdRef.current);
+				await createProfileForRole(
+					values.role,
+					verifiedIdRef.current,
+					reuseGuestVerificationRef.current
+				);
 			}
 			await client.bambi.onboarding.recordLegalConsent().catch(() => undefined);
 			await clearGuestToken().catch(() => undefined);
@@ -177,26 +306,7 @@ export function useSignup() {
 			// 고아 계정의 세션을 반드시 끊는다(안 끊으면 login이 세션을 보고 홈→index→
 			// onboarding으로 되돌아가 재인증해도 또 CONFLICT다). doneRef를 먼저 세워야
 			// 이탈 가드(beforeRemove)가 이 이동을 막지 않는다.
-			if (errorCode(error) === "CONFLICT") {
-				await authClient.signOut().catch(() => undefined);
-				queryClient.clear();
-				doneRef.current = true;
-				setIsSignedUp(false);
-				Alert.alert(
-					"이미 가입된 계정이 있어요",
-					"이미 가입된 계정이 있어요. 로그인해 주세요.",
-					[{ onPress: () => router.back(), text: "로그인" }]
-				);
-				return null;
-			}
-			// 프로필 생성 실패(예: 인증 건 30분 만료)·네트워크 오류.
-			const mapped = mapProfileError(error, signedUpRef.current);
-			if (mapped.resetToVerify) {
-				// 폼 state는 살아 있어 재인증 후 재제출 시 값이 유지된다.
-				verifiedIdRef.current = null;
-				setStep("verify");
-			}
-			return mapped.message;
+			return await handleProfileFailure(error, signedUpRef.current);
 		} finally {
 			setIsSubmitPending(false);
 		}
@@ -216,8 +326,12 @@ export function useSignup() {
 		isAvailable: isSignupAvailable,
 		isSignedUp,
 		isSubmitPending,
-		isVerifyPending: modal.isModalPending || check.isPending,
-		startVerification: modal.start,
+		isVerifyPending:
+			isGuestStatusPending || modal.isModalPending || check.isPending,
+		startVerification: () => {
+			reuseGuestVerificationRef.current = false;
+			modal.start();
+		},
 		step,
 		submit,
 		verification: modal.verification,

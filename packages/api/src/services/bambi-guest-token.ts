@@ -14,6 +14,11 @@ export const GUEST_COOKIE_NAME = "bambi_guest";
 // 직접 받으므로 발급 프로시저가 이 값을 토큰 exp에 박는다 — 양쪽 만료가 어긋나지
 // 않도록 상수 하나로 둔다(30일).
 export const GUEST_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+const SECOND_MS = 1000;
+export const GUEST_TOKEN_MAX_AGE_MS = GUEST_TOKEN_MAX_AGE_SECONDS * SECOND_MS;
+
+export const isGuestIdentityFresh = (updatedAt: Date, now: Date): boolean =>
+	updatedAt.getTime() > now.getTime() - GUEST_TOKEN_MAX_AGE_MS;
 
 // 서명 키가 없으면 게스트 토큰을 만들 수도 검증할 수도 없다. 개발 편의를 위한 폴백이며,
 // 프로덕션은 env(web.ts·server.ts)의 부팅 가드가 누락을 막는다. web이 발급한 토큰을 api

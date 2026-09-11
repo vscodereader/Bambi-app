@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BambiLogo } from "@/src/components/bambi-logo";
 import { NotificationBell } from "@/src/components/notification-bell";
+import { CoachmarkTarget } from "@/src/components/onboarding/coachmark-targets";
 
 // 룩은 웹 헤더의 outline 아이콘 버튼(border+card 표면, 반경 16px=rounded-2xl)을 따른다.
 function HeaderIconButton({
@@ -110,11 +111,13 @@ export function SeekerHomeHeader() {
 				<View className="flex-row items-center gap-2">
 					{/* 정적 라우트지만 jobs/[id]와 같은 이유로 Href 캐스팅 — expo-router 타입
 					    생성이 dev 서버 없이 돌지 않아 새 라우트가 생성 타입에 아직 없다. */}
-					<HeaderIconButton
-						href={"/(seeker)/search" as unknown as Href}
-						label="공고 검색"
-						name="search-outline"
-					/>
+					<CoachmarkTarget name="search">
+						<HeaderIconButton
+							href={"/(seeker)/search" as unknown as Href}
+							label="공고 검색"
+							name="search-outline"
+						/>
+					</CoachmarkTarget>
 					<HeaderIconButton
 						href={"/(seeker)/point-shop" as unknown as Href}
 						label="포인트몰"

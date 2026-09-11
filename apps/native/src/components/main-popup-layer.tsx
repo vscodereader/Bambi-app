@@ -1,5 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { type Href, router, usePathname } from "expo-router";
+import {
+	type Href,
+	router,
+	useGlobalSearchParams,
+	usePathname,
+} from "expo-router";
 import { getItemAsync, setItemAsync } from "expo-secure-store";
 import { Button, Dialog } from "heroui-native";
 import { useEffect, useMemo, useState } from "react";
@@ -21,6 +26,7 @@ import { orpc } from "@/src/lib/orpc";
 
 export function MainPopupLayer() {
 	const pathname = usePathname();
+	const params = useGlobalSearchParams<{ coachmarks?: string }>();
 	const session = authClient.useSession();
 	const [closed, setClosed] = useState<Set<string>>(new Set());
 	const [storedHidden, setStoredHidden] = useState<Record<
@@ -65,6 +71,7 @@ export function MainPopupLayer() {
 		() =>
 			(storedHidden ? (query.data?.items ?? []) : []).find(
 				(candidate) =>
+					params.coachmarks !== "1" &&
 					pageId &&
 					candidate.targetPages.includes(pageId) &&
 					!closed.has(candidate.id) &&
@@ -74,7 +81,7 @@ export function MainPopupLayer() {
 						Date.now()
 					)
 			) ?? null,
-		[closed, pageId, query.data?.items, storedHidden]
+		[closed, pageId, params.coachmarks, query.data?.items, storedHidden]
 	);
 	if (!item) {
 		return null;
