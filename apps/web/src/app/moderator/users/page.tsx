@@ -37,6 +37,7 @@ import {
 	MODERATION_USERS_QUERY_INPUT,
 	useMod,
 } from "@/components/bambi/screens/moderator-context";
+import { buildJobViewLogsCsv } from "@/lib/bambi/job-view-logs-csv";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { MODERATOR_ACCOUNT_CREATE_PATH } from "@/lib/bambi/moderator-navigation";
 import type { ManagedUser } from "@/lib/bambi/types";
@@ -44,7 +45,7 @@ import {
 	resolveLivePresenceSnapshot,
 	useModeratorPresenceStream,
 } from "@/lib/bambi/use-moderator-presence-stream";
-import { orpc } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 
 // 탈퇴는 계정 상태 enum이 아니라 deletedAt 유무지만, 운영자 눈에는 같은 축이라 함께 둔다.
 type StatusFilter = "all" | "active" | "warned" | "suspended" | "deleted";
@@ -153,6 +154,27 @@ export default function ModeratorUsersPage() {
 			},
 		})
 	);
+	// 업소 아웃바운드용 전 회원 공고 조회 로그 CSV. 서버가 화면 필터와 무관하게 전체를
+	// 내리고, 파일 저장까지 성공 콜백에서 끝내 별도 상태를 두지 않는다.
+	const exportMutation = useMutation({
+		mutationFn: () => client.bambi.contentHistory.exportAdminJobViews(),
+		onError: () => toast.error("CSV를 내보내지 못했어요."),
+		onSuccess: (rows) => {
+			const now = new Date();
+			const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+			const url = URL.createObjectURL(
+				new Blob([buildJobViewLogsCsv(rows)], {
+					type: "text/csv;charset=utf-8",
+				})
+			);
+			const anchor = document.createElement("a");
+			anchor.href = url;
+			anchor.download = `공고조회로그_${stamp}.csv`;
+			anchor.click();
+			URL.revokeObjectURL(url);
+			toast.success(`${rows.length}건을 CSV로 내보냈어요.`);
+		},
+	});
 	const {
 		clearSelection,
 		isLoading,
@@ -483,6 +505,13 @@ export default function ModeratorUsersPage() {
 					variant="outline"
 				>
 					계정 생성
+				</Button>
+				<Button
+					disabled={exportMutation.isPending}
+					onClick={() => exportMutation.mutate()}
+					variant="outline"
+				>
+					{exportMutation.isPending ? "내보내는 중…" : "조회 로그 CSV"}
 				</Button>
 			</div>
 

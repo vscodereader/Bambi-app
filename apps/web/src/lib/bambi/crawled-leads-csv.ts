@@ -41,12 +41,12 @@ const formatDigitsOnlyPhone = (digits: string): string => {
 	return digits;
 };
 
-const normalizePhone = (phone: string | null): string => {
+export const normalizePhone = (phone: string | null): string => {
 	const trimmed = phone?.trim() ?? "";
 	return DIGITS_ONLY.test(trimmed) ? formatDigitsOnlyPhone(trimmed) : trimmed;
 };
 
-const escapeCsvField = (value: string): string =>
+export const escapeCsvField = (value: string): string =>
 	NEEDS_CSV_QUOTING.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
 
 export const buildCrawledLeadsCsv = (
