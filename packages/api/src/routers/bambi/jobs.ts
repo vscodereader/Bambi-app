@@ -65,6 +65,7 @@ import {
 	recordAdBannerImpressions,
 	recordJobListingImpressions,
 	recordJobPerformanceEvent,
+	recordJobView,
 } from "../../services/bambi-analytics";
 import {
 	isEmployerLikeRole,
@@ -2064,6 +2065,22 @@ export const jobsRouter = {
 				.innerJoin(user, eq(user.id, bambiProfile.userId))
 				.where(eq(bambiProfile.userId, post.createdByUserId))
 				.limit(1);
+
+			// 회원의 조회만 사용자×공고 로그에 누적한다(비회원 제외). 업소 아웃바운드 근거.
+			// 연락처는 작성자의 인증된 번호(운영자 화면 전용 스냅샷).
+			if (context.session?.user.id) {
+				await recordJobView({
+					businessPhone: creatorProfile?.isPhoneVerified
+						? (creatorProfile.phoneNumber ?? null)
+						: null,
+					jobPostId: post.id,
+					jobTitle: post.title,
+					organizationId: post.organizationId,
+					organizationName: post.employerDisplayName ?? "",
+					source: "member",
+					userId: context.session.user.id,
+				});
+			}
 
 			return {
 				...post,

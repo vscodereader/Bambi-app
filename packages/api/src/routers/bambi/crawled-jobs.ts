@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import z from "zod";
 
 import { publicProcedure } from "../../index";
+import { recordJobView } from "../../services/bambi-analytics";
 import { createOriginalImageDocument } from "../../services/bambi-crawled-image-document";
 
 // 공개 상세에 내려보내는 컬럼.
@@ -47,7 +48,7 @@ export const crawledJobsRouter = {
 	// 매번 다시 읽어 확인해야 한다.
 	getById: publicProcedure
 		.input(z.object({ id: z.uuid() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
 			// status 조건을 where에 두면 응답에 상태 어휘가 섞이지 않는다 — 화면이
 			// crawled_post_status(active/needs_review/expired)를 알아야 할 이유가 없다.
 			// needs_review(업종 미지정)·expired는 목록에도 안 나오는 공고다.
@@ -64,6 +65,18 @@ export const crawledJobsRouter = {
 
 			if (!post) {
 				throw new ORPCError("NOT_FOUND");
+			}
+
+			// 회원의 조회만 로그에 남긴다(비회원 제외). 수집 공고는 조직이 없어 전화번호로 묶는다.
+			if (context.session?.user.id) {
+				await recordJobView({
+					businessPhone: post.contactPhone ?? null,
+					jobPostId: post.id,
+					jobTitle: post.title,
+					organizationName: post.shopName ?? "",
+					source: "crawled",
+					userId: context.session.user.id,
+				});
 			}
 
 			const sourceDocument =

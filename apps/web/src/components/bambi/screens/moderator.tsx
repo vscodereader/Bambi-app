@@ -2931,6 +2931,90 @@ function UserContentHistory({ userId }: { userId: string }) {
 	);
 }
 
+const JOB_VIEW_SOURCE_LABEL = {
+	crawled: "수집 공고",
+	member: "회원 업소",
+} as const;
+
+// 회원이 상세를 연 공고를 업소 단위로 묶어 보여준다. 업소 아웃바운드 근거로 쓰므로
+// 헤더에 연락처를 두고, 아래에 그 업소의 어떤 공고를 몇 번 봤는지 붙인다.
+function UserJobViewHistory({ userId }: { userId: string }) {
+	const [page, setPage] = useState(1);
+	const query = useQuery(
+		orpc.bambi.contentHistory.listAdminMemberJobViews.queryOptions({
+			input: { page, pageSize: 5, userId },
+		})
+	);
+	const pageCount = Math.max(1, Math.ceil((query.data?.totalCount ?? 0) / 5));
+	return (
+		<Accordion>
+			<AccordionItem value="job-view-history">
+				<AccordionTrigger>최근 본 공고</AccordionTrigger>
+				<AccordionContent>
+					{query.data?.items.length === 0 ? (
+						<p className="mb-0 text-muted-foreground text-sm">
+							아직 본 공고가 없습니다.
+						</p>
+					) : null}
+					<ul className="grid list-none gap-3 p-0">
+						{query.data?.items.map((group) => (
+							<li className="rounded-lg border p-3" key={group.businessKey}>
+								<div className="flex flex-wrap items-start justify-between gap-2">
+									<div className="min-w-0">
+										<strong className="block truncate">
+											{group.businessName || "업소명 없음"}
+										</strong>
+										<span className="text-muted-foreground text-xs">
+											{JOB_VIEW_SOURCE_LABEL[group.source]}
+											{group.businessPhone
+												? ` · ${formatPhone(group.businessPhone)}`
+												: " · 연락처 없음"}
+										</span>
+									</div>
+									<span className="shrink-0 text-muted-foreground text-xs">
+										총 {group.totalViews}회 · 마지막 조회{" "}
+										{formatDateTime(group.lastViewedAt)}
+									</span>
+								</div>
+								<ul className="mt-2 grid list-none gap-1 border-t p-0 pt-2">
+									{group.jobs.map((job) => (
+										<li
+											className="flex items-center justify-between gap-3 text-sm"
+											key={job.id}
+										>
+											<Link
+												className="min-w-0 truncate underline-offset-2 hover:underline"
+												href={
+													(job.source === "member"
+														? `/seeker/jobs/${job.jobPostId}`
+														: `/seeker/jobs/crawled/${job.jobPostId}`) as Route
+												}
+											>
+												{job.jobTitle}
+											</Link>
+											<span className="shrink-0 text-muted-foreground text-xs">
+												{job.viewCount}회 · {formatDateTime(job.lastViewedAt)}
+											</span>
+										</li>
+									))}
+								</ul>
+							</li>
+						))}
+					</ul>
+					<div className="mt-3 flex justify-end">
+						<PageControls
+							disabled={query.isFetching}
+							onPageChange={setPage}
+							page={page}
+							pageCount={pageCount}
+						/>
+					</div>
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
+	);
+}
+
 // 무료 법률 자문 답변 계정 지정·해제. 구직자 ↔ 법률자문만 오갈 수 있고(서버 규칙),
 // 액션 UI는 사용자 목록(/moderator/users)이 이 헬퍼로 대상 여부를 판정해 띄운다.
 const LEGAL_ADVISOR_ROLE = "legal_advisor";
@@ -3196,6 +3280,7 @@ export function UserDetail({
 					) : null}
 					<UserModerationHistory key={item.id} userId={item.id} />
 					<UserContentHistory userId={item.id} />
+					<UserJobViewHistory userId={item.id} />
 					<div>
 						<div className="mb-2.5 font-bold text-[13px] text-foreground">
 							제재 적용
