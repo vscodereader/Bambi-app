@@ -7,6 +7,7 @@ import {
 	DialogPopup,
 	DialogPortal,
 	DialogTitle,
+	dialogContentClassName,
 } from "@bambi-app/ui/components/dialog";
 import { useId } from "react";
 
@@ -16,6 +17,7 @@ import {
 } from "@/lib/bambi/coachmark";
 
 export interface SpotlightRect {
+	borderRadius: number;
 	height: number;
 	width: number;
 	x: number;
@@ -44,10 +46,10 @@ export function Coachmark({
 	return (
 		<Dialog onOpenChange={(open: boolean) => !open && onClose()} open>
 			<DialogPortal>
-				<div className="fixed inset-0">
+				<div className="fixed inset-0 z-50">
 					<svg
 						aria-hidden="true"
-						className="absolute inset-0 size-full text-ink-900"
+						className="absolute inset-0 size-full text-ink-900/70"
 					>
 						<defs>
 							<mask id={maskId}>
@@ -55,6 +57,8 @@ export function Coachmark({
 								<rect
 									fill="black"
 									height={rect.height}
+									rx={rect.borderRadius}
+									ry={rect.borderRadius}
 									width={rect.width}
 									x={rect.x}
 									y={rect.y}
@@ -68,7 +72,7 @@ export function Coachmark({
 							width="100%"
 						/>
 					</svg>
-					<DialogPopup>
+					<DialogPopup className={dialogContentClassName}>
 						<div className="flex items-center justify-between">
 							<span className="font-semibold text-primary text-xs">
 								{currentIndex + 1}/{total}

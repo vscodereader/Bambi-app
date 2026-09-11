@@ -60,6 +60,7 @@ export function DataTable<T>({
 	rowClassName,
 	showPageInput = true,
 	tableClassName,
+	initialSort,
 }: {
 	columns: DataColumn<T>[];
 	data: T[];
@@ -78,8 +79,9 @@ export function DataTable<T>({
 	rowClassName?: string;
 	showPageInput?: boolean;
 	tableClassName?: string;
+	initialSort?: Exclude<SortState, null>;
 }): React.JSX.Element {
-	const [sorting, setSorting] = useState<SortState>(null);
+	const [sorting, setSorting] = useState<SortState>(initialSort ?? null);
 	const [internalPage, setInternalPage] = useState(0);
 	const page = controlledPage ?? internalPage;
 	const setPage = (nextPage: number) => {

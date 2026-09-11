@@ -34,6 +34,7 @@ const requireAuth = o.middleware(({ context, next }) => {
 	}
 	return next({
 		context: {
+			guest: context.guest,
 			session: context.session,
 		},
 	});

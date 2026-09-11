@@ -30,6 +30,7 @@ import {
 } from "../icons";
 import { JobDescriptionContent } from "../job-description-content";
 import { JobDetailImage } from "../job-detail-image";
+import { JobMetadataBadges } from "../job-metadata-badges";
 import { JobReviewSection } from "../job-review-section";
 
 interface SeekerJobDetailResponsiveProps {
@@ -233,9 +234,12 @@ export function SeekerJobDetailResponsive({
 								<h1 className="m-0 font-extrabold text-[28px] leading-tight md:text-[34px]">
 									{displayJobTitle(job.title, job.company)}
 								</h1>
-								<p className="mt-2 mb-0 text-muted-foreground">
-									{job.location} · {job.type}
-								</p>
+								<JobMetadataBadges
+									className="mt-2"
+									district={job.district}
+									industryCategory={job.type}
+									region={job.region}
+								/>
 								<div className="mt-3 flex items-center gap-2">
 									<Avatar
 										name={job.company}

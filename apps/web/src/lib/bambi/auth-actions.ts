@@ -2,6 +2,7 @@ import type { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { clearGuestCookie } from "@/lib/bambi/guest";
+import { client } from "@/utils/orpc";
 
 type AppRouter = ReturnType<typeof useRouter>;
 
@@ -23,6 +24,7 @@ export function clearSigningOut(): void {
 export async function signOutToHome(router: AppRouter): Promise<void> {
 	signingOut = true;
 	try {
+		await client.bambi.presence.disconnectSession().catch(() => undefined);
 		await authClient.signOut();
 		// 로그인 시점에 이미 회수하지만, 예외적으로 게스트 쿠키가 남아 있으면
 		// 로그아웃 후에도 게스트 마켓 열람이 가능해지므로 방어적으로 한 번 더 지운다.

@@ -61,6 +61,21 @@ describe("notificationRoute", () => {
 		).toBeNull();
 	});
 
+	it("고객센터 알림은 문의와 상담 상세로 이동한다", () => {
+		expect(
+			notificationRoute(
+				view({ targetId: "inquiry-1", targetType: "support_inquiry" }),
+				"seeker"
+			)
+		).toBe("/(seeker)/support/inquiries/inquiry-1");
+		expect(
+			notificationRoute(
+				view({ targetId: "room-1", targetType: "support_chat" }),
+				"seeker"
+			)
+		).toBe("/(seeker)/support/chat/room-1");
+	});
+
 	it("구인자 공고 알림은 대기열·결제류면 광고 관리, 그 외는 편집", () => {
 		for (const action of [
 			"listing_queued",
@@ -112,8 +127,6 @@ describe("notificationRoute", () => {
 		for (const targetType of [
 			"community_post",
 			"community_comment",
-			"support_inquiry",
-			"support_chat",
 			"unknown_future_type",
 		]) {
 			expect(notificationRoute(view({ targetType }), "seeker")).toBeNull();

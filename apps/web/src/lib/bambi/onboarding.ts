@@ -29,6 +29,7 @@ interface StoredOnboardingIntent {
 
 export const SIGNUP_ONBOARDING_INTENT_KEY = "bambi:onboarding:signup-intent";
 export const COACHMARK_INTENT_KEY = "bambi:onboarding:coachmark-intent";
+export const COACHMARK_STATE_EVENT = "bambi:onboarding:coachmark-state";
 
 const ONBOARDING_COMPLETION_KEY_PREFIX = "bambi:onboarding:seen";
 
@@ -99,6 +100,15 @@ const clearSessionIntent = (key: string): void => {
 	}
 };
 
+const notifyCoachmarkStateChange = (): void => {
+	if (
+		typeof window !== "undefined" &&
+		typeof window.dispatchEvent === "function"
+	) {
+		window.dispatchEvent(new Event(COACHMARK_STATE_EVENT));
+	}
+};
+
 export const getOnboardingCompletionKey = (
 	userId: string,
 	role: OnboardingRole
@@ -148,14 +158,18 @@ export const readSignupOnboardingIntent = (): StoredOnboardingIntent | null =>
 export const clearSignupOnboardingIntent = (): void =>
 	clearSessionIntent(SIGNUP_ONBOARDING_INTENT_KEY);
 
-export const writeCoachmarkIntent = (intent: StoredOnboardingIntent): void =>
+export const writeCoachmarkIntent = (intent: StoredOnboardingIntent): void => {
 	writeSessionIntent(COACHMARK_INTENT_KEY, intent);
+	notifyCoachmarkStateChange();
+};
 
 export const readCoachmarkIntent = (): StoredOnboardingIntent | null =>
 	readSessionIntent(COACHMARK_INTENT_KEY);
 
-export const clearCoachmarkIntent = (): void =>
+export const clearCoachmarkIntent = (): void => {
 	clearSessionIntent(COACHMARK_INTENT_KEY);
+	notifyCoachmarkStateChange();
+};
 
 export const getOnboardingHomePath = (role: OnboardingRole): Route =>
 	homePathForRole(role);

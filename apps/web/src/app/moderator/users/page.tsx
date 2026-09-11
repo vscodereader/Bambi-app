@@ -4,6 +4,11 @@
 // 이 화면은 상태·역할·인증·누적 신고/경고 필터와 이름·이메일·아이디 검색을 클라이언트에서
 // 적용한다. 레이아웃·필터·빈 상태 패턴은 공고 관리(/moderator/jobs)와 동일하다.
 
+import {
+	DEFAULT_USER_OFFLINE_AFTER_MINUTES,
+	isUserOnline,
+	POSTGRES_INTEGER_MAX,
+} from "@bambi-app/api/services/bambi-user-presence";
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
@@ -16,9 +21,11 @@ import {
 } from "@bambi-app/ui/components/select";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { ModeratorUsersTable } from "@/components/bambi/moderator-users-table";
 import {
@@ -26,10 +33,19 @@ import {
 	legalAdvisorChoice,
 	ReasonConfirmSheet,
 } from "@/components/bambi/screens/moderator";
-import { useMod } from "@/components/bambi/screens/moderator-context";
+import {
+	MODERATION_USERS_QUERY_INPUT,
+	useMod,
+} from "@/components/bambi/screens/moderator-context";
+import { buildJobViewLogsCsv } from "@/lib/bambi/job-view-logs-csv";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { MODERATOR_ACCOUNT_CREATE_PATH } from "@/lib/bambi/moderator-navigation";
 import type { ManagedUser } from "@/lib/bambi/types";
+import {
+	resolveLivePresenceSnapshot,
+	useModeratorPresenceStream,
+} from "@/lib/bambi/use-moderator-presence-stream";
+import { client, orpc } from "@/utils/orpc";
 
 // 탈퇴는 계정 상태 enum이 아니라 deletedAt 유무지만, 운영자 눈에는 같은 축이라 함께 둔다.
 type StatusFilter = "all" | "active" | "warned" | "suspended" | "deleted";
@@ -47,7 +63,6 @@ const ROLE_FILTER_ITEMS: Record<string, string> = {
 	job_seeker: userRoleLabel("job_seeker"),
 	legal_advisor: userRoleLabel("legal_advisor"),
 	employer: userRoleLabel("employer"),
-	admin: userRoleLabel("admin"),
 };
 const PHONE_FILTER_ITEMS: Record<string, string> = {
 	all: "전체",
@@ -97,6 +112,69 @@ export default function ModeratorUsersPage() {
 	const searchParams = useSearchParams();
 	const pathname = usePathname();
 	const router = useRouter();
+	const queryClient = useQueryClient();
+	const presencePolicyQuery = useQuery(
+		orpc.bambi.siteSettings.getPresencePolicy.queryOptions()
+	);
+	const livePresence = useModeratorPresenceStream();
+	useEffect(() => {
+		if (livePresence.reconnectRevision <= 1) {
+			return;
+		}
+		queryClient
+			.invalidateQueries({
+				queryKey: orpc.bambi.moderation.listUsers.queryKey({
+					input: MODERATION_USERS_QUERY_INPUT,
+				}),
+			})
+			.catch(() => undefined);
+		queryClient
+			.invalidateQueries({
+				queryKey: orpc.bambi.siteSettings.getPresencePolicy.queryKey(),
+			})
+			.catch(() => undefined);
+	}, [livePresence.reconnectRevision, queryClient]);
+	const [offlineAfterMinutes, setOfflineAfterMinutes] = useState("");
+	useEffect(() => {
+		if (presencePolicyQuery.data) {
+			setOfflineAfterMinutes(
+				String(presencePolicyQuery.data.offlineAfterMinutes)
+			);
+		}
+	}, [presencePolicyQuery.data]);
+	const updatePresencePolicy = useMutation(
+		orpc.bambi.siteSettings.updatePresencePolicy.mutationOptions({
+			onError: (error) =>
+				toast.error(error.message || "오프라인 기준을 저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("오프라인 기준을 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getPresencePolicy.queryKey(),
+				});
+			},
+		})
+	);
+	// 업소 아웃바운드용 전 회원 공고 조회 로그 CSV. 서버가 화면 필터와 무관하게 전체를
+	// 내리고, 파일 저장까지 성공 콜백에서 끝내 별도 상태를 두지 않는다.
+	const exportMutation = useMutation({
+		mutationFn: () => client.bambi.contentHistory.exportAdminJobViews(),
+		onError: () => toast.error("CSV를 내보내지 못했어요."),
+		onSuccess: (rows) => {
+			const now = new Date();
+			const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+			const url = URL.createObjectURL(
+				new Blob([buildJobViewLogsCsv(rows)], {
+					type: "text/csv;charset=utf-8",
+				})
+			);
+			const anchor = document.createElement("a");
+			anchor.href = url;
+			anchor.download = `공고조회로그_${stamp}.csv`;
+			anchor.click();
+			URL.revokeObjectURL(url);
+			toast.success(`${rows.length}건을 CSV로 내보냈어요.`);
+		},
+	});
 	const {
 		clearSelection,
 		isLoading,
@@ -160,11 +238,51 @@ export default function ModeratorUsersPage() {
 		user: ManagedUser;
 	} | null>(null);
 	const [isApplyingRole, setIsApplyingRole] = useState(false);
+	const savePresencePolicy = () => {
+		const value = Number(offlineAfterMinutes);
+		if (
+			!Number.isSafeInteger(value) ||
+			value < 1 ||
+			value > POSTGRES_INTEGER_MAX
+		) {
+			toast.error("오프라인 기준은 1 이상의 분 단위 정수로 입력해 주세요.");
+			return;
+		}
+		updatePresencePolicy.mutate({ offlineAfterMinutes: value });
+	};
 
+	const liveUsers = useMemo(() => {
+		const offlineAfter =
+			livePresence.policyMinutes ??
+			presencePolicyQuery.data?.offlineAfterMinutes ??
+			DEFAULT_USER_OFFLINE_AFTER_MINUTES;
+		return users
+			.map((user) => {
+				const snapshot = resolveLivePresenceSnapshot(
+					livePresence.users.get(user.id),
+					user
+				);
+				return {
+					...user,
+					...snapshot,
+					isOnline: isUserOnline({
+						...snapshot,
+						now: new Date(livePresence.now),
+						offlineAfterMinutes: offlineAfter,
+					}),
+					offlineAfterMinutes: offlineAfter,
+				};
+			})
+			.sort(
+				(a, b) =>
+					(b.lastActivityAt?.getTime() ?? 0) -
+					(a.lastActivityAt?.getTime() ?? 0)
+			);
+	}, [livePresence, presencePolicyQuery.data?.offlineAfterMinutes, users]);
 	const filteredUsers = useMemo(() => {
 		const keyword = search.trim().toLowerCase();
 
-		return users.filter(
+		return liveUsers.filter(
 			(user) =>
 				matchesStatus(user, statusFilter) &&
 				(roleFilter === "all" || user.role === ROLE_FILTER_ITEMS[roleFilter]) &&
@@ -174,7 +292,7 @@ export default function ModeratorUsersPage() {
 				matchesKeyword(user, keyword)
 		);
 	}, [
-		users,
+		liveUsers,
 		statusFilter,
 		roleFilter,
 		phoneFilter,
@@ -261,6 +379,26 @@ export default function ModeratorUsersPage() {
 					placeholder="이름·이메일·로그인 아이디 검색"
 					value={search}
 				/>
+				<div className="ml-auto flex items-center gap-2 whitespace-nowrap text-sm">
+					<span>오프라인 기준 : 마지막 활동기준</span>
+					<Input
+						aria-label="오프라인 기준 시간"
+						className="w-14"
+						inputMode="numeric"
+						onChange={(event) => setOfflineAfterMinutes(event.target.value)}
+						value={offlineAfterMinutes}
+					/>
+					<span>분 후,</span>
+					<Button
+						disabled={updatePresencePolicy.isPending}
+						onClick={savePresencePolicy}
+						size="sm"
+						type="button"
+						variant="outline"
+					>
+						저장
+					</Button>
+				</div>
 			</div>
 
 			<div className="flex flex-wrap items-end gap-4">
@@ -367,6 +505,13 @@ export default function ModeratorUsersPage() {
 					variant="outline"
 				>
 					계정 생성
+				</Button>
+				<Button
+					disabled={exportMutation.isPending}
+					onClick={() => exportMutation.mutate()}
+					variant="outline"
+				>
+					{exportMutation.isPending ? "내보내는 중…" : "조회 로그 CSV"}
 				</Button>
 			</div>
 

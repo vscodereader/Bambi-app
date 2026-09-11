@@ -51,6 +51,12 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("truncateJobCardText(job.company)");
 		expect(source).toContain("title={fullTextTitle(job.title)}");
 		expect(source).toContain("title={fullTextTitle(job.company)}");
+		// 메인 카드에서는 상세용 메타데이터 뱃지를 쓰지 않고 기존 위치·업종 한 줄을 유지한다.
+		expect(source).toContain("<MapPinIcon />");
+		expect(source).toContain("{job.location}");
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: 컴포넌트 소스의 템플릿 리터럴을 검증한다.
+		expect(source).toContain('job.type ? ` · ${job.type}` : ""');
+		expect(source).not.toContain("JobMetadataBadges");
 		// 최신(organic) 배지는 중립 톤 — 사용 색상 최소화
 		expect(source).toContain("tone={toneBadge[tone]}");
 		expect(source).toContain('organic: "neutral"');

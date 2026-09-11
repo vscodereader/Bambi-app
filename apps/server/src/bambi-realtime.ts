@@ -218,6 +218,12 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 	});
 
 	const realtimeTransport: ChatRealtimeTransport = {
+		emit(event, payload) {
+			const args = [payload] as Parameters<
+				ChatRealtimeServerToClientEvents[typeof event]
+			>;
+			io.emit(event, ...args);
+		},
 		to(room) {
 			return {
 				emit(event, payload) {

@@ -34,8 +34,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import type { BusinessDocument } from "@/components/bambi/business-document-file-row";
 import {
-	type BusinessDocument,
 	BusinessDocumentUploader,
 	type BusinessDocumentUploaderHandle,
 } from "@/components/bambi/business-document-uploader";

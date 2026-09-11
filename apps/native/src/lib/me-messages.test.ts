@@ -181,6 +181,35 @@ describe("parseDirectMessageBody", () => {
 		]);
 	});
 
+	it("취소선 마크를 인라인 플래그로 남긴다(볼드 중첩 포함)", () => {
+		const body = JSON.stringify({
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [
+						{ type: "text", marks: [{ type: "strike" }], text: "마감" },
+						{
+							type: "text",
+							marks: [{ type: "bold" }, { type: "strike" }],
+							text: "되었습니다",
+						},
+					],
+				},
+			],
+		});
+
+		expect(parseDirectMessageBody(body)).toEqual([
+			{
+				type: "paragraph",
+				inlines: [
+					{ strike: true, text: "마감" },
+					{ bold: true, strike: true, text: "되었습니다" },
+				],
+			},
+		]);
+	});
+
 	it("리스트는 마커를 붙여 평탄화한다(불릿 · 번호)", () => {
 		const listItem = (text: string) => ({
 			type: "listItem",

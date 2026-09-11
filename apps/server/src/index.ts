@@ -11,8 +11,10 @@ import { listingPromotionPlugin } from "./plugins/listing-promotion";
 import { observabilityPlugin } from "./plugins/observability";
 import { orpcPlugin } from "./plugins/orpc";
 import { pointShopExpiryPlugin } from "./plugins/point-shop-expiry";
+import { presencePlugin } from "./plugins/presence";
 import { realtimePlugin } from "./plugins/realtime";
 import { ssePlugin } from "./plugins/sse";
+import { supportChatSessionPlugin } from "./plugins/support-chat-session";
 import { withdrawalPurgePlugin } from "./plugins/withdrawal-purge";
 
 const fastify = Fastify({
@@ -23,6 +25,8 @@ fastify.register(observabilityPlugin);
 fastify.register(corsPlugin);
 fastify.register(realtimePlugin);
 fastify.register(ssePlugin);
+fastify.register(supportChatSessionPlugin);
+fastify.register(presencePlugin);
 fastify.register(orpcPlugin);
 fastify.register(authBridgePlugin);
 fastify.register(aiPlugin);
