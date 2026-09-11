@@ -146,3 +146,8 @@
 - 회원 문의 작성·목록·상세·추가 답변, 회원 상담방 생성·추가 메시지·목록 상태와 비회원 상담 세션·메시지 전송을 실제 API 왕복으로 확인했다.
 - 개발 DB에 공개 FAQ가 없어 FAQ는 빈 상태를 확인했고, FAQ 변환·표시 규칙은 자동 테스트로 확인했다.
 - `pnpm --filter native test`: 39 files / 393 tests 통과. native 타입 검사, Ultracite, `git diff --check` 통과.
+## 2026-09-11 독립성 재감사
+
+- 이용 가이드는 고객센터 홈의 별도 버튼과 별도 route다. FAQ, 문의, 회원·비회원 상담 query와 mutation은 manual module을 import하지 않는다.
+- 매뉴얼 asset을 읽지 못하면 manual 화면만 오류 상태를 표시하며 고객센터의 다른 기능은 계속 실행된다.
+- asset 원문 `docs/manual/seeker-manual.md`는 기준 `origin/mobile`에 이미 존재하므로 다른 운영자·매뉴얼 PR을 먼저 병합할 필요가 없다.
