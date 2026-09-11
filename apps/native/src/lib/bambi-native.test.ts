@@ -33,6 +33,7 @@ import {
 const seekerJob = (
 	overrides: Partial<NativeSeekerJob> & { id: string }
 ): NativeSeekerJob => ({
+	district: "역삼동",
 	employerDisplayName: "밤비 라운지",
 	employerVerificationStatus: "verified",
 	industryCategory: "룸싸롱",
@@ -515,7 +516,7 @@ describe("bambi native helpers", () => {
 
 	it("reads a job row as one screen reader sentence", () => {
 		expect(describeJobForScreenReader(seekerJob({ id: "job-1" }))).toBe(
-			"강남 라운지 스태프, 밤비 라운지, 강남, 20:00-02:00, 15,000원 / 시급, 인증 완료"
+			"강남 라운지 스태프, 밤비 라운지, 강남 · 역삼동 · 룸싸롱, 15,000원 / 시급, 인증 완료"
 		);
 		expect(
 			describeJobForScreenReader(
@@ -528,7 +529,7 @@ describe("bambi native helpers", () => {
 				})
 			)
 		).toBe(
-			"강남 라운지 스태프, 밤비알바 구인자, 강남, 일정 협의, 급여 협의, 인증 완료"
+			"강남 라운지 스태프, 밤비알바 구인자, 강남 · 역삼동 · 룸싸롱, 급여 협의, 인증 완료"
 		);
 	});
 });

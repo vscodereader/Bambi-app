@@ -452,6 +452,7 @@ export interface NativeSeekerJob {
 	// 수집 공고(crawled)의 대표 이미지. job_post_media 행이 아니라 미러링된 한 줄(현재
 	// base64 data URI)이라 storageKey 조립을 거치지 않고 그대로 <Image>에 넣는다.
 	coverImageUrl?: null | string;
+	district?: null | string;
 	employerDisplayName: null | string;
 	employerVerificationStatus: null | string;
 	id: string;
@@ -655,8 +656,9 @@ export const describeJobForScreenReader = (
 	[
 		job.title,
 		job.employerDisplayName ?? "밤비알바 구인자",
-		job.region,
-		job.workSchedule ?? "일정 협의",
+		[job.region, job.district, job.industryCategory]
+			.filter(Boolean)
+			.join(" · "),
 		formatJobPay(job.payAmount, job.payUnit),
 		...badges.map((badge) => badge.label),
 	].join(", ");

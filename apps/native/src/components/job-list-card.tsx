@@ -159,10 +159,15 @@ function JobCardBody({
 					>
 						{job.title}
 					</Text>
+					<Text className="text-foreground text-sm" numberOfLines={1}>
+						{employerName}
+					</Text>
 					<View className="flex-row items-center gap-1">
 						<Ionicons color={mutedColor} name="location-outline" size={12} />
 						<Text className="flex-1 text-muted text-xs" numberOfLines={1}>
-							{employerName} · {job.region} · {job.workSchedule ?? "일정 협의"}
+							{[job.region, job.district, job.industryCategory]
+								.filter(Boolean)
+								.join(" · ")}
 						</Text>
 					</View>
 				</View>

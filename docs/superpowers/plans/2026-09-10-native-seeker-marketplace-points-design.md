@@ -5,7 +5,7 @@
 브랜치: feat/native-seeker-marketplace-points
 최초 기준: origin/mobile 64c11018
 
-현재 mobile에는 스페셜, 급구, 추천, 전체 공고, 업종 필터, 검색, 페이지네이션과 누적 광고 기간 배지가 있다. 최신 develop과 비교해 빠진 광고 배너, HIT, 상세 필터, 포인트 공고 보상, 보유 혜택 사용을 독립 구현한다.
+현재 mobile에는 스페셜, 급구, 추천, 전체 공고, 업종 필터, 검색, 페이지네이션과 누적 광고 기간 배지가 있다. 최신 develop과 비교해 빠진 광고 배너, HIT, 상세 필터와 포인트 공고 보상을 독립 구현한다.
 
 ## 네이티브 기술 원칙
 
@@ -28,7 +28,7 @@
 - point-shop 화면, point-shop 순수 규칙, attendance 포인트 내역
 - packages/api의 ad preview, job hit, pointJobRewards, pointShop 규칙
 
-필터 값, 광고 슬롯, HIT 기준, 보상 포인트, 쿨다운, 혜택 적용 정책을 화면에 하드코딩하지 않는다.
+필터 값, 광고 슬롯, HIT 기준, 보상 포인트와 쿨다운을 화면에 하드코딩하지 않는다.
 
 ## 구현 범위
 
@@ -70,27 +70,13 @@
 - 이미 수령, 대상 교체, 비대상, 쿨다운 오류를 서버 코드로 구분
 - 오래된 대상을 누른 경우 정본 재조회
 
-### 보유 혜택 사용
-
-- develop과 동일하게 이 기능은 구인자 역할에만 노출한다. job_seeker는 서버 resolvePurchase가 사용형 혜택 구매를 차단하므로 사용 UI도 표시하지 않는다.
-- 현재 native의 공용 포인트 내역 화면을 구인자도 사용하므로 역할별 web 동작을 보존하는 범위로 포함한다.
-- owned 사용형 혜택에 사용하기 제공
-- listUsableJobPosts로 적용 가능한 공고 조회
-- 공고 선택과 되돌릴 수 없음 확인
-- useBenefit 호출
-- 성공 후 pointShop, attendance, promotions와 jobs query 갱신
-- 만료, 이미 사용, 공고 상태 변경, 권한 변경, 중복 제출 처리
-- 기존 cancelMyOrder와 canCancelOrder 동작 보존
-
 ## 예정 파일
 
 - 수정: apps/native/app/(seeker)/(tabs)/index.tsx
-- 수정: apps/native/app/(seeker)/me/attendance.tsx
 - 수정: apps/native/app/(seeker)/point-shop.tsx
 - 추가: apps/native/src/components/seeker/marketplace-filter-sheet.tsx
 - 추가: apps/native/src/components/seeker/premium-banner-rail.tsx
 - 추가: apps/native/src/components/seeker/point-job-card.tsx
-- 추가: apps/native/src/components/seeker/use-benefit-dialog.tsx
 - 추가: apps/native/src/lib/seeker/marketplace-filters.ts
 - 추가: apps/native/src/lib/seeker/job-hit.ts
 - 추가: apps/native/src/lib/seeker/point-job.ts
@@ -108,8 +94,6 @@
   - 슬롯 순서, 이미지, 단색, cover 폴백, 자체 및 수집 링크
 - point-job.test.ts
   - 수령 가능, 이미 수령, 쿨다운, 대상 교체, query 갱신 대상
-- point-shop.test.ts 확장
-  - 사용 가능 혜택, 만료, 적용 공고 없음, 중복 실행
 - bambi-native.test.ts 확장
   - 필터 뒤 섹션 병합과 중복 제거
 
@@ -119,7 +103,6 @@
 - banner 이미지 및 단색 소재와 상세 이동
 - HIT 공고와 일반 공고
 - 자체 및 수집 포인트 공고 수령
-- 혜택 사용, 취소, 만료, 적용 대상 없음
 
 ## UI와 접근성
 
@@ -144,7 +127,7 @@
 - premium banner 고정 3칸, 이미지 및 단색 layout, 빈 문의 슬롯과 자체 및 수집 상세 이동을 구현했다.
 - 공유 HIT 경계 판정과 유료 섹션 리본을 추가했다.
 - 자체 및 수집 포인트 공고 표시, 클릭 시 claim과 포인트 query 갱신을 연결했다.
-- 구인자 역할의 owned 혜택에 적용 공고 조회, 최종 확인과 useBenefit을 추가했고 구직자에게는 노출하지 않는다.
+- 구인자 전용 보유 혜택 적용은 이 구직자 브랜치에서 제외했다. 기존 구직자 구매·보유·취소 표시는 변경하지 않는다.
 - native check-types 통과.
 - native marketplace 및 point 관련 2 files, 8 tests 통과.
 - API HIT와 point shop 순수 테스트를 포함해 2 files, 50 tests 통과.
@@ -157,3 +140,8 @@
 - 실제 데이터에서 필터 적용 결과가 57개에서 2개로 줄고 초기화 후 57개로 복원됐다.
 - 포인트몰 0P 잔액과 50,000P 상품의 잔액 부족 상세를 확인했다. 개발 DB에 HIT·공고 보상 대상 데이터가 없어 해당 경계는 자동 테스트로 검증했다.
 - `pnpm --filter native test`: 39 files / 384 tests 통과. native 타입 검사, Ultracite, `git diff --check` 통과.
+
+## 2026-09-11 최신 develop 재감사
+
+- 구인자 전용 공고 혜택 사용 UI와 파일을 이 구직자 브랜치에서 제거했다. 구직자의 기존 구매·보유·취소 표시는 유지한다.
+- 최신 develop `541a41fc`의 구직자 공고 카드 순서에 맞춰 제목 아래 업소명을 독립 표시하고, 다음 줄을 지역·세부지역·업종으로 구성했다. 근무시간은 카드 요약에서 제거하고 상세에서 계속 제공한다.
