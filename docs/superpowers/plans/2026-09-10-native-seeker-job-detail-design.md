@@ -153,3 +153,7 @@ preflight는 develop의 별도 route와 현재 native Stack 상세 패턴을 따
 - 후기 차감에 사용자·후기별 external key를 추가하고 음수 원장 거래를 멱등 처리해 재요청 시 재차감되지 않도록 수정했다. 실제 첫 열람 뒤 0P, 재실행 후 같은 후기 재열람 뒤에도 0P를 확인했다.
 - `pnpm --filter native test`: 39 files / 384 tests 통과. native 타입 검사, 대상 Ultracite, `git diff --check` 통과.
 - API 후기 DB 테스트는 공유 개발 DB 픽스처 잔존으로 5개 중 1개 통과했다. 실패는 면접 상태, 후기 unique 잔존, 공고 인증 상태 충돌이며 실제 수정 경로는 AVD API 왕복으로 재검증했다.
+## 2026-09-11 최신 develop 재감사
+
+- 채팅 생성 실패 문구가 서버 원문을 직접 표시하던 차이를 수정하고 기존 공통 `startChatErrorMessage`를 재사용했다.
+- NOT_FOUND, FORBIDDEN, rate limit과 알 수 없는 오류가 기존 native 채팅 정책과 같은 한국어 문구로 표시된다.

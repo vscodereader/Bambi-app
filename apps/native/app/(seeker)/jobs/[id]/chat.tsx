@@ -9,6 +9,7 @@ import {
 	LoadingState,
 	Pill,
 } from "@/src/components/bambi-screen";
+import { startChatErrorMessage } from "@/src/lib/chat/chat-errors";
 import { useVisitor } from "@/src/lib/guest-store";
 import { orpc } from "@/src/lib/orpc";
 import { resolveChatPreflight } from "@/src/lib/seeker/chat-preflight";
@@ -149,7 +150,9 @@ export default function ChatPreflightScreen() {
 				면접 일정이 확정되기 전까지 전화번호와 외부 연락처는 공개되지 않아요.
 			</Text>
 			{start.isError ? (
-				<Text className="text-danger text-sm">{start.error.message}</Text>
+				<Text className="text-danger text-sm">
+					{startChatErrorMessage(start.error)}
+				</Text>
 			) : null}
 			{action}
 		</BambiScreen>
