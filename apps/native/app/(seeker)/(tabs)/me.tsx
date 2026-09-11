@@ -284,6 +284,22 @@ const SHORTCUT_ITEMS: MenuItem[] = [
 	},
 ];
 
+// 약관·처리방침 — 계정과 무관한 공개 문서라 위 두 그룹과 섞지 않고 마지막 그룹으로 뗀다.
+const LEGAL_ITEMS: MenuItem[] = [
+	{
+		description: "서비스 이용 조건을 확인해요.",
+		href: "/(seeker)/me/terms" as Href,
+		icon: "document-text-outline" as const,
+		label: "이용약관",
+	},
+	{
+		description: "개인정보를 어떻게 다루는지 확인해요.",
+		href: "/(seeker)/me/privacy" as Href,
+		icon: "shield-checkmark-outline" as const,
+		label: "개인정보 처리방침",
+	},
+];
+
 function MeMenuGroup({
 	items,
 	suffixFor,
@@ -367,6 +383,7 @@ function MeMenu() {
 				}
 			/>
 			<MeMenuGroup items={SHORTCUT_ITEMS} />
+			<MeMenuGroup items={LEGAL_ITEMS} />
 		</>
 	);
 }
@@ -378,9 +395,7 @@ function SeekerMeInner() {
 			<ProfileCard />
 			<PointsSummaryCard />
 			<MeMenu />
-			<View className="items-start">
-				<LogoutButton />
-			</View>
+			<LogoutButton />
 		</BambiScreen>
 	);
 }

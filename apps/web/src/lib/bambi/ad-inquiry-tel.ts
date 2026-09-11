@@ -1,4 +1,4 @@
-import { BAMBI_COMPANY } from "./company";
+import { BAMBI_COMPANY } from "@bambi-app/api/services/bambi-company";
 
 // 광고 문의 번호 폴백 체인. 운영자가 광고 전용 번호를 두지 않았으면 고객센터 번호를,
 // 사이트 설정 행 자체가 없으면 코드 상수를 쓴다 — 자리표시에 번호가 비면 안 된다.

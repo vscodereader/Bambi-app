@@ -1,5 +1,5 @@
+import { BAMBI_COMPANY } from "@bambi-app/api/services/bambi-company";
 import type { MetadataRoute } from "next";
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
 
 // Vercel 프리뷰·dev 배포도 NODE_ENV=production이라, 실제 프로덕션에서만 참인
 // VERCEL_ENV로 판정한다. 테스트 도메인이 색인되면 중복 콘텐츠로 프로덕션 순위가

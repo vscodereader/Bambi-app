@@ -1,3 +1,4 @@
+import { BAMBI_COMPANY } from "@bambi-app/api/services/bambi-company";
 import { buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	Empty,
@@ -22,7 +23,6 @@ import {
 	communityWritePath,
 	formatCommunityDate,
 } from "@/lib/bambi/community";
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import {
 	getPublicBoardByKey,
 	getPublicBoardBySlug,

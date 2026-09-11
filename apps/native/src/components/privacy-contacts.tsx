@@ -1,17 +1,16 @@
 // 개인정보 처리방침의 동적 값(위탁사명·보호책임자 연락처·탈퇴 보존기간). 운영자 콘솔
 // (/moderator/site-settings)에서 저장한 값을 쓰고, 미설정이면 코드 상수로 폴백한다.
-// 처리방침 페이지는 metadata를 export 하는 서버 컴포넌트라 "use client"가 될 수 없어,
-// 값이 들어가는 지점만 클라이언트 컴포넌트로 분리해 푸터와 같은 방식으로 조회한다
-// (폴백 값을 먼저 그려 로딩 깜빡임 없음).
-"use client";
+// web components/bambi/privacy-contacts.tsx의 native 이식 — 조회 프로시저는 public이라
+// 로그인 없이도 그대로 열린다(폴백 값을 먼저 그려 로딩 깜빡임 없음).
 
 import {
 	BAMBI_COMPANY,
 	BAMBI_PROCESSORS,
 } from "@bambi-app/api/services/bambi-company";
 import { useQuery } from "@tanstack/react-query";
-import { LegalParagraph, LegalTable } from "@/components/bambi/legal-doc";
-import { orpc } from "@/utils/orpc";
+
+import { LegalParagraph, LegalTable } from "@/src/components/legal-doc";
+import { orpc } from "@/src/lib/orpc";
 
 // 위탁 수탁자 표. 위탁업무 내용은 고정이고, 첫 행(본인인증 대행사)의 수탁사명만
 // 운영자 설정으로 치환한다 — 나머지 수탁사는 계약이 아니라 코드가 정하는 값이다.

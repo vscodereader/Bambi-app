@@ -41,14 +41,18 @@ export function LogoutButton() {
 		]);
 	};
 
+	// 너비·정렬을 지정하지 않는다 — Button의 base가 이미 justify-center이고, 세로 스택
+	// (BambiScreen의 gap-4 p-4 컬럼)의 기본 stretch로 콘텐츠 폭을 그대로 채운다.
+	// 테두리·글자는 브랜드 primary(native 테마의 --accent = 웹 --color-primary 코랄)로 —
+	// outline 기본색(border/foreground)은 중립이라 로그아웃이 메뉴 행과 구분되지 않는다.
 	return (
 		<Button
+			className="border-accent"
 			isDisabled={isPending}
 			onPress={confirmSignOut}
-			size="sm"
-			variant="secondary"
+			variant="outline"
 		>
-			<Button.Label>로그아웃</Button.Label>
+			<Button.Label className="text-accent">로그아웃</Button.Label>
 		</Button>
 	);
 }
