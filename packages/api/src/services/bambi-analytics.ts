@@ -588,31 +588,78 @@ export const getEmployerJobPerformanceSummary = async (
 	}));
 };
 
+export type JobViewSource = "crawled" | "member";
+
 export interface RecordJobViewInput {
+	businessPhone?: null | string;
 	jobPostId: string;
 	jobTitle: string;
-	organizationId: string;
+	organizationId?: null | string;
 	organizationName: string;
+	source: JobViewSource;
 	userId: string;
 }
 
-// 회원의 공고 상세 조회를 사용자×공고 1행에 누적한다. 제목·업소명은 최신값으로
-// 덮어써 운영자 화면이 현재 이름을 보이게 한다. FK는 user뿐이라 삼킬 오류가 없다.
+// 운영자 화면에서 업소 단위로 묶는 키. 회원 업소는 조직 id, 수집 공고는 조직이 없어
+// 전화번호(숫자만)로 같은 업소를 모으고, 번호도 없으면 상호로 묶는다.
+export const buildJobViewBusinessKey = ({
+	organizationId,
+	organizationName,
+	phone,
+	source,
+}: {
+	organizationId?: null | string;
+	organizationName: string;
+	phone?: null | string;
+	source: JobViewSource;
+}): string => {
+	if (source === "member" && organizationId) {
+		return `org:${organizationId}`;
+	}
+
+	const digits = (phone ?? "").replace(/\D/g, "");
+
+	return digits ? `phone:${digits}` : `shop:${organizationName}`;
+};
+
+// 회원의 공고 상세 조회를 사용자×공고 1행에 누적한다. 제목·업소명·연락처는 최신값으로
+// 덮어써 운영자 화면이 현재 값을 보이게 한다. FK는 user뿐이라 삼킬 오류가 없다.
 export const recordJobView = async ({
+	businessPhone,
 	jobPostId,
 	jobTitle,
 	organizationId,
 	organizationName,
+	source,
 	userId,
 }: RecordJobViewInput): Promise<void> => {
+	const businessKey = buildJobViewBusinessKey({
+		organizationId,
+		organizationName,
+		phone: businessPhone,
+		source,
+	});
+
 	await db
 		.insert(jobViewLog)
-		.values({ jobPostId, jobTitle, organizationId, organizationName, userId })
+		.values({
+			businessKey,
+			businessPhone: businessPhone ?? null,
+			jobPostId,
+			jobTitle,
+			organizationId: organizationId ?? null,
+			organizationName,
+			source,
+			userId,
+		})
 		.onConflictDoUpdate({
 			set: {
+				businessKey,
+				businessPhone: businessPhone ?? null,
 				jobTitle,
 				lastViewedAt: sql`now()`,
 				organizationName,
+				source,
 				viewCount: sql`${jobViewLog.viewCount} + 1`,
 			},
 			target: [jobViewLog.userId, jobViewLog.jobPostId],
