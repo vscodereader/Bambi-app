@@ -1696,8 +1696,12 @@ export const jobPerformanceEvent = pgTable(
 );
 
 // 회원이 공고 상세를 연 기록. 사용자×공고 1행에 누적(view_count)하며,
-// 공고·업소가 삭제돼도 아웃바운드 근거로 남도록 제목·업소명을 스냅샷하고
+// 공고·업소가 삭제돼도 아웃바운드 근거로 남도록 제목·업소명·연락처를 스냅샷하고
 // job_post/organization에는 FK를 걸지 않는다. 탈퇴 시(user cascade)만 지운다.
+// source: 'member'(우리 회원 업소 공고, organization_id 있음) | 'crawled'(수집 공고, organization_id 없음).
+// business_key: 운영자 화면에서 업소 단위로 묶는 키. member → `org:<organization_id>`,
+// crawled → 전화번호가 있으면 `phone:<숫자만>`, 없으면 `shop:<shop_name>`.
+// business_phone: 운영자 전용 아웃바운드 연락처 스냅샷. 공개 API에 싣지 않는다.
 export const jobViewLog = pgTable(
 	"job_view_log",
 	{
@@ -1706,9 +1710,12 @@ export const jobViewLog = pgTable(
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
 		jobPostId: uuid("job_post_id").notNull(),
-		organizationId: text("organization_id").notNull(),
+		source: text("source").notNull(),
+		businessKey: text("business_key").notNull(),
+		organizationId: text("organization_id"),
 		jobTitle: text("job_title").notNull(),
 		organizationName: text("organization_name").notNull(),
+		businessPhone: text("business_phone"),
 		viewCount: integer("view_count").default(1).notNull(),
 		firstViewedAt: timestamp("first_viewed_at").defaultNow().notNull(),
 		lastViewedAt: timestamp("last_viewed_at").defaultNow().notNull(),
@@ -1719,6 +1726,7 @@ export const jobViewLog = pgTable(
 			table.userId,
 			table.lastViewedAt
 		),
+		index("job_view_log_user_business_idx").on(table.userId, table.businessKey),
 		index("job_view_log_organization_id_idx").on(table.organizationId),
 	]
 );
