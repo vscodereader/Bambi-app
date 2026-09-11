@@ -29,14 +29,37 @@ export const formatRelativeTime = (
 	return `${Math.floor(elapsed / DAY_MS)}일 전`;
 };
 
+export const INQUIRY_TITLE_MIN = 2;
+export const INQUIRY_TITLE_MAX = 100;
+const INQUIRY_BODY_MIN = 5;
+
+// 등록 버튼이 꺼져 있는 이유 한 줄. 꺼진 버튼만 두면 사용자가 무엇이 모자란지 못 찾는다.
+// 문구는 위에서부터 먼저 걸리는 하나만 — 세 줄을 한꺼번에 띄우면 고정 바가 본문을 덮는다.
+export const inquirySubmitBlocker = (input: {
+	bodyText: string;
+	hasImage: boolean;
+	title: string;
+}): null | string => {
+	const title = input.title.trim();
+
+	if (title.length < INQUIRY_TITLE_MIN) {
+		return `제목을 ${INQUIRY_TITLE_MIN}자 이상 입력해 주세요`;
+	}
+	if (title.length > INQUIRY_TITLE_MAX) {
+		return `제목은 ${INQUIRY_TITLE_MAX}자 이내로 입력해 주세요`;
+	}
+	if (input.bodyText.trim().length < INQUIRY_BODY_MIN && !input.hasImage) {
+		return `내용을 ${INQUIRY_BODY_MIN}자 이상 적거나 이미지를 넣어 주세요`;
+	}
+	return null;
+};
+
+// 판정 규칙은 blocker 한 곳에만 둔다 — 두 곳에 두면 문구와 활성 조건이 따로 논다.
 export const canSubmitInquiry = (input: {
 	bodyText: string;
 	hasImage: boolean;
 	title: string;
-}): boolean =>
-	input.title.trim().length >= 2 &&
-	input.title.trim().length <= 100 &&
-	(input.bodyText.trim().length >= 5 || input.hasImage);
+}): boolean => inquirySubmitBlocker(input) === null;
 
 export const canSendSupportMessage = (
 	body: string,

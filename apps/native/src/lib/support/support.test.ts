@@ -8,6 +8,7 @@ import {
 	canSendSupportMessage,
 	canSubmitInquiry,
 	formatRelativeTime,
+	inquirySubmitBlocker,
 	supportChatHref,
 	supportInquiryHref,
 } from "./support";
@@ -36,6 +37,24 @@ describe("support submission", () => {
 		expect(
 			canSubmitInquiry({ bodyText: "1234", hasImage: false, title: "문의" })
 		).toBe(false);
+	});
+	it("비활성 사유를 제목·본문 순으로 하나만 알려준다", () => {
+		expect(
+			inquirySubmitBlocker({ bodyText: "12345", hasImage: false, title: " 문" })
+		).toBe("제목을 2자 이상 입력해 주세요");
+		expect(
+			inquirySubmitBlocker({
+				bodyText: "12345",
+				hasImage: false,
+				title: "가".repeat(101),
+			})
+		).toBe("제목은 100자 이내로 입력해 주세요");
+		expect(
+			inquirySubmitBlocker({ bodyText: "1234", hasImage: false, title: "문의" })
+		).toBe("내용을 5자 이상 적거나 이미지를 넣어 주세요");
+		expect(
+			inquirySubmitBlocker({ bodyText: "", hasImage: true, title: "문의" })
+		).toBeNull();
 	});
 	it("종료·차단 방과 빈 메시지를 막는다", () => {
 		expect(canSendSupportMessage("질문", false, "open")).toBe(true);

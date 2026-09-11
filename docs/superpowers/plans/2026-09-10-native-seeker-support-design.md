@@ -164,3 +164,11 @@
 - 대화방([id]): 헤더 "1:1 상담", inverted FlatList + 공유 `annotateChatMessages`로 날짜 칩·그룹 경계, `SupportChatBubble`(내 것 오른쪽 accent, 운영팀 왼쪽 surface-secondary+헤드셋 아바타), `SupportChatComposer`(멀티라인·원형 전송·withSpring 눌림). `id === "new"`는 인사 말풍선만 두고 첫 전송이 방을 만든 뒤 실제 id로 replace한다. 비회원은 첫 전송 직전 토큰을 보장한다.
 - Reanimated: 마운트 이후 도착한 메시지만 FadeInRight/FadeInLeft 등장, 전송 버튼 스프링, 새 메시지 pill 재사용. 3초 폴링·markRead는 현행 유지.
 - 실기기 확인 잔여: 시트 안 상단 안전영역 값, Android formSheet 렌더, 플로팅 버튼 배치·그림자, 키보드와 컴포저 겹침.
+## 2026-09-11 문의 글 등록 UI 재설계(B안)
+
+- 본문 큰 제목 제거(헤더 전담). 문의 유형은 칩에서 FieldSelect(바텀시트)로, 라벨 맵 경유. 제목은 TextField isRequired + "2~100자" 안내 + trim 기준 카운터.
+- 제출 CTA는 stickyFooter 고정. 같은 바에 비활성 사유 한 줄(`inquirySubmitBlocker`: 제목 2자 미만 → 100자 초과 → 본문 5자 미만·이미지 없음). `canSubmitInquiry`는 blocker === null로 위임.
+- 에디터는 문단·이미지를 문서 순서 그대로 한 목록(순번·위로/아래로/삭제)으로 그리고 미리보기 박스를 없앴다. 서식 도구·링크·selection·history는 전면 제거(markRange/toggleMarkRange/wrapBlock/editableBlocks 삭제). 저장 포맷은 계속 Tiptap 부분집합이며 `editBlockText`의 미지 마크 보존으로 웹 작성 글 왕복이 안전하다.
+- `onChange` payload에 hasImage 추가(documentImages 기반), 화면의 JSON 문자열 스니핑 제거.
+- 별건: 웹에서 작성된 취소선(strike)을 native 파서·MessageBody가 렌더하도록 보강. 링크+취소선 겹침은 밑줄만 적용(RN 단일 속성 한계).
+- 미조치: 서버 필드 단위 오류 매핑(채널 없음), 수정 화면용 hasImage 프리필(편집 진입점 없음), FieldSelect 바텀시트 45%·블록 카드 룩 실기기 확인.
