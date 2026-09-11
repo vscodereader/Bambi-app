@@ -49,7 +49,7 @@ import {
 import type { JobMediaUploadItem } from "@/src/lib/employer/job-media";
 import { orpc } from "@/src/lib/orpc";
 
-interface PostingScope {
+export interface PostingScope {
 	organizationDisplayName: string;
 	organizationId: string;
 	scopeType: "organization" | "team";

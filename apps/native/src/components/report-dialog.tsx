@@ -1,3 +1,7 @@
+import {
+	REPORT_REASON_LABELS,
+	type ReportReason,
+} from "@bambi-app/api/services/bambi-moderation-labels";
 import { useMutation } from "@tanstack/react-query";
 import { Button, Dialog, RadioGroup, TextArea } from "heroui-native";
 import { useState } from "react";
@@ -5,20 +9,17 @@ import { KeyboardAvoidingView, Platform, Text, View } from "react-native";
 
 import { orpc } from "@/src/lib/orpc";
 
-// 서버 신고 사유 enum(orpc moderation.createReport) → 한국어 라벨. 웹
-// REPORT_REASON_LABELS(apps/web lib/bambi/report-labels)와 같은 맵을 native에 미러링한다
-// — 두 앱이 패키지를 공유하지 않아 import가 불가하다. enum 값은 서버 스키마와 일치해야 한다.
-const REPORT_REASONS = [
-	["illegal_or_prohibited_content", "불법·금지 콘텐츠"],
-	["coercion_or_safety", "강요·안전 위협"],
-	["underage_concern", "미성년 의심"],
-	["scam_or_fraud", "사기·기만"],
-	["misleading_job_information", "허위 공고 정보"],
-	["harassment", "괴롭힘"],
-	["other", "기타"],
-] as const;
-
-type ReportReason = (typeof REPORT_REASONS)[number][0];
+// 라벨 정본은 공유 모듈(packages/api services/bambi-moderation-labels). 표시 순서는
+// 위험도 높은 사유부터 보이도록 여기서 고정한다(Record 키 순서에 기대지 않는다).
+const REPORT_REASON_ORDER: readonly ReportReason[] = [
+	"illegal_or_prohibited_content",
+	"coercion_or_safety",
+	"underage_concern",
+	"scam_or_fraud",
+	"misleading_job_information",
+	"harassment",
+	"other",
+];
 
 // 순수 공고 상세 신고 접수 다이얼로그. 웹 report-dialog.tsx + safety-kit ReportForm/ReportDone의
 // native 최소 미러 — 사유 선택 + 상세(선택) + 제출, 성공/중복 에러를 다이얼로그 안에서 알린다.
@@ -98,9 +99,9 @@ export function JobReportDialog({
 									onValueChange={(value) => setReason(value as ReportReason)}
 									value={reason ?? undefined}
 								>
-									{REPORT_REASONS.map(([value, label]) => (
+									{REPORT_REASON_ORDER.map((value) => (
 										<RadioGroup.Item key={value} value={value}>
-											{label}
+											{REPORT_REASON_LABELS[value]}
 										</RadioGroup.Item>
 									))}
 								</RadioGroup>

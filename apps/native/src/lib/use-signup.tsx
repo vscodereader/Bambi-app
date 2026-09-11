@@ -177,6 +177,7 @@ export function useSignup() {
 			// onboarding으로 되돌아가 재인증해도 또 CONFLICT다). doneRef를 먼저 세워야
 			// 이탈 가드(beforeRemove)가 이 이동을 막지 않는다.
 			if (errorCode(error) === "CONFLICT") {
+				await client.bambi.presence.disconnectSession().catch(() => undefined);
 				await authClient.signOut().catch(() => undefined);
 				queryClient.clear();
 				doneRef.current = true;

@@ -89,6 +89,7 @@ const createFixture = async (
 	const [topic] = await db
 		.insert(crawledCommunityTopic)
 		.values({
+			boardKey: "work_talk",
 			sourceExternalId: testExternalId(),
 			// 목록이 원 게시일 최신순이라 날짜를 지금으로 둬 첫 페이지에 오게 한다.
 			sourcePostedAt: new Date(),

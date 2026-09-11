@@ -75,6 +75,7 @@ import {
 	supportInquiryRelations,
 	supportInquiryStatus,
 	userBlock,
+	userPresenceConnection,
 } from "./schema/bambi";
 import { todo } from "./schema/todo";
 
@@ -149,6 +150,7 @@ const schema = {
 	todo,
 	user,
 	userBlock,
+	userPresenceConnection,
 	userRelations,
 	verification,
 };
