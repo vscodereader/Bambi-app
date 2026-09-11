@@ -20,6 +20,10 @@ import {
 	isLoginPopupScreen,
 	resolveMainPopupPageId,
 } from "@/lib/bambi/main-popup-pages";
+import {
+	COACHMARK_STATE_EVENT,
+	readCoachmarkIntent,
+} from "@/lib/bambi/onboarding";
 import { isOnboardingPath } from "@/lib/bambi/onboarding-route";
 import { useCommunityBoards } from "@/lib/bambi/use-community-boards";
 import { orpc } from "@/utils/orpc";
@@ -80,9 +84,19 @@ export function MainPopupLayer() {
 	const [closed, setClosed] = useState<Set<string>>(new Set());
 	const [ready, setReady] = useState(false);
 	const [authTransition, setAuthTransition] = useState(false);
+	const [coachmarkActive, setCoachmarkActive] = useState(false);
 	const [pageReady, setPageReady] = useState(false);
 	const [frontId, setFrontId] = useState<string | null>(null);
 	useEffect(() => setReady(true), []);
+	useEffect(() => {
+		const syncCoachmark = () => {
+			setCoachmarkActive(readCoachmarkIntent() !== null);
+		};
+		syncCoachmark();
+		window.addEventListener(COACHMARK_STATE_EVENT, syncCoachmark);
+		return () =>
+			window.removeEventListener(COACHMARK_STATE_EVENT, syncCoachmark);
+	}, []);
 	useEffect(() => {
 		const syncAuthTransition = () => {
 			setAuthTransition(
@@ -142,6 +156,7 @@ export function MainPopupLayer() {
 			pageReady &&
 			!isOnboarding &&
 			!authTransition &&
+			!coachmarkActive &&
 			!isPending &&
 			(isAuthenticated || isLogin)
 				? ((query.data?.items ?? []).filter(
@@ -153,6 +168,7 @@ export function MainPopupLayer() {
 				: [],
 		[
 			authTransition,
+			coachmarkActive,
 			closed,
 			isAuthenticated,
 			isLogin,
