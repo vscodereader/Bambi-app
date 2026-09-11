@@ -46,30 +46,6 @@ export function nodeText(node: DocumentNode): string {
 	return (node.content ?? []).map(nodeText).join("");
 }
 
-export function editableBlocks(
-	document: DocumentNode
-): { node: DocumentNode; path: number[]; editable: boolean }[] {
-	const blocks: { node: DocumentNode; path: number[]; editable: boolean }[] =
-		[];
-	const visit = (node: DocumentNode, path: number[]) => {
-		if (["paragraph", "heading", "codeBlock"].includes(node.type)) {
-			blocks.push({
-				node,
-				path,
-				editable: (node.content ?? []).every(
-					(child) => child.type === "text" || child.type === "hardBreak"
-				),
-			});
-			return;
-		}
-		for (const [index, child] of (node.content ?? []).entries()) {
-			visit(child, [...path, index]);
-		}
-	};
-	visit(document, []);
-	return blocks;
-}
-
 export function documentImages(
 	document: DocumentNode
 ): { node: DocumentNode; path: number[] }[] {
@@ -101,40 +77,6 @@ export function replaceNode(
 			position === index ? replaceNode(node, rest, update) : node
 		),
 	};
-}
-
-export function wrapBlock(
-	document: DocumentNode,
-	path: number[],
-	type: "bulletList" | "orderedList" | "blockquote"
-): DocumentNode {
-	let ancestor = document;
-	for (let depth = 0; depth < path.length; depth++) {
-		const index = path[depth];
-		const child = index === undefined ? undefined : ancestor.content?.[index];
-		if (!child) {
-			break;
-		}
-		if (child.type === type) {
-			return replaceNode(document, path.slice(0, depth), (parent) => ({
-				...parent,
-				content: parent.content?.flatMap((node, position) => {
-					if (position !== index) {
-						return [node];
-					}
-					return (node.content ?? []).flatMap((item) =>
-						item.type === "listItem" ? (item.content ?? []) : [item]
-					);
-				}),
-			}));
-		}
-		ancestor = child;
-	}
-	return replaceNode(document, path, (node) => ({
-		type,
-		content:
-			type === "blockquote" ? [node] : [{ type: "listItem", content: [node] }],
-	}));
 }
 
 function cleanEmptyContainers(node: DocumentNode): DocumentNode {
@@ -216,67 +158,6 @@ function mergeRuns(nodes: DocumentNode[]): DocumentNode[] {
 		}
 	}
 	return result;
-}
-
-export function markRange(
-	node: DocumentNode,
-	start: number,
-	end: number,
-	mark: DocumentMark,
-	remove = false
-): DocumentNode {
-	if (start >= end) {
-		return node;
-	}
-	let offset = 0;
-	const content = (node.content ?? []).flatMap((child) => {
-		const text = nodeText(child);
-		const left = Math.max(0, start - offset);
-		const right = Math.min(text.length, end - offset);
-		offset += text.length;
-		if (child.type !== "text" || left >= right) {
-			return [child];
-		}
-		const marks = (child.marks ?? []).filter(
-			(value) => value.type !== mark.type
-		);
-		if (!remove) {
-			const original = child.marks?.find((value) => value.type === mark.type);
-			marks.push(
-				mark.attrs && original?.attrs
-					? { ...mark, attrs: { ...original.attrs, ...mark.attrs } }
-					: mark
-			);
-		}
-		const { marks: _oldMarks, ...unmarked } = child;
-		const marked = marks.length ? { ...child, marks } : unmarked;
-		return [
-			{ ...child, text: text.slice(0, left) },
-			{ ...marked, text: text.slice(left, right) },
-			{ ...child, text: text.slice(right) },
-		];
-	});
-	return { ...node, content: mergeRuns(content) };
-}
-
-export function toggleMarkRange(
-	node: DocumentNode,
-	start: number,
-	end: number,
-	mark: DocumentMark
-): DocumentNode {
-	let offset = 0;
-	const selected = (node.content ?? []).filter((child) => {
-		const first = offset;
-		offset += nodeText(child).length;
-		return child.type === "text" && first < end && offset > start;
-	});
-	const active =
-		selected.length > 0 &&
-		selected.every((child) =>
-			child.marks?.some((value) => value.type === mark.type)
-		);
-	return markRange(node, start, end, mark, active);
 }
 
 // TextInput offsets and JS slices both use UTF-16. Keep unchanged runs and their

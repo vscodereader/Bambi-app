@@ -26,6 +26,7 @@ function BodyInline({ inline }: { inline: MessageInline }) {
 			className={cn(
 				inline.bold && "font-semibold",
 				inline.italic && "italic",
+				inline.strike && "line-through",
 				href && "text-accent-soft-foreground underline dark:text-accent"
 			)}
 			onPress={href ? () => openLink(href) : undefined}
