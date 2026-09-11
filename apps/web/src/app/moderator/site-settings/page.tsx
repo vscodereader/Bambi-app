@@ -1,5 +1,9 @@
 "use client";
 
+import {
+	BAMBI_COMPANY,
+	BAMBI_PROCESSORS,
+} from "@bambi-app/api/services/bambi-company";
 import { DEFAULT_MINIMUM_WAGE } from "@bambi-app/api/services/bambi-policy";
 import {
 	Accordion,
@@ -16,7 +20,6 @@ import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { BAMBI_COMPANY, BAMBI_PROCESSORS } from "@/lib/bambi/company";
 import { formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 

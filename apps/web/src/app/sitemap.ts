@@ -1,5 +1,5 @@
+import { BAMBI_COMPANY } from "@bambi-app/api/services/bambi-company";
 import type { MetadataRoute } from "next";
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import { guidePath, guideSlugs } from "@/lib/bambi/guide";
 import { buildJobLandingSitemapEntries } from "@/lib/bambi/job-landing-sitemap";
 import {

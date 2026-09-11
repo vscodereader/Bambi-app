@@ -1,7 +1,7 @@
 // 사이트 공통 SEO 문구와 구조화 데이터(JSON-LD). 루트 레이아웃의 metadata와
 // <script type="application/ld+json">이 같은 원본을 공유해 문구가 어긋나지 않게 한다.
 
-import { BAMBI_COMPANY } from "./company";
+import { BAMBI_COMPANY } from "@bambi-app/api/services/bambi-company";
 
 // 경쟁 서비스명 노출 순서는 퀸알바 → 여우알바 → 밤알바로 고정한다(사용자 확정 정책,
 // 2026-08-20). title·description·keywords 선두가 모두 이 순서를 따른다.

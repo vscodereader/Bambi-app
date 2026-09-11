@@ -1,3 +1,4 @@
+import { BAMBI_COMPANY } from "@bambi-app/api/services/bambi-company";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { buttonVariants } from "@bambi-app/ui/components/button";
 import { Separator } from "@bambi-app/ui/components/separator";
@@ -17,7 +18,6 @@ import {
 	communityPostPath,
 	formatCommunityDate,
 } from "@/lib/bambi/community";
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import {
 	communityBodyText,
 	getPublicBoardBySlug,

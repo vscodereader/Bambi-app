@@ -1,3 +1,4 @@
+import { BAMBI_COMPANY } from "@bambi-app/api/services/bambi-company";
 import type { Metadata } from "next";
 import {
 	LegalDoc,
@@ -12,7 +13,6 @@ import {
 	PrivacyProcessorsTable,
 	PrivacyRetentionDays,
 } from "@/components/bambi/privacy-contacts";
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
 
 export const metadata: Metadata = {
 	title: "개인정보 처리방침 | 밤비알바",
