@@ -2270,13 +2270,18 @@ export const moderationRouter = {
 				.orderBy(desc(user.createdAt))
 				.limit(input.limit);
 
-			const rows = input.status
-				? // 프로필이 없는(온보딩 전) 계정도 목록 표시와 동일하게 active로 취급한다 —
-					// 컬럼을 그대로 비교하면 NULL이라 'active' 필터에서 통째로 사라진다.
-					await query.where(
-						sql`coalesce(${bambiProfile.status}, 'active')::text = ${input.status}`
-					)
-				: await query;
+			// 운영자 계정은 사용자 관리 대상이 아니다 — 목록·집계에서 뺀다.
+			const notAdmin = sql`coalesce(${bambiProfile.role}, 'job_seeker')::text <> 'admin'`;
+			const rows = await query.where(
+				input.status
+					? // 프로필이 없는(온보딩 전) 계정도 목록 표시와 동일하게 active로 취급한다 —
+						// 컬럼을 그대로 비교하면 NULL이라 'active' 필터에서 통째로 사라진다.
+						and(
+							notAdmin,
+							sql`coalesce(${bambiProfile.status}, 'active')::text = ${input.status}`
+						)
+					: notAdmin
+			);
 
 			// 잔액·등급 뱃지는 userId들로 한 번에 배치 조회해 각 행에 싣는다(행 부풀림 없음).
 			const userIds = rows.map((row) => row.userId);
