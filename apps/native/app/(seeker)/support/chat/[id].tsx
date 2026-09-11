@@ -40,6 +40,19 @@ const BOTTOM_STICK_THRESHOLD = 80;
 const GREETING_BODY = "안녕하세요 👋\n무엇을 도와드릴까요?";
 const BLOCKED_MESSAGE = "운영자가 메시지 발신을 잠갔어요.";
 
+// 정적 인사 — annotateChatMessages 바깥에 두어 날짜 칩·그룹 경계 계산에서 빠지고,
+// inverted 리스트의 ListFooterComponent(=시각상 맨 위)라 새 대화든 기존 방이든 항상 맨 위다.
+// isGroupEnd=false라 createdAt은 렌더되지 않는다(자리만 채우는 값).
+const GREETING_BUBBLE = (
+	<SupportChatBubble
+		body={GREETING_BODY}
+		createdAt={new Date(0)}
+		isGroupEnd={false}
+		isGroupStart
+		isMine={false}
+	/>
+);
+
 const invalidateSupportChat = () =>
 	queryClient.invalidateQueries({ queryKey: orpc.bambi.supportChat.key() });
 
@@ -71,6 +84,7 @@ function SupportChatHeader() {
 }
 
 // 종료된 대화의 입력바 자리 — 이력은 그대로 보이고 새 대화로만 이어 간다.
+// replace로 파라미터만 "new"로 되돌리면 아래 동기화 effect가 roomId를 null로 되돌린다.
 function ClosedNotice() {
 	const insets = useSafeAreaInsets();
 
@@ -95,11 +109,13 @@ function ClosedNotice() {
 function RoomFooter({
 	isBlocked,
 	isClosed,
+	isDisabled,
 	isSending,
 	onSend,
 }: {
 	isBlocked: boolean;
 	isClosed: boolean;
+	isDisabled: boolean;
 	isSending: boolean;
 	onSend: (body: string) => void;
 }) {
@@ -111,80 +127,41 @@ function RoomFooter({
 	}
 	return (
 		<SupportChatComposer
-			isDisabled={false}
+			isDisabled={isDisabled}
 			isSending={isSending}
 			onSend={onSend}
 		/>
 	);
 }
 
-// 방이 없는 상태. 첫 발신이 roomId 없이 sendMessage를 호출하면 서버가 방을 만들어 주고,
-// 응답 roomId로 실제 방 화면을 갈아 끼운다(뒤로 갔을 때 빈 /new가 남지 않게 replace).
-function NewSupportChatScreen() {
+export default function SupportChatRoomScreen() {
+	const { id } = useLocalSearchParams<{ id: string }>();
+	// 방 id는 화면 상태다 — 첫 전송으로 방이 생겨도 화면을 갈아 끼우지 않고 이 값만 바뀐다.
+	const [roomId, setRoomId] = useState<null | string>(
+		id === NEW_ROOM_ID ? null : id
+	);
 	const visitor = useVisitor();
-	const send = useMutation(
-		orpc.bambi.supportChat.sendMessage.mutationOptions({
-			onError: (error) =>
-				Alert.alert("메시지를 보내지 못했어요", error.message),
-			onSuccess: async (result) => {
-				await invalidateSupportChat();
-				router.replace(supportChatHref(result.roomId) as unknown as Href);
-			},
-		})
-	);
-
-	const handleSend = (body: string) => {
-		// 비회원은 첫 발신 전에 상담 세션 토큰이 있어야 서버가 신원을 잡는다(목록 화면과 같은 흐름).
-		const ready =
-			visitor.state === "member"
-				? Promise.resolve()
-				: ensureSupportChatToken().then(() => undefined);
-		ready
-			.then(() => send.mutate({ body }))
-			.catch((error: unknown) =>
-				Alert.alert(
-					"상담을 시작하지 못했어요",
-					error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요."
-				)
-			);
-	};
-
-	return (
-		<View className="flex-1 bg-background">
-			<SupportChatHeader />
-			<KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-				<View className="flex-1 pt-2">
-					<SupportChatBubble
-						body={GREETING_BODY}
-						// isGroupEnd=false라 시각은 렌더되지 않는다 — 정적 인사에는 시간이 없다.
-						createdAt={new Date()}
-						isGroupEnd={false}
-						isGroupStart
-						isMine={false}
-					/>
-				</View>
-				<SupportChatComposer
-					isDisabled={visitor.state === "pending"}
-					isSending={send.isPending}
-					onSend={handleSend}
-				/>
-			</KeyboardAvoidingView>
-		</View>
-	);
-}
-
-function SupportChatRoomView({ roomId }: { roomId: string }) {
 	const [hasUnseenNew, setHasUnseenNew] = useState(false);
 	const listRef = useRef<FlatList>(null);
 	// 마운트 이후 새로 도착한 id만 등장 애니메이션 대상이다. 첫 응답분은 통째로 seen 처리한다.
 	const seenIdsRef = useRef(new Set<string>());
 	const hasLoadedRef = useRef(false);
 	const isAtBottomRef = useRef(true);
+	// 기존 방으로 들어왔을 때만 첫 로딩 스피너를 띄운다 — 새 대화에서 방이 막 생겨
+	// 첫 getRoomMessages 응답이 오기 전 빈 순간에는 인사 말풍선만 남긴다.
+	const openedExistingRoomRef = useRef(id !== NEW_ROOM_ID);
+
+	// 딥링크 등으로 파라미터가 바뀌면 상태를 맞춘다. setParams로 우리가 넣은 값은 같은 값이라 no-op.
+	useEffect(() => {
+		setRoomId(id === NEW_ROOM_ID ? null : id);
+	}, [id]);
 
 	const query = useQuery({
 		...orpc.bambi.supportChat.getRoomMessages.queryOptions({
-			input: { roomId },
+			// roomId가 없으면 enabled:false라 이 입력으로는 요청이 나가지 않는다.
+			input: { roomId: roomId ?? "" },
 		}),
+		enabled: roomId !== null,
 		refetchInterval: 3000,
 	});
 	const markRead = useMutation(
@@ -192,6 +169,9 @@ function SupportChatRoomView({ roomId }: { roomId: string }) {
 	);
 	useFocusEffect(
 		useCallback(() => {
+			if (!roomId) {
+				return;
+			}
 			markRead.mutate({ roomId });
 			query.refetch();
 		}, [roomId, markRead.mutate, query.refetch])
@@ -200,8 +180,13 @@ function SupportChatRoomView({ roomId }: { roomId: string }) {
 		orpc.bambi.supportChat.sendMessage.mutationOptions({
 			onError: (error) =>
 				Alert.alert("메시지를 보내지 못했어요", error.message),
-			onSuccess: async () => {
+			onSuccess: async (result) => {
 				await invalidateSupportChat();
+				if (roomId === null) {
+					// 화면은 그대로 두고 URL 파라미터만 갱신한다 — 폴링·markRead는 roomId가 켜지며 따라온다.
+					setRoomId(result.roomId);
+					router.setParams({ id: result.roomId });
+				}
 			},
 		})
 	);
@@ -209,7 +194,7 @@ function SupportChatRoomView({ roomId }: { roomId: string }) {
 	const data = query.data;
 	// 새로 들어온 메시지만 골라 seen에 넣고, 운영자 발신이면 읽음 처리·새 메시지 칩을 띄운다.
 	useEffect(() => {
-		if (!data) {
+		if (!(data && roomId)) {
 			return;
 		}
 		const incoming = data.messages.filter(
@@ -257,6 +242,26 @@ function SupportChatRoomView({ roomId }: { roomId: string }) {
 		isAtBottomRef.current = true;
 		setHasUnseenNew(false);
 	};
+	const handleSend = (body: string) => {
+		scrollToBottom();
+		if (roomId) {
+			send.mutate({ body, roomId });
+			return;
+		}
+		// 비회원은 첫 발신 전에 상담 세션 토큰이 있어야 서버가 신원을 잡는다(목록 화면과 같은 흐름).
+		const ready =
+			visitor.state === "member"
+				? Promise.resolve()
+				: ensureSupportChatToken().then(() => undefined);
+		ready
+			.then(() => send.mutate({ body }))
+			.catch((error: unknown) =>
+				Alert.alert(
+					"상담을 시작하지 못했어요",
+					error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요."
+				)
+			);
+	};
 
 	const renderItem = ({ item }: { item: (typeof items)[number] }) => (
 		// inverted여도 셀 안은 정방향이라 JSX 순서가 곧 시각 순서 — 날짜 칩이 메시지 위에 온다.
@@ -275,60 +280,54 @@ function SupportChatRoomView({ roomId }: { roomId: string }) {
 		</View>
 	);
 
+	if (query.isError) {
+		return (
+			<View className="flex-1 bg-background">
+				<SupportChatHeader />
+				<ErrorState onRetry={() => query.refetch()} />
+			</View>
+		);
+	}
+
 	return (
 		<View className="flex-1 bg-background">
 			<SupportChatHeader />
-			{query.isPending ? (
-				<View className="flex-1 items-center justify-center">
-					<Spinner size="lg" />
-					<Text className="mt-3 text-muted text-sm">
-						상담 내용을 불러오고 있어요.
-					</Text>
-				</View>
-			) : null}
-			{query.isError ? <ErrorState onRetry={() => query.refetch()} /> : null}
-			{data ? (
-				<KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-					<View className="flex-1">
+			<KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+				<View className="flex-1">
+					{openedExistingRoomRef.current && query.isLoading ? (
+						<View className="flex-1 items-center justify-center">
+							<Spinner size="lg" />
+							<Text className="mt-3 text-muted text-sm">
+								상담 내용을 불러오고 있어요.
+							</Text>
+						</View>
+					) : (
 						<FlatList
 							data={items}
 							inverted
 							keyboardDismissMode="interactive"
 							keyboardShouldPersistTaps="handled"
 							keyExtractor={(item) => item.message.id}
-							ListFooterComponent={<View className="h-3" />}
+							ListFooterComponent={GREETING_BUBBLE}
 							ListHeaderComponent={<View className="h-3" />}
 							onScroll={handleScroll}
 							ref={listRef}
 							renderItem={renderItem}
 							scrollEventThrottle={100}
 						/>
-						{hasUnseenNew ? (
-							<ChatNewMessagePill onPress={scrollToBottom} />
-						) : null}
-					</View>
-					<RoomFooter
-						isBlocked={data.room.isBlocked}
-						isClosed={data.room.status === "closed"}
-						isSending={send.isPending}
-						onSend={(body) => {
-							scrollToBottom();
-							send.mutate({ body, roomId });
-						}}
-					/>
-				</KeyboardAvoidingView>
-			) : null}
+					)}
+					{hasUnseenNew ? (
+						<ChatNewMessagePill onPress={scrollToBottom} />
+					) : null}
+				</View>
+				<RoomFooter
+					isBlocked={data?.room.isBlocked ?? false}
+					isClosed={data?.room.status === "closed"}
+					isDisabled={visitor.state === "pending"}
+					isSending={send.isPending}
+					onSend={handleSend}
+				/>
+			</KeyboardAvoidingView>
 		</View>
-	);
-}
-
-export default function SupportChatRoomScreen() {
-	const { id } = useLocalSearchParams<{ id: string }>();
-
-	// 방 유무로 컴포넌트를 갈라 둔다 — 훅 구성이 서로 달라 한 컴포넌트에 섞지 않는다.
-	return id === NEW_ROOM_ID ? (
-		<NewSupportChatScreen />
-	) : (
-		<SupportChatRoomView roomId={id} />
 	);
 }
