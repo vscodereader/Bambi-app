@@ -30,6 +30,8 @@ export interface ApiJobMedia {
 	height?: null | number;
 	id?: string;
 	mimeType: string;
+	sliceGroupId?: null | string;
+	sliceIndex?: null | number;
 	storageKey: string;
 	usage: JobMediaUsage;
 	width?: null | number;
@@ -141,11 +143,15 @@ const toJobMedia = (media?: ApiJobMedia | null): JobMedia | null => {
 		altText: media.altText ?? "",
 		byteSize: media.byteSize,
 		fileName: media.fileName,
+		height: media.height ?? null,
 		id: media.id,
 		mimeType: media.mimeType,
+		sliceGroupId: media.sliceGroupId ?? null,
+		sliceIndex: media.sliceIndex ?? null,
 		storageKey: media.storageKey,
 		url: toJobMediaUrl(media),
 		usage: media.usage,
+		width: media.width ?? null,
 	};
 };
 

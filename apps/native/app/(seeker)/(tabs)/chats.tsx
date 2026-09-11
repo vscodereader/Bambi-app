@@ -12,9 +12,10 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import { MemberOnly } from "@/src/components/member-only";
 import { orpc } from "@/src/lib/orpc";
 
-export default function SeekerChatsScreen() {
+function SeekerChatsInner() {
 	const chatsQuery = useQuery(orpc.bambi.chats.listMine.queryOptions());
 
 	if (chatsQuery.isLoading) {
@@ -69,5 +70,13 @@ export default function SeekerChatsScreen() {
 				</View>
 			)}
 		</BambiScreen>
+	);
+}
+
+export default function SeekerChatsScreen() {
+	return (
+		<MemberOnly>
+			<SeekerChatsInner />
+		</MemberOnly>
 	);
 }

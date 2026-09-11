@@ -10,6 +10,14 @@ const managementSource = readFileSync(
 	srcPath("components/bambi/main-popup/popup-management.tsx"),
 	"utf8"
 );
+const coachmarkSource = readFileSync(
+	srcPath("components/bambi/onboarding/coachmark.tsx"),
+	"utf8"
+);
+const coachmarkRunnerSource = readFileSync(
+	srcPath("components/bambi/onboarding/role-coachmark-runner.tsx"),
+	"utf8"
+);
 
 describe("PC 다중 팝업 배치", () => {
 	it("너비 초과 팝업을 다음 flex 행으로 내리지 않는다", () => {
@@ -29,6 +37,31 @@ describe("팝업 표시 시점", () => {
 		expect(source).toContain("popupAuthTransitionStorageKey");
 		expect(source).toContain("!authTransition");
 		expect(source).toContain("window.requestAnimationFrame");
+	});
+
+	it("신규회원 코치마크가 끝날 때까지 메인 팝업을 숨긴다", () => {
+		expect(source).toContain("COACHMARK_STATE_EVENT");
+		expect(source).toContain("readCoachmarkIntent");
+		expect(source).toContain("!coachmarkActive");
+		expect(coachmarkRunnerSource).not.toContain(
+			"setRect(measureTarget(target));\n\t\t\t\tclearCoachmarkIntent();"
+		);
+	});
+
+	it("코치마크 설명창은 공용 Dialog 콘텐츠 배치를 재사용한다", () => {
+		expect(coachmarkSource).toContain("dialogContentClassName");
+		expect(coachmarkSource).toContain('className="fixed inset-0 z-50"');
+		expect(coachmarkSource).toContain("text-ink-900/70");
+		expect(coachmarkSource).not.toContain(
+			'className="absolute inset-0 size-full text-ink-900"'
+		);
+	});
+
+	it("spotlight는 실제 대상 버튼의 둥근 테두리를 따른다", () => {
+		expect(coachmarkRunnerSource).toContain("borderTopLeftRadius");
+		expect(coachmarkRunnerSource).toContain("resolveSpotlightTarget(target)");
+		expect(coachmarkSource).toContain("rx={rect.borderRadius}");
+		expect(coachmarkSource).toContain("ry={rect.borderRadius}");
 	});
 });
 

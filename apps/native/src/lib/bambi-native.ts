@@ -1,11 +1,18 @@
+import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
+
 const TITLE_MIN_LENGTH = 2;
 const TITLE_MAX_LENGTH = 80;
-const OPTION_MAX_LENGTH = 80;
+// 서버 jobPostInput이 지역 마스터의 법정동코드(10자리)만 받는다.
+const REGION_CODE_LENGTH = 10;
 const PAY_UNIT_MAX_LENGTH = 30;
 const WORK_SCHEDULE_MAX_LENGTH = 200;
 const DESCRIPTION_MIN_LENGTH = 10;
 const DESCRIPTION_MAX_LENGTH = 2000;
 const INTERVIEW_NOTES_MAX_LENGTH = 500;
+// packages/auth가 emailAndPassword 길이를 지정하지 않아 better-auth 기본값(8/128)이 그대로
+// 서버 규칙이다. 서버가 min/maxPasswordLength를 설정하면 이 두 값도 같이 옮겨야 한다.
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 128;
 
 export type NativeHomeRoute =
 	| "/(employer)"
@@ -22,7 +29,7 @@ export interface NativeJobForm {
 	organizationId: string;
 	payAmount: string;
 	payUnit: string;
-	region: string;
+	regionCode: string;
 	teamId: string;
 	title: string;
 	workSchedule: string;
@@ -36,7 +43,7 @@ export interface NativeJobPostInput {
 	organizationId: string;
 	payAmount: number;
 	payUnit: string;
-	region: string;
+	regionCode: string;
 	teamId?: string;
 	title: string;
 	workSchedule: string;
@@ -78,16 +85,6 @@ export const industryOptions = [
 
 export type NativeIndustryOption = (typeof industryOptions)[number];
 
-export const regionOptions = [
-	"서울",
-	"경기",
-	"인천",
-	"부산",
-	"대구",
-	"대전",
-	"광주",
-	"기타",
-] as const;
 export const payUnitOptions = ["시급", "일급", "주급", "월급"] as const;
 
 export const jobStatusLabels = {
@@ -113,7 +110,8 @@ export const emptyNativeJobForm: NativeJobForm = {
 	organizationId: "",
 	payAmount: "",
 	payUnit: payUnitOptions[0] ?? "",
-	region: regionOptions[0] ?? "",
+	// 지역은 서버 마스터(bambi.regions.list)에서 고르므로 기본값을 둘 수 없다.
+	regionCode: "",
 	teamId: "",
 	title: "",
 	workSchedule: "",
@@ -151,7 +149,7 @@ export const validateNativeJobForm = (
 	const teamId = trim(form.teamId);
 	const title = trim(form.title);
 	const industryCategory = trim(form.industryCategory);
-	const region = trim(form.region);
+	const regionCode = trim(form.regionCode);
 	const payAmountText = trim(form.payAmount);
 	const payAmount = Number(payAmountText);
 	const payUnit = trim(form.payUnit);
@@ -181,8 +179,8 @@ export const validateNativeJobForm = (
 		errors.industryCategory = "업종을 선택해 주세요.";
 	}
 
-	if (!(region.length > 0 && region.length <= OPTION_MAX_LENGTH)) {
-		errors.region = "지역을 선택해 주세요.";
+	if (regionCode.length !== REGION_CODE_LENGTH) {
+		errors.regionCode = "지역을 선택해 주세요.";
 	}
 
 	if (!(Number.isInteger(payAmount) && payAmount > 0)) {
@@ -234,7 +232,7 @@ export const validateNativeJobForm = (
 			organizationId,
 			payAmount,
 			payUnit,
-			region,
+			regionCode,
 			teamId: teamId || undefined,
 			title,
 			workSchedule,
@@ -247,3 +245,397 @@ export const getConfirmedScheduleId = (
 	schedules: NativeScheduleSummary[]
 ): null | string =>
 	schedules.find((schedule) => schedule.status === "confirmed")?.id ?? null;
+
+export interface NativeLoginErrors {
+	loginId?: string;
+	password?: string;
+}
+
+// 아이디 규칙(@bambi-app/auth의 login-id.ts)이 영문·숫자와 밑줄·마침표·하이픈만 허용해
+// "@"가 들어갈 수 없다. 그래서 웹(apps/web의 isEmailLoginId)과 똑같이 "@" 포함 여부만으로
+// signIn.email과 signIn.username을 가른다. 형식·존재 검증은 서버가 한다.
+export const isEmailLoginId = (value: string): boolean => value.includes("@");
+
+export const validateNativeLoginInput = (
+	loginId: string,
+	password: string
+): NativeLoginErrors => {
+	const errors: NativeLoginErrors = {};
+
+	if (!trim(loginId)) {
+		errors.loginId = "아이디 또는 이메일을 입력해 주세요.";
+	}
+
+	if (password.length < PASSWORD_MIN_LENGTH) {
+		errors.password = "비밀번호는 8자 이상이어야 해요.";
+	} else if (password.length > PASSWORD_MAX_LENGTH) {
+		errors.password = "비밀번호는 128자까지 입력할 수 있어요.";
+	}
+
+	return errors;
+};
+
+// 계정복구의 새 비밀번호 검증. 서버 resetPasswordInput(8~128)과 같은 규칙을 클라에서 먼저
+// 걸러 인증 건을 헛되이 소진시키지 않는다. 확인 입력 일치까지 한 함수에서 본다.
+export const validateNewPassword = (
+	password: string,
+	passwordConfirm: string
+): null | string => {
+	if (password.length < PASSWORD_MIN_LENGTH) {
+		return "비밀번호를 8자 이상 입력해 주세요.";
+	}
+	if (password.length > PASSWORD_MAX_LENGTH) {
+		return "비밀번호는 128자까지 입력할 수 있어요.";
+	}
+	if (password !== passwordConfirm) {
+		return "비밀번호가 일치하지 않아요.";
+	}
+	return null;
+};
+
+export type SignupRole = "job_seeker" | "employer";
+
+export interface SignupFormValues {
+	agreedToTerms: boolean;
+	email: string;
+	nickname: string;
+	password: string;
+	passwordConfirm: string;
+	username: string;
+}
+
+export type SignupSubmitValues = SignupFormValues & { role: SignupRole };
+
+// 웹 getValidationError(auth-panel.tsx:65) + 약관 동의 가드와 같은 규칙·문구·순서.
+// username·nickname은 웹과 동일하게 trim해서 검사한다.
+export const validateSignupInput = (
+	values: SignupFormValues
+): null | string => {
+	if (values.nickname.trim().length < 2) {
+		return "닉네임을 2자 이상 입력해 주세요.";
+	}
+	const loginIdError = getLoginIdErrorMessage(values.username.trim());
+	if (loginIdError) {
+		return loginIdError;
+	}
+	if (
+		!values.email.includes("@") ||
+		values.password.length < PASSWORD_MIN_LENGTH
+	) {
+		return "이메일과 8자 이상 비밀번호를 확인해 주세요.";
+	}
+	if (values.password !== values.passwordConfirm) {
+		return "비밀번호가 일치하지 않아요.";
+	}
+	if (!values.agreedToTerms) {
+		return "이용약관과 개인정보 처리방침에 동의해주세요";
+	}
+	return null;
+};
+
+// 목록 한 행이 쓰는 필드만 좁혀 둔 클라이언트 타입. 서버 응답(bambi.jobs.list)은 더 넓은
+// 객체를 주지만 구조적 타이핑으로 그대로 들어온다. 연락처 계열 필드는 서버 selection에
+// 애초에 없으므로 여기에도 추가하지 않는다.
+export interface NativeSeekerJob {
+	// 유료 카드(스페셜·급구·추천)에만 부착되는 조직 단위 누적 광고 집계. 서버 jobs.list가
+	// inPaidSection일 때만 채우고 그 외(전체 공고·수집)엔 null이다 — 카드는 값이 있을 때만
+	// 등급 배지를 그린다.
+	adPeriod?: { count: number; totalDays: number } | null;
+	// 순수 공고(job_post)의 커버 미디어. 서버는 storageKey 등 여러 필드를 주지만 카드는
+	// storageKey만 써서 공개 버킷 URL을 조립한다. 수집 공고·커버 없는 공고는 null이다.
+	coverImage?: { storageKey: string } | null;
+	// 수집 공고(crawled)의 대표 이미지. job_post_media 행이 아니라 미러링된 한 줄(현재
+	// base64 data URI)이라 storageKey 조립을 거치지 않고 그대로 <Image>에 넣는다.
+	coverImageUrl?: null | string;
+	employerDisplayName: null | string;
+	employerVerificationStatus: null | string;
+	id: string;
+	industryCategory: string;
+	instantInterview: boolean | null;
+	payAmount: null | number;
+	// 크롤 공고가 섞여 내려오는 목록이라 단위가 비어 있을 수 있다.
+	payUnit: null | string;
+	promotionLabel: null | string;
+	region: string;
+	// "crawled"면 jobs.getById가 job_post만 조회해 상세가 NOT_FOUND다 — 링크를 걸지 않는다.
+	// job_post 쪽 값은 "converted" | "original"이다.
+	source: string;
+	title: string;
+	workSchedule: null | string;
+}
+
+export interface NativeJobBadge {
+	label: string;
+	tone: "success" | "warning";
+}
+
+export interface NativeSeekerJobPage {
+	sections: {
+		organic: NativeSeekerJob[];
+		recommended: NativeSeekerJob[];
+		special: NativeSeekerJob[];
+		urgent: NativeSeekerJob[];
+	};
+}
+
+export const jobSectionTitles = {
+	organic: "전체 공고",
+	recommended: "추천 광고",
+	special: "스페셜 광고",
+	urgent: "급구 광고",
+} as const;
+
+export type NativeJobSectionKey = keyof typeof jobSectionTitles;
+
+// 웹의 세로 액센트 바 색 언어를 그대로 옮긴다(스페셜=coral, 급구=amber, 추천=blue).
+const jobSectionAccentClassNames = {
+	organic: "bg-border",
+	recommended: "bg-link",
+	special: "bg-accent",
+	urgent: "bg-warning",
+} as const;
+
+export interface NativeJobSection {
+	accentClassName: (typeof jobSectionAccentClassNames)[NativeJobSectionKey];
+	data: NativeSeekerJob[];
+	key: NativeJobSectionKey;
+	title: string;
+}
+
+// 유료 자리는 첫 페이지에서만 내려온다(2페이지부터는 organic만 이어진다). 배열 순서가
+// 곧 화면 순서다.
+const paidJobSectionKeys = ["special", "urgent", "recommended"] as const;
+
+const toJobSection = (
+	key: NativeJobSectionKey,
+	data: NativeSeekerJob[]
+): NativeJobSection => ({
+	accentClassName: jobSectionAccentClassNames[key],
+	data,
+	key,
+	title: jobSectionTitles[key],
+});
+
+export const buildSeekerJobSections = (
+	pages: NativeSeekerJobPage[],
+	config: { urgentHidden: boolean }
+): NativeJobSection[] => {
+	const [firstPage] = pages;
+	const paidSections = paidJobSectionKeys
+		.filter((key) => !(key === "urgent" && config.urgentHidden))
+		.map((key) => toJobSection(key, firstPage?.sections[key] ?? []));
+	// 서버가 수집 행을 유료 섹션과 전체 공고에 동시에 담으므로 전체 공고에서 걷어낸다.
+	// 페이지끼리도 겹칠 수 있다 — organicOffset이 offset 기반이라 1페이지를 받은 뒤 새
+	// 공고가 목록 앞에 삽입되면 밀려난 행이 2페이지에 다시 내려온다. 그대로 두면
+	// SectionList가 duplicate key 경고를 내고 같은 카드가 두 번 그려진다.
+	const seenIds = new Set(
+		paidSections.flatMap((section) => section.data.map((job) => job.id))
+	);
+	const organic: NativeSeekerJob[] = [];
+
+	for (const job of pages.flatMap((page) => page.sections.organic)) {
+		if (seenIds.has(job.id)) {
+			continue;
+		}
+
+		seenIds.add(job.id);
+		organic.push(job);
+	}
+
+	return [...paidSections, toJobSection("organic", organic)].filter(
+		(section) => section.data.length > 0
+	);
+};
+
+// 배지 예산은 카드당 2개다 — 규칙을 더 넣으면 여기서 잘라내야 한다. 지역·업종·평점은
+// 배지로 승격하지 않고 회색 메타 줄로 내린다.
+export const buildJobCardBadges = (job: NativeSeekerJob): NativeJobBadge[] => {
+	const badges: NativeJobBadge[] = [];
+
+	// 두 필드 모두 truthy 검사다. 크롤 행은 false/"none"으로 내려오므로 기본값 true나 !!
+	// 강제를 넣으면 우리가 확인한 적 없는 업소에 "인증 완료"가 붙는다.
+	if (job.instantInterview) {
+		badges.push({ label: "당일면접", tone: "warning" });
+	}
+
+	if (job.employerVerificationStatus === "verified") {
+		badges.push({ label: verificationStatusLabels.verified, tone: "success" });
+	}
+
+	return badges;
+};
+
+const TRAILING_SLASH_RE = /\/$/;
+
+// 공개 버킷 객체 URL 조립(server gcs.ts getPublicObjectUrl과 같은 모양). base가 없으면
+// (개발·env 미설정) 만들 수 없으므로 null — 호출부가 각자 폴백을 고른다.
+export const publicObjectUri = (
+	storageKey: string,
+	gcsPublicBaseUrl: string | undefined
+): null | string =>
+	gcsPublicBaseUrl
+		? `${gcsPublicBaseUrl.replace(TRAILING_SLASH_RE, "")}/${storageKey}`
+		: null;
+
+// 목록 카드 커버 이미지의 소스 URI를 고른다(web api-job-mapper의 커버 우선순위 이식).
+// 순수 공고는 공개 버킷 base + storageKey로 URL을 조립하고, 수집 공고는 base64 data URI를
+// 그대로 쓴다. base가 없거나(개발) 이미지가 아예 없으면 null → 카드가 업소명 타일로 폴백한다.
+export const resolveJobCoverUri = (
+	job: Pick<NativeSeekerJob, "coverImage" | "coverImageUrl">,
+	gcsPublicBaseUrl: string | undefined
+): null | string => {
+	const storageKey = job.coverImage?.storageKey;
+
+	return (
+		(storageKey ? publicObjectUri(storageKey, gcsPublicBaseUrl) : null) ??
+		job.coverImageUrl ??
+		null
+	);
+};
+
+// bambi-screen.tsx의 formatPay와 같은 규칙. 이 파일은 react-native를 import 하지 않는
+// 순수 모듈이라(테스트가 노드에서 그대로 돈다) 컴포넌트 모듈에서 끌어오지 않고 같이 둔다.
+const formatJobPay = (amount: null | number, unit: null | string): string => {
+	if (amount === null) {
+		return "급여 협의";
+	}
+
+	const money = `${amount.toLocaleString("ko-KR")}원`;
+
+	return unit ? `${money} / ${unit}` : money;
+};
+
+// 행 하나를 한 문장으로 합성해 카드의 accessibilityLabel에 넣는다. 카드 내부 Text가
+// 6~7노드로 쪼개져 낭독되면 20행 페이지에 120회 넘는 스와이프가 필요하다.
+export const describeJobForScreenReader = (
+	job: NativeSeekerJob,
+	badges: NativeJobBadge[] = buildJobCardBadges(job)
+): string =>
+	[
+		job.title,
+		job.employerDisplayName ?? "밤비알바 구인자",
+		job.region,
+		job.workSchedule ?? "일정 협의",
+		formatJobPay(job.payAmount, job.payUnit),
+		...badges.map((badge) => badge.label),
+	].join(", ");
+
+// 누적 광고일수 등급 — 웹 apps/web/src/lib/bambi/ad-period.ts의 순수 로직만 이식한다.
+// native는 웹의 colorClass(amber/slate 등 Tailwind 팔레트)를 쓰지 않는다 — heroui 토큰만
+// 허용되고 그 팔레트가 native 테마에 없으므로, 렌더 레이어(index.tsx)가 icon 판별자로
+// 색을 정한다. 여기서는 icon 종류·누적일수 경계·운영자 업로드 아이콘 URL만 옮긴다.
+export interface NativeAdPeriodTier {
+	// 카드가 이 값으로 아이콘을 고른다(웹 lucide crown/medal → native Ionicons trophy/medal).
+	icon: "crown" | "medal";
+	// 운영자가 올린 아이콘 이미지(GIF 등) URL. 있으면 icon 프리셋 대신 이걸 그린다.
+	iconImageUrl?: null | string;
+	label: string;
+	// 티어 최대 누적 일수. 최상위는 상한 없음(null).
+	maxDays: null | number;
+	minDays: number;
+}
+
+// 웹 AD_PERIOD_TIERS와 같은 5구간(≤90 / 91–180 / 181–360 / 361–720 / ≥721). 운영자가
+// 등급을 설정하지 않았을 때의 폴백이다.
+export const NATIVE_AD_PERIOD_TIERS: readonly NativeAdPeriodTier[] = [
+	{ icon: "medal", label: "브론즈", maxDays: 90, minDays: 0 },
+	{ icon: "medal", label: "실버", maxDays: 180, minDays: 91 },
+	{ icon: "medal", label: "골드", maxDays: 360, minDays: 181 },
+	{ icon: "crown", label: "플래티넘", maxDays: 720, minDays: 361 },
+	{ icon: "crown", label: "다이아", maxDays: null, minDays: 721 },
+];
+
+// 누적 일수 → 티어. tiers를 주입할 수 있고(운영자 설정값), 비었으면 상수로 폴백한다.
+// 웹과 동일하게, 모든 구간을 넘긴 일수는 최하위가 아니라 최상위로 떨어뜨린다(오름차순 전제).
+export const adPeriodTier = (
+	totalDays: number,
+	tiers: readonly NativeAdPeriodTier[] = NATIVE_AD_PERIOD_TIERS
+): NativeAdPeriodTier => {
+	const list = tiers.length > 0 ? tiers : NATIVE_AD_PERIOD_TIERS;
+	return (
+		list.find((tier) => tier.maxDays === null || totalDays <= tier.maxDays) ??
+		list.at(-1) ??
+		list[0]
+	);
+};
+
+// "22회 900일". totalDays가 0이어도(백필 기간 null 행) 정직하게 그대로 노출한다.
+export const formatAdPeriod = ({
+	count,
+	totalDays,
+}: {
+	count: number;
+	totalDays: number;
+}): string =>
+	`${count.toLocaleString("ko-KR")}회 ${totalDays.toLocaleString("ko-KR")}일`;
+
+// media.detail 상세 이미지 한 행. sliceGroupId가 있으면 세로로 긴 원본을 잘라 저장한
+// 조각이고(같은 id끼리 한 장), 없으면(null) 비조각 단독 이미지다.
+export interface DetailImageSliceItem {
+	assetId: string;
+	id: string;
+	sliceGroupId?: null | string;
+}
+
+// 한 조각의 그룹 내 위치. 그룹 위/아래 끝에만 라운드·상하 테두리를 걸기 위한 플래그다.
+export interface DetailImageSlicePiece {
+	assetId: string;
+	id: string;
+	isGroupEnd: boolean;
+	isGroupStart: boolean;
+}
+
+// 렌더 그룹: 조각들을 간격 0으로 이어 한 장처럼 그린다. key는 첫 조각 id.
+export interface DetailImageSliceGroup {
+	key: string;
+	pieces: readonly DetailImageSlicePiece[];
+}
+
+// 상세 이미지 행들을 렌더 그룹으로 묶는다. 같은 sliceGroupId를 공유하는 "연속" 조각이
+// 한 그룹이 되고, sliceGroupId가 없는 비조각 이미지는 각자 단독 그룹이 된다. 조각은
+// 서버가 sliceIndex 오름차순으로 연속 배치해 내려주므로 여기선 인접 런만 묶으면 된다.
+export const groupDetailImageSlices = (
+	items: readonly DetailImageSliceItem[]
+): DetailImageSliceGroup[] => {
+	const runs: { groupId: null | string; items: DetailImageSliceItem[] }[] = [];
+	for (const item of items) {
+		const groupId = item.sliceGroupId ?? null;
+		const current = runs.at(-1);
+		if (groupId !== null && current?.groupId === groupId) {
+			current.items.push(item);
+		} else {
+			runs.push({ groupId, items: [item] });
+		}
+	}
+
+	return runs.map((run) => ({
+		key: run.items[0].id,
+		pieces: run.items.map((item, index) => ({
+			assetId: item.assetId,
+			id: item.id,
+			isGroupEnd: index === run.items.length - 1,
+			isGroupStart: index === 0,
+		})),
+	}));
+};
+
+// 역할 enum 원값을 화면에 내보내지 않는다 — 웹 my-page-shell의 ROLE_LABELS와 같은 표.
+// 미등록 역할은 "구직자"로 폴백(법률자문 등 구직자 계정에 얹는 역할의 자연스러운 기본값).
+const PROFILE_ROLE_LABELS: Record<string, string> = {
+	admin: "관리자",
+	employer: "구인자",
+	job_seeker: "구직자",
+	legal_advisor: "법률자문가",
+};
+
+export const profileRoleLabel = (role: null | string | undefined): string =>
+	PROFILE_ROLE_LABELS[role ?? ""] ?? "구직자";
+
+// 웹 MyPointsSummaryCard의 "다음 등급까지" 문구와 같은 규칙.
+export const pointsToNextLabel = (
+	nextGrade: { minPoints: number; name: string } | null,
+	pointsToNext: null | number
+): string =>
+	nextGrade
+		? `${(pointsToNext ?? 0).toLocaleString("ko-KR")}P 남음`
+		: "최고 등급입니다";

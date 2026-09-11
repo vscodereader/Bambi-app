@@ -1,3 +1,4 @@
+import { USER_ACTIVITY_HEADER } from "@bambi-app/api/services/bambi-user-presence";
 import { env } from "@bambi-app/env/server";
 import fastifyCors from "@fastify/cors";
 import fp from "fastify-plugin";
@@ -19,6 +20,7 @@ export const corsPlugin = fp(
 				"X-Requested-With",
 				"x-bambi-guest",
 				"x-bambi-support-chat",
+				USER_ACTIVITY_HEADER,
 			],
 			credentials: true,
 			maxAge: 86_400,

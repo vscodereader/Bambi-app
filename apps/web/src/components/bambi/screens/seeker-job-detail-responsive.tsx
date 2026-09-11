@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
+import { groupDetailMediaBySlice } from "@/lib/bambi/detail-image-slicing";
 import { trackContactIntent } from "@/lib/bambi/ga-interaction";
 import { trackJobView } from "@/lib/bambi/ga-job";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
@@ -29,6 +30,7 @@ import {
 } from "../icons";
 import { JobDescriptionContent } from "../job-description-content";
 import { JobDetailImage } from "../job-detail-image";
+import { JobMetadataBadges } from "../job-metadata-badges";
 import { JobReviewSection } from "../job-review-section";
 
 interface SeekerJobDetailResponsiveProps {
@@ -232,9 +234,12 @@ export function SeekerJobDetailResponsive({
 								<h1 className="m-0 font-extrabold text-[28px] leading-tight md:text-[34px]">
 									{displayJobTitle(job.title, job.company)}
 								</h1>
-								<p className="mt-2 mb-0 text-muted-foreground">
-									{job.location} · {job.type}
-								</p>
+								<JobMetadataBadges
+									className="mt-2"
+									district={job.district}
+									industryCategory={job.type}
+									region={job.region}
+								/>
 								<div className="mt-3 flex items-center gap-2">
 									<Avatar
 										name={job.company}
@@ -303,15 +308,24 @@ export function SeekerJobDetailResponsive({
 						{job.detailImages?.length ? (
 							// 상세 이미지는 업체가 만든 세로로 긴 홍보 이미지가 대부분이라
 							// 크롭·타일링 없이 본문 폭에 맞춰 원본 비율 그대로 세로로 이어 붙인다.
+							// 세로로 긴 이미지는 저장 시 조각들로 잘려 오므로(native 화질 보전),
+							// 같은 그룹은 간격 0으로 이어 그리고 라운드·테두리는 그룹 컨테이너에만 둔다.
 							<div className="mt-5 flex flex-col gap-3">
-								{job.detailImages.map((image) => (
-									<JobDetailImage
-										alt={image.altText || image.fileName}
-										height={image.height}
-										key={image.storageKey}
-										src={image.url}
-										width={image.width}
-									/>
+								{groupDetailMediaBySlice(job.detailImages).map((group) => (
+									<div
+										className="flex flex-col overflow-hidden rounded-lg border"
+										key={group[0].sliceGroupId ?? group[0].storageKey}
+									>
+										{group.map((image) => (
+											<JobDetailImage
+												alt={image.altText || image.fileName}
+												height={image.height}
+												key={image.storageKey}
+												src={image.url}
+												width={image.width}
+											/>
+										))}
+									</div>
 								))}
 							</div>
 						) : null}

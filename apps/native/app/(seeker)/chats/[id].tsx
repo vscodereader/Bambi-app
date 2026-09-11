@@ -12,13 +12,14 @@ import {
 	LoadingState,
 	Pill,
 } from "@/src/components/bambi-screen";
+import { MemberOnly } from "@/src/components/member-only";
 import { getConfirmedScheduleId } from "@/src/lib/bambi-native";
 import { orpc } from "@/src/lib/orpc";
 
 const getNextDayIso = (): string =>
 	new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-export default function SeekerChatRoomScreen() {
+function SeekerChatRoomInner() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const [message, setMessage] = useState("");
 	const chatQuery = useQuery(
@@ -193,5 +194,13 @@ export default function SeekerChatRoomScreen() {
 				)}
 			</Surface>
 		</BambiScreen>
+	);
+}
+
+export default function SeekerChatRoomScreen() {
+	return (
+		<MemberOnly>
+			<SeekerChatRoomInner />
+		</MemberOnly>
 	);
 }

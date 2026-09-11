@@ -8,7 +8,18 @@
     },
     "name": "bambi-app",
     "slug": "bambi-app",
-    "plugins": ["expo-font"],
+    "plugins": [
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "프로필 사진을 등록하려면 사진 접근이 필요해요.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "@portone/react-native-sdk"
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

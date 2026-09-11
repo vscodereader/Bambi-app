@@ -11,6 +11,7 @@ import {
 } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
+	bambiIdentityVerificationLog,
 	bambiLegalConsent,
 	bambiProfile,
 	bambiSiteSettings,
@@ -21,7 +22,17 @@ import {
 } from "@bambi-app/db/schema/bambi";
 import { env, isTestIdentityChannelAllowed } from "@bambi-app/env/server";
 import { ORPCError } from "@orpc/server";
-import { and, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import {
+	and,
+	count,
+	desc,
+	eq,
+	inArray,
+	isNull,
+	ne,
+	or,
+	type SQL,
+} from "drizzle-orm";
 import z from "zod";
 
 import {
@@ -39,6 +50,11 @@ import {
 import { MAX_BUSINESS_DOCUMENTS } from "../../services/bambi-business-document-policy";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
+import {
+	createGuestToken,
+	GUEST_TOKEN_MAX_AGE_SECONDS,
+	resolveGuestTokenSecret,
+} from "../../services/bambi-guest-token";
 import {
 	resolveVerifiedIdentity,
 	type VerifiedIdentity,
@@ -65,7 +81,10 @@ import {
 } from "../../services/bambi-onboarding";
 import { awardMemberPoints } from "../../services/bambi-point-ledger";
 import { resolveOptionalRegion } from "../../services/bambi-region";
-import { recordMockIdentityLog } from "../../services/bambi-secret-identity";
+import {
+	getFreshGuestVerifiedIdentity,
+	recordMockIdentityLog,
+} from "../../services/bambi-secret-identity";
 import {
 	createBusinessDocumentUploadIntent,
 	createEditorMediaUploadIntent,
@@ -99,6 +118,9 @@ const profileInput = z.object({
 	// 인증 결과(번호·생년월일·성별·CI/DI 해시)를 함께 기록한다.
 	identityVerificationId: z.string().min(1).optional(),
 	phoneNumber: z.string().min(3).max(30).optional(),
+	// 앞서 발급된 서명 게스트 토큰과 서버 인증 로그를 가입 증명으로 사용한다.
+	// true만 받으며, 실제 자격은 요청 context의 검증된 guest로 다시 판정한다.
+	reuseGuestVerification: z.literal(true).optional(),
 });
 
 // 현재 유효한 법적 문서 버전. 각 웹 페이지의 시행일과 일치시킨다 — 두 문서 모두
@@ -114,7 +136,11 @@ const LEGAL_CONSENT_VERSIONS = {
 // 표시명(닉네임)은 user.name 정본을 갱신하므로 프로필 입력이 아니라 이 갱신 입력에만 둔다.
 // 인증 건은 가입 시점에만 반영하므로 갱신 입력에서는 뺀다(받아놓고 무시하지 않는다).
 const profileUpdateInput = profileInput
-	.omit({ gender: true, identityVerificationId: true })
+	.omit({
+		gender: true,
+		identityVerificationId: true,
+		reuseGuestVerification: true,
+	})
 	.extend({
 		displayName: z.string().min(1).max(80).optional(),
 		role: z.enum(["job_seeker", "employer", "admin"]).optional(),
@@ -390,18 +416,44 @@ const toBusinessDocumentResponse = (document: {
 // 다른 계정이 같은 사람으로 인증했는지 본다. 판정 축은 DI지만, 과거 CI만 저장된
 // 계정과의 충돌도 유니크 인덱스가 유지되므로 함께 걸러 같은 안내로 막는다.
 const findIdentityCollision = async (
-	identity: VerifiedIdentity,
+	identity: {
+		birth8: string;
+		ciHash?: string | null;
+		diHash?: string | null;
+		phoneNumber?: string | null;
+	},
 	excludeUserId?: string
 ): Promise<boolean> => {
+	const identityConditions: SQL[] = [];
+	if (identity.diHash) {
+		identityConditions.push(eq(bambiProfile.diHash, identity.diHash));
+	}
+	if (identity.ciHash) {
+		identityConditions.push(eq(bambiProfile.ciHash, identity.ciHash));
+	}
+	if (identity.phoneNumber) {
+		const phoneBirthCondition = and(
+			eq(bambiProfile.birthDate, identity.birth8),
+			eq(bambiProfile.phoneNumber, identity.phoneNumber)
+		);
+		if (phoneBirthCondition) {
+			identityConditions.push(phoneBirthCondition);
+		}
+	}
+	if (identityConditions.length === 0) {
+		return false;
+	}
+	const collisionWhere =
+		identityConditions.length === 1
+			? identityConditions[0]
+			: or(...identityConditions);
+	if (!collisionWhere) {
+		return false;
+	}
 	const collisions = await db
 		.select({ userId: bambiProfile.userId })
 		.from(bambiProfile)
-		.where(
-			or(
-				eq(bambiProfile.diHash, identity.diHash),
-				eq(bambiProfile.ciHash, identity.ciHash)
-			)
-		);
+		.where(collisionWhere);
 	return collisions.some((row) => row.userId !== excludeUserId);
 };
 
@@ -427,14 +479,18 @@ const toClientProfile = <
 
 const createBambiProfile = async ({
 	gender,
+	guestId,
 	identityVerificationId,
 	phoneNumber,
+	reuseGuestVerification,
 	role,
 	userId,
 }: {
 	gender?: "male" | "female";
+	guestId?: string;
 	identityVerificationId?: string;
 	phoneNumber?: string;
+	reuseGuestVerification?: true;
 	role: BambiProfileRole;
 	userId: string;
 }) => {
@@ -449,13 +505,16 @@ const createBambiProfile = async ({
 	const apiSecret = env.PORTONE_API_SECRET;
 	// 포트원이 구성된 환경에서는 본인인증 없이 가입할 수 없다. 미구성 개발 환경만
 	// 목 흐름을 위해 인증 없는 가입을 허용한다.
-	if (apiSecret && !identityVerificationId) {
+	if (apiSecret && !(identityVerificationId || reuseGuestVerification)) {
 		throw new ORPCError("BAD_REQUEST", {
 			message: "본인인증을 먼저 완료해 주세요.",
 		});
 	}
 
 	let identity: VerifiedIdentity | null = null;
+	let guestIdentity: Awaited<
+		ReturnType<typeof getFreshGuestVerifiedIdentity>
+	> | null = null;
 	if (apiSecret && identityVerificationId) {
 		identity = await resolveVerifiedIdentity(
 			apiSecret,
@@ -476,20 +535,54 @@ const createBambiProfile = async ({
 			identityVerificationId,
 			kind: role,
 		});
+	} else if (reuseGuestVerification) {
+		if (!guestId) {
+			throw new ORPCError("BAD_REQUEST", {
+				message: "기존 인증 정보가 만료되었습니다. 다시 본인인증해 주세요.",
+			});
+		}
+		guestIdentity = await getFreshGuestVerifiedIdentity(guestId);
+		if (!guestIdentity) {
+			throw new ORPCError("BAD_REQUEST", {
+				message: "기존 인증 정보가 만료되었습니다. 다시 본인인증해 주세요.",
+			});
+		}
+		if (await findIdentityCollision(guestIdentity, userId)) {
+			throw new ORPCError("CONFLICT", { message: IDENTITY_CONFLICT_MESSAGE });
+		}
 	}
 
+	const verifiedIdentity = identity ?? guestIdentity;
+
 	const createdProfile = await db.transaction(async (tx) => {
+		if (guestIdentity && guestId) {
+			const [claimedIdentity] = await tx
+				.update(bambiIdentityVerificationLog)
+				.set({ guestId: null, kind: role })
+				.where(
+					and(
+						eq(bambiIdentityVerificationLog.id, guestIdentity.id),
+						eq(bambiIdentityVerificationLog.guestId, guestId)
+					)
+				)
+				.returning({ id: bambiIdentityVerificationLog.id });
+			if (!claimedIdentity) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "기존 인증 정보가 만료되었습니다. 다시 본인인증해 주세요.",
+				});
+			}
+		}
 		const [created] = await tx
 			.insert(bambiProfile)
 			.values({
 				userId,
 				role,
-				phoneNumber: identity?.phoneNumber ?? phoneNumber,
-				gender: identity?.gender ?? gender,
-				birthDate: identity?.birth8,
+				phoneNumber: verifiedIdentity?.phoneNumber ?? phoneNumber,
+				gender: verifiedIdentity?.gender ?? gender,
+				birthDate: verifiedIdentity?.birth8,
 				ciHash: identity?.ciHash,
 				diHash: identity?.diHash,
-				isPhoneVerified: identity !== null,
+				isPhoneVerified: verifiedIdentity !== null,
 			})
 			.returning();
 		const [settings] = await tx
@@ -1130,6 +1223,23 @@ export const onboardingRouter = {
 		identityVerificationId: await issueIdentityVerificationId(),
 	})),
 
+	// 회원가입 화면이 서명된 게스트 쿠키와 서버 인증 로그를 이어 쓸 수 있는지 확인한다.
+	// 브라우저에는 개인정보를 내리지 않고 화면 전이에 필요한 상태만 돌려준다.
+	getGuestSignupStatus: publicProcedure.handler(async ({ context }) => {
+		if (!context.guest) {
+			return { status: "reauthenticate" as const };
+		}
+		const identity = await getFreshGuestVerifiedIdentity(context.guest.gid);
+		if (!identity) {
+			return { status: "reauthenticate" as const };
+		}
+		return {
+			status: (await findIdentityCollision(identity))
+				? ("account_exists" as const)
+				: ("available" as const),
+		};
+	}),
+
 	// 가입 전 본인인증 확인 — 계정이 없는 상태에서 부르므로 publicProcedure다.
 	// 개인정보는 돌려주지 않는다(성별과 가입 여부 불리언만). 인증 자체는 이미
 	// 끝난 뒤이고 포트원 단건조회는 무료라, 임의 ID로 두드려도 얻을 게 없다
@@ -1168,6 +1278,52 @@ export const onboardingRouter = {
 				gender: identity.gender,
 				hasAccount: await findIdentityCollision(identity),
 			};
+		}),
+
+	// 게스트 토큰 발급 — 앱(native) 전용. 웹은 /api/guest 라우트가 인증을 확인하고
+	// 서명 토큰을 쿠키로 내려주지만, 앱은 그 Set-Cookie를 읽을 수 없어 토큰 문자열을
+	// 직접 받아 x-bambi-guest 헤더로 실어 보낸다. 동작은 웹 /api/guest의
+	// handleRealVerification + checkIdentityForSignup(source:"guest")을 서버 안에서
+	// 합친 것이다. 계정이 없는 방문자가 부르므로 rateLimitedPublicProcedure다 —
+	// 무인증 포트원 단건조회·수집 로그 삽입이라 남용되면 표가 부풀 수 있어 IP
+	// 레이트리밋을 건다. 인증 건은 여기서 소진(consume)하지 않는다(웹과 동일 —
+	// 최종 소비자는 가입이다).
+	issueGuestToken: rateLimitedPublicProcedure
+		.input(phoneVerificationInput)
+		.handler(async ({ input }) => {
+			const apiSecret = env.PORTONE_API_SECRET;
+			if (!apiSecret) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "본인인증이 아직 구성되지 않았습니다.",
+				});
+			}
+			await assertIdentityVerificationUsable(input.identityVerificationId);
+			// 미성년(FORBIDDEN)·미완료(BAD_REQUEST) 등은 resolveVerifiedIdentity가
+			// 던진다 — 성인 판정도 이 안에서 끝난다.
+			const identity = await resolveVerifiedIdentity(
+				apiSecret,
+				input.identityVerificationId,
+				identityChannelOptions
+			);
+			const guestId = randomUUID();
+			await recordIdentityVerification({
+				guestId,
+				identity,
+				identityVerificationId: input.identityVerificationId,
+				kind: "guest",
+			});
+			const token = await createGuestToken({
+				gender: identity.gender,
+				gid: guestId,
+				maxAgeSeconds: GUEST_TOKEN_MAX_AGE_SECONDS,
+				now: new Date(),
+				secret: resolveGuestTokenSecret(
+					env.BAMBI_GUEST_TOKEN_SECRET,
+					process.env.NODE_ENV
+				),
+			});
+			// 개인정보(이름·번호·생년월일)는 돌려주지 않는다. 성별은 토큰 안에 이미 있다.
+			return { token };
 		}),
 
 	// 실 휴대폰 본인인증(포트원 인증창) — 클라이언트가 보낸 identityVerificationId를
@@ -1305,6 +1461,7 @@ export const onboardingRouter = {
 		.handler(async ({ context, input }) =>
 			createBambiProfile({
 				...input,
+				guestId: context.guest?.gid,
 				role: "job_seeker",
 				userId: context.session.user.id,
 			})
@@ -1315,6 +1472,7 @@ export const onboardingRouter = {
 		.handler(async ({ context, input }) =>
 			createBambiProfile({
 				...input,
+				guestId: context.guest?.gid,
 				role: "employer",
 				userId: context.session.user.id,
 			})

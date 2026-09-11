@@ -19,6 +19,14 @@ export const jobAdBannerUsages: JobAdBannerUsage[] = [
 export const JOB_POST_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 export const JOB_POST_COVER_IMAGE_LIMIT = 1;
 export const JOB_POST_DETAIL_IMAGE_LIMIT = 5;
+// 세로로 긴 상세 이미지는 업로드 시 조각들로 잘려 여러 행이 된다. 한 원본이 만들 수 있는
+// 조각 수 상한 — 상세 행 개수의 하드캡(원본 상한 × 이 값)과 정렬 여유를 잡는 데 쓴다.
+// 세로 상한(zod 20000px) ÷ 조각 최대 높이(DETAIL_SLICE_MAX_HEIGHT 3500) ≈ 6, 여유 포함 8.
+export const JOB_POST_DETAIL_MAX_SLICES_PER_IMAGE = 8;
+// 조각 하나의 최대 세로 픽셀. Android RN Image(Fresco)는 GPU 텍스처 한계(기기별 4096~,
+// 구형 2048)를 넘는 비트맵을 2의 거듭제곱으로 다운샘플해 가로 해상도까지 깎아 흐려진다.
+// 3500은 거의 모든 기기의 4096 한계 아래로 여유를 두면서 조각 수를 최소화한다(웹은 무관).
+export const DETAIL_SLICE_MAX_HEIGHT = 3500;
 export const JOB_AD_BANNER_LIMIT = 1;
 export const JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH = 120;
 
@@ -102,6 +110,10 @@ export type JobPostImageUploadPolicyResult =
 export interface JobPostMediaPolicyInput extends JobPostImageUploadInput {
 	altText: string;
 	height?: null | number;
+	// 조각 그룹 메타(detail만). 같은 원본에서 잘린 조각들이 공유하는 id와 그룹 내 순서(0부터).
+	// 슬라이싱하지 않은 이미지는 둘 다 null/undefined. 개수 상한은 조각이 아니라 원본으로 센다.
+	sliceGroupId?: null | string;
+	sliceIndex?: null | number;
 	storageKey: string;
 	usage: JobPostMediaUsage;
 	width?: null | number;
@@ -236,7 +248,17 @@ const collectUsageCountIssues = (
 		});
 	}
 
-	if (countOf("detail") > JOB_POST_DETAIL_IMAGE_LIMIT) {
+	// 상세는 조각이 아니라 원본 단위로 센다. 세로로 긴 이미지가 여러 조각 행으로 잘려도
+	// 각 그룹의 첫 조각(sliceIndex 0)만, 슬라이싱 안 한 이미지(sliceIndex null)는 그대로 하나로.
+	const detailOriginalCount = media.filter(
+		(item) =>
+			item.usage === "detail" &&
+			(item.sliceIndex === null ||
+				item.sliceIndex === undefined ||
+				item.sliceIndex === 0)
+	).length;
+
+	if (detailOriginalCount > JOB_POST_DETAIL_IMAGE_LIMIT) {
 		issues.push({
 			code: "too_many_detail_images",
 			maxDetailImages: JOB_POST_DETAIL_IMAGE_LIMIT,
