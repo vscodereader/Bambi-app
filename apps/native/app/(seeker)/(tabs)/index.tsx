@@ -5,7 +5,7 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import { useNetworkState } from "expo-network";
-import { type Href, Link } from "expo-router";
+import { type Href, Link, useRouter } from "expo-router";
 import {
 	Button,
 	Chip,
@@ -33,6 +33,7 @@ import {
 } from "react-native";
 import { StateCard } from "@/src/components/bambi-screen";
 import { JobListCard } from "@/src/components/job-list-card";
+import { SpeedDialFab } from "@/src/components/speed-dial-fab";
 import {
 	buildSeekerJobSections,
 	describeJobForScreenReader,
@@ -365,8 +366,10 @@ function SeekerListFooter({
 		return null;
 	}
 
+	// pb-20은 우하단 FAB(h-14 + bottom-4 = 72dp) 자리를 비워 두는 몫이다 —
+	// 이 안내문이 목록의 마지막 줄이라 여백이 없으면 통째로 버튼에 가린다.
 	return (
-		<View className="gap-3 px-4 py-4">
+		<View className="gap-3 px-4 pt-4 pb-20">
 			<Text className="text-center text-muted text-xs">
 				마지막 공고까지 모두 확인했어요.
 			</Text>
@@ -381,6 +384,7 @@ function SeekerListFooter({
 
 export default function SeekerHomeScreen() {
 	const listRef = useRef<SectionList<NativeSeekerJob, JobSection>>(null);
+	const router = useRouter();
 	const [industry, setIndustry] = useState<null | NativeIndustryOption>(null);
 	const accentColor = useThemeColor("accent");
 	const networkState = useNetworkState();
@@ -540,6 +544,17 @@ export default function SeekerHomeScreen() {
 				sections={sections}
 				stickySectionHeadersEnabled
 				windowSize={7}
+			/>
+			{/* 정적 라우트지만 헤더 버튼들과 같은 이유로 Href 캐스팅 — expo-router 타입
+			    생성이 dev 서버 없이 돌지 않아 새 라우트가 생성 타입에 아직 없다. */}
+			<SpeedDialFab
+				actions={[
+					{
+						icon: "chatbubble-ellipses-outline",
+						label: "1:1 상담",
+						onPress: () => router.push("/(seeker)/support/chat" as Href),
+					},
+				]}
 			/>
 		</View>
 	);

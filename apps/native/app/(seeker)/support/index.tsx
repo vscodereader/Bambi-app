@@ -27,14 +27,32 @@ export default function SupportHomeScreen() {
 	);
 
 	return (
-		<BambiScreen>
+		<BambiScreen
+			stickyFooter={
+				visitor.state === "member" ? (
+					<View className="gap-2">
+						<Button
+							onPress={() =>
+								router.push("/(seeker)/support/inquiries/new" as Href)
+							}
+						>
+							<Button.Label>문의 글 등록하기</Button.Label>
+						</Button>
+						<Button
+							onPress={() => router.push("/(seeker)/support/inquiries" as Href)}
+							variant="secondary"
+						>
+							<Button.Label>내 문의 내역</Button.Label>
+						</Button>
+					</View>
+				) : (
+					<Button onPress={() => router.push("/(seeker)/support/chat" as Href)}>
+						<Button.Label>1:1 상담</Button.Label>
+					</Button>
+				)
+			}
+		>
 			<Stack.Screen options={{ title: "고객센터" }} />
-			<View className="gap-1">
-				<Text className="font-bold text-3xl text-foreground">고객센터</Text>
-				<Text className="text-muted text-sm">
-					자주 묻는 질문을 확인하거나 운영팀에 문의하세요.
-				</Text>
-			</View>
 			{query.isPending ? (
 				<Skeleton className="h-40 rounded-lg" />
 			) : query.isError ? (
@@ -90,37 +108,6 @@ export default function SupportHomeScreen() {
 					</View>
 				</>
 			)}
-			<View className="gap-2">
-				{visitor.state === "member" ? (
-					<>
-						<Button
-							onPress={() => router.push("/(seeker)/support/inquiries" as Href)}
-						>
-							<Button.Label>내 문의 내역</Button.Label>
-						</Button>
-						<Button
-							onPress={() =>
-								router.push("/(seeker)/support/inquiries/new" as Href)
-							}
-							variant="secondary"
-						>
-							<Button.Label>문의 글 등록하기</Button.Label>
-						</Button>
-					</>
-				) : null}
-				<Button
-					onPress={() => router.push("/(seeker)/support/chat" as Href)}
-					variant="secondary"
-				>
-					<Button.Label>1:1 상담</Button.Label>
-				</Button>
-				<Button
-					onPress={() => router.push("/(seeker)/support/manual" as Href)}
-					variant="tertiary"
-				>
-					<Button.Label>이용 가이드</Button.Label>
-				</Button>
-			</View>
 		</BambiScreen>
 	);
 }
