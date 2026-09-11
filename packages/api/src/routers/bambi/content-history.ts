@@ -4,6 +4,7 @@ import {
 	communityComment,
 	communityPost,
 	communityPostLikeHistory,
+	jobViewLog,
 } from "@bambi-app/db/schema/bambi";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 import z from "zod";
@@ -20,6 +21,7 @@ const adminInput = pageInput.extend({
 	filter: z.enum(["all", "comment", "post"]).default("all"),
 	userId: z.string().min(1),
 });
+const adminJobViewInput = pageInput.extend({ userId: z.string().min(1) });
 
 export const contentHistoryRouter = {
 	listMineAuthored: protectedProcedure
@@ -160,6 +162,36 @@ export const contentHistoryRouter = {
 				page: input.page,
 				pageSize: input.pageSize,
 				totalCount: merged.length,
+			};
+		}),
+	listAdminMemberJobViews: adminProcedure
+		.input(adminJobViewInput)
+		.handler(async ({ input }) => {
+			const where = eq(jobViewLog.userId, input.userId);
+			const [[total], items] = await Promise.all([
+				db.select({ value: count() }).from(jobViewLog).where(where),
+				db
+					.select({
+						firstViewedAt: jobViewLog.firstViewedAt,
+						id: jobViewLog.id,
+						jobPostId: jobViewLog.jobPostId,
+						jobTitle: jobViewLog.jobTitle,
+						lastViewedAt: jobViewLog.lastViewedAt,
+						organizationId: jobViewLog.organizationId,
+						organizationName: jobViewLog.organizationName,
+						viewCount: jobViewLog.viewCount,
+					})
+					.from(jobViewLog)
+					.where(where)
+					.orderBy(desc(jobViewLog.lastViewedAt))
+					.limit(input.pageSize)
+					.offset((input.page - 1) * input.pageSize),
+			]);
+			return {
+				items,
+				page: input.page,
+				pageSize: input.pageSize,
+				totalCount: total?.value ?? 0,
 			};
 		}),
 };
