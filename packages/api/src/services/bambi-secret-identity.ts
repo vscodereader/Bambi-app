@@ -5,10 +5,9 @@ import {
 	bambiIdentityVerificationLog,
 	bambiProfile,
 } from "@bambi-app/db/schema/bambi";
-import { and, eq, gt, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 
-const GUEST_IDENTITY_RETENTION_DAYS = 30;
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { isGuestIdentityFresh } from "./bambi-guest-token";
 
 const completeIdentityWhere = () =>
 	and(
@@ -48,27 +47,30 @@ const memberIdentity = async (userId: string) => {
 	return { gender: profile.gender, phoneNumber: profile.phoneNumber };
 };
 
-const guestIdentity = async (guestId: string, freshOnly: boolean) => {
+const guestIdentity = async (
+	guestId: string,
+	freshOnly: boolean,
+	now = new Date()
+) => {
 	const conditions = [
 		eq(bambiIdentityVerificationLog.guestId, guestId),
 		completeIdentityWhere(),
 	];
-	if (freshOnly) {
-		conditions.push(
-			gt(
-				bambiIdentityVerificationLog.updatedAt,
-				new Date(Date.now() - GUEST_IDENTITY_RETENTION_DAYS * DAY_MS)
-			)
-		);
-	}
 	const [row] = await db
 		.select({
+			birth8: bambiIdentityVerificationLog.birthDate,
 			gender: bambiIdentityVerificationLog.gender,
+			id: bambiIdentityVerificationLog.id,
+			name: bambiIdentityVerificationLog.name,
 			phoneNumber: bambiIdentityVerificationLog.phoneNumber,
+			updatedAt: bambiIdentityVerificationLog.updatedAt,
 		})
 		.from(bambiIdentityVerificationLog)
 		.where(and(...conditions))
 		.limit(1);
+	if (row && freshOnly && !isGuestIdentityFresh(row.updatedAt, now)) {
+		return null;
+	}
 	return row ?? null;
 };
 
@@ -79,6 +81,11 @@ export const hasMemberVerifiedIdentity = async (
 export const hasFreshGuestVerifiedIdentity = async (
 	guestId: string
 ): Promise<boolean> => Boolean(await guestIdentity(guestId, true));
+
+export const getFreshGuestVerifiedIdentity = async (
+	guestId: string,
+	now = new Date()
+) => await guestIdentity(guestId, true, now);
 
 const ownerIdentity = async (owner: {
 	guestId?: string | null;

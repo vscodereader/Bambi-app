@@ -14,6 +14,7 @@ import { EllipsisIcon, PencilIcon, Trash2 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import type { DataColumn } from "@/components/bambi/data-table";
+import { JobMetadataBadges } from "@/components/bambi/job-metadata-badges";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import {
 	getJobDisplayStatus,
@@ -162,9 +163,11 @@ export function getEmployerJobsColumns({
 			header: "직종·지역",
 			sortValue: (job) => `${job.industryCategory} · ${job.region}`,
 			cell: (job) => (
-				<span className="break-keep text-muted-foreground">
-					{`${job.industryCategory} · ${job.region}`}
-				</span>
+				<JobMetadataBadges
+					district={job.district}
+					industryCategory={job.industryCategory}
+					region={job.region}
+				/>
 			),
 		},
 		{

@@ -20,6 +20,7 @@ import {
 } from "@/lib/bambi/ga-job";
 import type { Job } from "@/lib/bambi/types";
 import { JobCoverImage } from "./job-cover-image";
+import { JobMetadataBadges } from "./job-metadata-badges";
 
 const SEARCH_PLACEHOLDER = "업종, 지역, 공고 제목 검색";
 
@@ -100,9 +101,11 @@ function JobSearchResults({
 					) : null}
 					<div className="flex min-w-0 flex-1 flex-col">
 						<span className="truncate font-bold text-sm">{job.title}</span>
-						<span className="truncate text-muted-foreground text-xs">
-							{job.type} · {job.location}
-						</span>
+						<JobMetadataBadges
+							district={job.district}
+							industryCategory={job.type}
+							region={job.region}
+						/>
 						<span className="truncate font-extrabold text-sm">{job.pay}</span>
 					</div>
 				</CommandItem>

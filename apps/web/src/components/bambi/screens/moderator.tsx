@@ -5,6 +5,7 @@
 // 복구 가능 여부 판정은 서버(accountRecovery.restoreWithdrawnAccount)와 같은 순수 함수를
 // 공유한다 — 화면이 규칙을 따로 구현하면 버튼은 열려 있는데 서버가 거절하는 상태가 생긴다.
 import { resolveAccountRestoreDecision } from "@bambi-app/api/services/bambi-account-restore";
+import { isUserOnline } from "@bambi-app/api/services/bambi-user-presence";
 import {
 	Accordion,
 	AccordionContent,
@@ -45,14 +46,14 @@ import {
 } from "@bambi-app/ui/components/sheet";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, FileTextIcon, MessageCircle } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChatHistoryContent } from "@/app/moderator/chats/chat-history-dialog";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
@@ -61,6 +62,7 @@ import { JobDetailImage } from "@/components/bambi/job-detail-image";
 import { PageControls } from "@/components/bambi/page-controls";
 import { SecretAuthorMark } from "@/components/bambi/secret-author-mark";
 import { StatusBadge } from "@/components/bambi/status-badge";
+import { UserPresenceIndicator } from "@/components/bambi/user-presence-indicator";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
 	COMMUNITY_BOARDS,
@@ -90,6 +92,10 @@ import type {
 	UserStatus,
 	VisualTone,
 } from "@/lib/bambi/types";
+import {
+	resolveLivePresenceSnapshot,
+	useModeratorPresenceStream,
+} from "@/lib/bambi/use-moderator-presence-stream";
 import { formatDateTime, formatPhone } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 import { BOTTOM_NAV_STACK_OFFSET } from "../bottom-nav-shell";
@@ -109,6 +115,7 @@ import {
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
 import {
+	MODERATION_USERS_QUERY_INPUT,
 	type ModerationBulkAction,
 	type ModerationBulkScope,
 	QUEUE_VERDICT_TOAST,
@@ -2924,6 +2931,90 @@ function UserContentHistory({ userId }: { userId: string }) {
 	);
 }
 
+const JOB_VIEW_SOURCE_LABEL = {
+	crawled: "수집 공고",
+	member: "회원 업소",
+} as const;
+
+// 회원이 상세를 연 공고를 업소 단위로 묶어 보여준다. 업소 아웃바운드 근거로 쓰므로
+// 헤더에 연락처를 두고, 아래에 그 업소의 어떤 공고를 몇 번 봤는지 붙인다.
+function UserJobViewHistory({ userId }: { userId: string }) {
+	const [page, setPage] = useState(1);
+	const query = useQuery(
+		orpc.bambi.contentHistory.listAdminMemberJobViews.queryOptions({
+			input: { page, pageSize: 5, userId },
+		})
+	);
+	const pageCount = Math.max(1, Math.ceil((query.data?.totalCount ?? 0) / 5));
+	return (
+		<Accordion>
+			<AccordionItem value="job-view-history">
+				<AccordionTrigger>최근 본 공고</AccordionTrigger>
+				<AccordionContent>
+					{query.data?.items.length === 0 ? (
+						<p className="mb-0 text-muted-foreground text-sm">
+							아직 본 공고가 없습니다.
+						</p>
+					) : null}
+					<ul className="grid list-none gap-3 p-0">
+						{query.data?.items.map((group) => (
+							<li className="rounded-lg border p-3" key={group.businessKey}>
+								<div className="flex flex-wrap items-start justify-between gap-2">
+									<div className="min-w-0">
+										<strong className="block truncate">
+											{group.businessName || "업소명 없음"}
+										</strong>
+										<span className="text-muted-foreground text-xs">
+											{JOB_VIEW_SOURCE_LABEL[group.source]}
+											{group.businessPhone
+												? ` · ${formatPhone(group.businessPhone)}`
+												: " · 연락처 없음"}
+										</span>
+									</div>
+									<span className="shrink-0 text-muted-foreground text-xs">
+										총 {group.totalViews}회 · 마지막 조회{" "}
+										{formatDateTime(group.lastViewedAt)}
+									</span>
+								</div>
+								<ul className="mt-2 grid list-none gap-1 border-t p-0 pt-2">
+									{group.jobs.map((job) => (
+										<li
+											className="flex items-center justify-between gap-3 text-sm"
+											key={job.id}
+										>
+											<Link
+												className="min-w-0 truncate underline-offset-2 hover:underline"
+												href={
+													(job.source === "member"
+														? `/seeker/jobs/${job.jobPostId}`
+														: `/seeker/jobs/crawled/${job.jobPostId}`) as Route
+												}
+											>
+												{job.jobTitle}
+											</Link>
+											<span className="shrink-0 text-muted-foreground text-xs">
+												{job.viewCount}회 · {formatDateTime(job.lastViewedAt)}
+											</span>
+										</li>
+									))}
+								</ul>
+							</li>
+						))}
+					</ul>
+					<div className="mt-3 flex justify-end">
+						<PageControls
+							disabled={query.isFetching}
+							onPageChange={setPage}
+							page={page}
+							pageCount={pageCount}
+						/>
+					</div>
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
+	);
+}
+
 // 무료 법률 자문 답변 계정 지정·해제. 구직자 ↔ 법률자문만 오갈 수 있고(서버 규칙),
 // 액션 UI는 사용자 목록(/moderator/users)이 이 헬퍼로 대상 여부를 판정해 띄운다.
 const LEGAL_ADVISOR_ROLE = "legal_advisor";
@@ -3026,6 +3117,29 @@ export function UserDetail({
 	onRevertWarning: (id: string, reason: string) => undefined | Promise<boolean>;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
 }) {
+	const queryClient = useQueryClient();
+	const livePresence = useModeratorPresenceStream();
+	const presenceSnapshot = resolveLivePresenceSnapshot(
+		livePresence.users.get(item.id),
+		item
+	);
+	const isOnline = isUserOnline({
+		...presenceSnapshot,
+		now: new Date(livePresence.now),
+		offlineAfterMinutes: livePresence.policyMinutes ?? item.offlineAfterMinutes,
+	});
+	useEffect(() => {
+		if (livePresence.reconnectRevision <= 1) {
+			return;
+		}
+		queryClient
+			.invalidateQueries({
+				queryKey: orpc.bambi.moderation.listUsers.queryKey({
+					input: MODERATION_USERS_QUERY_INPUT,
+				}),
+			})
+			.catch(() => undefined);
+	}, [livePresence.reconnectRevision, queryClient]);
 	const c = STATUS_CONF[item.status];
 	// 경고/정지 버튼을 누르면 곧바로 적용하지 않고, 공용 사유 작성 시트를 띄워
 	// 기본 문구가 프리필된 사유를 운영자가 확인·수정한 뒤 확정하게 한다.
@@ -3052,6 +3166,7 @@ export function UserDetail({
 							</div>
 						</div>
 						<div className="flex items-center gap-2">
+							<UserPresenceIndicator isOnline={isOnline} withLabel />
 							<Badge dot tone={c.tone}>
 								{c.label}
 							</Badge>
@@ -3076,6 +3191,14 @@ export function UserDetail({
 					</div>
 					<Separator className="hidden md:block" />
 					<ContextSection title="계정 정보">
+						<ContextField
+							label="마지막 활동"
+							value={
+								presenceSnapshot.lastActivityAt
+									? formatDateTime(presenceSnapshot.lastActivityAt)
+									: "마지막 활동 기록 없음"
+							}
+						/>
 						<ContextField
 							label="인증 번호"
 							value={item.phoneNumber ?? "미인증"}
@@ -3157,6 +3280,7 @@ export function UserDetail({
 					) : null}
 					<UserModerationHistory key={item.id} userId={item.id} />
 					<UserContentHistory userId={item.id} />
+					<UserJobViewHistory userId={item.id} />
 					<div>
 						<div className="mb-2.5 font-bold text-[13px] text-foreground">
 							제재 적용

@@ -8,6 +8,10 @@
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { MEMBER_GRADE_CHANGE_REASON_MAX_LENGTH } from "@bambi-app/api/services/bambi-member-grade-policy";
+import {
+	DEFAULT_USER_OFFLINE_AFTER_MINUTES,
+	isUserOnline,
+} from "@bambi-app/api/services/bambi-user-presence";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
@@ -58,7 +62,12 @@ import { EmptyState } from "@/components/bambi/empty-state";
 import { GradeBadge } from "@/components/bambi/grade-badge";
 import { MemberPointAdjustDialog } from "@/components/bambi/member-point-adjust-dialog";
 import { PageControls } from "@/components/bambi/page-controls";
+import { UserPresenceIndicator } from "@/components/bambi/user-presence-indicator";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
+import {
+	resolveLivePresenceSnapshot,
+	useModeratorPresenceStream,
+} from "@/lib/bambi/use-moderator-presence-stream";
 import { formatDate } from "@/lib/bambi-format";
 import { client, orpc } from "@/utils/orpc";
 
@@ -97,6 +106,30 @@ type AttendanceRow = Awaited<
 type GradeRow = Awaited<
 	ReturnType<AppRouterClient["bambi"]["memberGrades"]["list"]>
 >[number];
+
+const withLivePresence = (
+	item: AttendanceRow,
+	event: Parameters<typeof resolveLivePresenceSnapshot>[0],
+	now: number,
+	offlineAfterMinutes: number
+): AttendanceRow => {
+	const { lastActivityAt, presenceDisconnectedAt } =
+		resolveLivePresenceSnapshot(event, {
+			deletedAt: null,
+			lastActivityAt: item.lastActivityAt,
+			presenceDisconnectedAt: item.presenceDisconnectedAt,
+		});
+	return {
+		...item,
+		isOnline: isUserOnline({
+			deletedAt: null,
+			lastActivityAt,
+			now: new Date(now),
+			offlineAfterMinutes,
+			presenceDisconnectedAt,
+		}),
+	};
+};
 
 const formatPoints = (points: number) => `${points.toLocaleString("ko-KR")}P`;
 
@@ -238,7 +271,7 @@ function MemberRow({
 	selected: boolean;
 }) {
 	return (
-		<TableRow className="cursor-pointer" onClick={onOpen}>
+		<TableRow className="h-14 cursor-pointer" onClick={onOpen}>
 			<TableCell
 				className="text-center align-middle"
 				onClick={(event) => event.stopPropagation()}
@@ -251,26 +284,36 @@ function MemberRow({
 					/>
 				</div>
 			</TableCell>
+			<TableCell className="w-12 text-center align-middle">
+				<span className="flex justify-center">
+					<UserPresenceIndicator isOnline={item.isOnline} />
+				</span>
+			</TableCell>
 			<TableCell>
-				<div className="flex flex-col gap-0.5">
-					<span className="flex items-center gap-1.5 font-medium text-foreground">
+				<div className="flex min-w-0 max-w-40 items-center gap-1.5 whitespace-nowrap">
+					<span className="flex min-w-0 items-center gap-1.5 font-medium text-foreground">
 						<button
-							className="hover:underline"
+							className="min-w-0 truncate hover:underline"
 							onClick={(event) => {
 								event.stopPropagation();
 								onOpen();
 							}}
+							title={item.displayName}
 							type="button"
 						>
 							{item.displayName}
 						</button>
-						{item.attendedToday ? (
-							<Badge variant="success">오늘 출석</Badge>
-						) : null}
 					</span>
-					<span className="max-w-40 truncate text-muted-foreground text-xs">
+					<span className="text-muted-foreground">·</span>
+					<span
+						className="min-w-0 truncate text-muted-foreground text-xs"
+						title={item.loginId ?? undefined}
+					>
 						{item.loginId ?? "-"}
 					</span>
+					{item.attendedToday ? (
+						<Badge variant="success">오늘 출석</Badge>
+					) : null}
 				</div>
 			</TableCell>
 			<TableCell className="text-muted-foreground">
@@ -311,6 +354,7 @@ function MemberRow({
 	);
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: filters, server paging, dialogs, and live presence share one page state boundary.
 export default function ModeratorAttendancePage() {
 	const router = useRouter();
 	const [search, setSearch] = useState("");
@@ -324,6 +368,7 @@ export default function ModeratorAttendancePage() {
 	const [bulkPending, setBulkPending] = useState(false);
 	const debouncedSearch = useDebouncedValue(search);
 	const queryClient = useQueryClient();
+	const livePresence = useModeratorPresenceStream();
 
 	const listQuery = useQuery(
 		orpc.bambi.attendance.adminList.queryOptions({
@@ -340,6 +385,16 @@ export default function ModeratorAttendancePage() {
 		})
 	);
 	const gradesQuery = useQuery(orpc.bambi.memberGrades.list.queryOptions());
+	useEffect(() => {
+		if (livePresence.reconnectRevision <= 1) {
+			return;
+		}
+		queryClient
+			.invalidateQueries({
+				queryKey: orpc.bambi.attendance.adminList.key(),
+			})
+			.catch(() => undefined);
+	}, [livePresence.reconnectRevision, queryClient]);
 
 	const adjustMutation = useMutation(
 		orpc.bambi.attendance.adminAdjustPoints.mutationOptions({
@@ -366,7 +421,18 @@ export default function ModeratorAttendancePage() {
 		})
 	);
 
-	const items = listQuery.data?.items ?? [];
+	const offlineAfterMinutes =
+		livePresence.policyMinutes ??
+		listQuery.data?.offlineAfterMinutes ??
+		DEFAULT_USER_OFFLINE_AFTER_MINUTES;
+	const items = (listQuery.data?.items ?? []).map((item) =>
+		withLivePresence(
+			item,
+			livePresence.users.get(item.userId),
+			livePresence.now,
+			offlineAfterMinutes
+		)
+	);
 	const summary = listQuery.data?.summary ?? {
 		attendedToday: 0,
 		eligibleUsers: 0,
@@ -559,6 +625,7 @@ export default function ModeratorAttendancePage() {
 										/>
 									</div>
 								</TableHead>
+								<TableHead className="w-12 text-center">접속</TableHead>
 								<TableHead>회원</TableHead>
 								<TableHead>역할</TableHead>
 								<TableHead>등급</TableHead>

@@ -1,6 +1,7 @@
 import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
 import {
+	bambiMemberGrade,
 	bambiSiteSettings,
 	crawledCommunityTopic,
 	crawledJobPost,
@@ -21,7 +22,6 @@ import {
 	sql,
 } from "drizzle-orm";
 import z from "zod";
-
 import { adminProcedure } from "../../index";
 import { runCrawlTick } from "../../services/bambi-crawl-ingest";
 import {
@@ -32,9 +32,15 @@ import {
 	isRunStale,
 } from "../../services/bambi-crawl-policy";
 import {
+	crawledDisplayDate,
+	crawledDisplayTitle,
+	requireCrawlBoard,
+} from "../../services/bambi-crawled-community";
+import {
 	crawledJobEditedImageDocumentSchema,
 	createOriginalImageDocument,
 } from "../../services/bambi-crawled-image-document";
+import { crawledCommunityEditRouter } from "./crawled-community-edit";
 
 const SETTINGS_ROW_ID = "default";
 const imageEditIdInput = z.object({ id: z.uuid() }).strict();
@@ -86,12 +92,13 @@ const listInput = z.object({
 // 전체로 가는 우회로이고(crawled-jobs.ts PUBLIC_COLUMNS와 같은 원칙), 삭제·복구 판단에는
 // 제목과 반응 지표만 있으면 된다.
 const TOPIC_LIST_COLUMNS = {
+	boardKey: crawledCommunityTopic.boardKey,
 	boardName: crawledCommunityTopic.boardName,
 	commentCount: crawledCommunityTopic.commentCount,
 	id: crawledCommunityTopic.id,
 	removedAt: crawledCommunityTopic.removedAt,
-	sourcePostedAt: crawledCommunityTopic.sourcePostedAt,
-	title: crawledCommunityTopic.title,
+	displayedAt: crawledDisplayDate,
+	title: crawledDisplayTitle,
 	viewCount: crawledCommunityTopic.viewCount,
 } as const;
 
@@ -143,6 +150,8 @@ const sourceSiteInput = z.enum(["foxalba", "queenalba"]);
 const contentTypeInput = z.enum(["job_post", "community"]);
 
 const updateSettingsInput = z.object({
+	boardKey: z.string().min(1).max(40).nullable().optional(),
+	editorGradeId: z.uuid().nullable().optional(),
 	contentType: contentTypeInput,
 	enabled: z.boolean(),
 	intervalHours: z
@@ -157,6 +166,7 @@ const updateSettingsInput = z.object({
 const RECENT_RUN_LIMIT = 20;
 
 export const crawlerRouter = {
+	...crawledCommunityEditRouter,
 	// 수집 목록. 운영자 전용이며 연락처 계열은 포함하지 않는다(LIST_COLUMNS 주석 참고).
 	list: adminProcedure.input(listInput).handler(async ({ input }) => {
 		const where = input.status
@@ -447,7 +457,7 @@ export const crawlerRouter = {
 					.where(where)
 					// 원 게시일 최신순. nulls last를 명시하는 이유는 Postgres의 DESC 기본이
 					// NULLS FIRST라, 날짜를 못 읽은 글이 최신 글 앞을 통째로 막기 때문이다.
-					.orderBy(sql`${crawledCommunityTopic.sourcePostedAt} desc nulls last`)
+					.orderBy(sql`${crawledDisplayDate} desc nulls last`)
 					.limit(input.limit)
 					.offset(input.offset),
 				db.select({ value: count() }).from(crawledCommunityTopic).where(where),
@@ -485,6 +495,8 @@ export const crawlerRouter = {
 	getSettings: adminProcedure.handler(async () => {
 		const [row] = await db
 			.select({
+				boardKey: bambiSiteSettings.crawlCommunityBoardKey,
+				editorGradeId: bambiSiteSettings.crawledCommunityEditorGradeId,
 				contentType: bambiSiteSettings.crawlContentType,
 				enabled: bambiSiteSettings.crawlEnabled,
 				intervalHours: bambiSiteSettings.crawlIntervalHours,
@@ -499,6 +511,8 @@ export const crawlerRouter = {
 			// 수집 대상이 제공하는 (사이트 × 데이터 종류) 조합. 화면이 고를 수 있는 데이터
 			// 종류를 이 목록으로 그린다(퀸알바=공고·커뮤니티).
 			availableTargets: [...AVAILABLE_CRAWL_TARGETS],
+			boardKey: row?.boardKey ?? null,
+			editorGradeId: row?.editorGradeId ?? null,
 			contentType: row?.contentType ?? "job_post",
 			defaultIntervalHours: DEFAULT_CRAWL_INTERVAL_HOURS,
 			// 행이 없으면 꺼진 상태로 본다. 설정이 없다는 이유로 수집이 시작되면 안 된다.
@@ -515,7 +529,33 @@ export const crawlerRouter = {
 	updateSettings: adminProcedure
 		.input(updateSettingsInput)
 		.handler(async ({ input }) => {
+			if (input.boardKey) {
+				await requireCrawlBoard(input.boardKey);
+			}
+			if (input.contentType === "community" && !input.boardKey) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "수집할 게시판을 선택해 주세요.",
+				});
+			}
+			if (input.editorGradeId) {
+				const [grade] = await db
+					.select({ id: bambiMemberGrade.id })
+					.from(bambiMemberGrade)
+					.where(eq(bambiMemberGrade.id, input.editorGradeId))
+					.limit(1);
+				if (!grade) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "선택한 등급을 찾을 수 없습니다.",
+					});
+				}
+			}
 			const values = {
+				...(input.boardKey === undefined
+					? {}
+					: { crawlCommunityBoardKey: input.boardKey }),
+				...(input.editorGradeId === undefined
+					? {}
+					: { crawledCommunityEditorGradeId: input.editorGradeId }),
 				crawlContentType: input.contentType,
 				crawlEnabled: input.enabled,
 				crawlIntervalHours: input.intervalHours,
@@ -527,6 +567,8 @@ export const crawlerRouter = {
 				.values({ id: SETTINGS_ROW_ID, ...values })
 				.onConflictDoUpdate({ set: values, target: bambiSiteSettings.id })
 				.returning({
+					boardKey: bambiSiteSettings.crawlCommunityBoardKey,
+					editorGradeId: bambiSiteSettings.crawledCommunityEditorGradeId,
 					contentType: bambiSiteSettings.crawlContentType,
 					enabled: bambiSiteSettings.crawlEnabled,
 					intervalHours: bambiSiteSettings.crawlIntervalHours,
@@ -545,10 +587,17 @@ export const crawlerRouter = {
 	// 고르고 저장까지 해야 원하는 종류가 돌던 흐름이 실제로 헷갈렸다. 여기서 설정 row를
 	// 갱신하지는 않는다(저장은 updateSettings의 몫). 생략하면 저장된 설정으로 돈다.
 	runNow: adminProcedure
-		.input(z.object({ contentType: contentTypeInput.optional() }))
+		.input(
+			z.object({
+				contentType: contentTypeInput.optional(),
+				boardKey: z.string().min(1).max(40).optional(),
+			})
+		)
 		.handler(async ({ input }) => {
 			const [settings] = await db
 				.select({
+					boardKey: bambiSiteSettings.crawlCommunityBoardKey,
+					editorGradeId: bambiSiteSettings.crawledCommunityEditorGradeId,
 					contentType: bambiSiteSettings.crawlContentType,
 					sourceSite: bambiSiteSettings.crawlSourceSite,
 				})
@@ -573,6 +622,10 @@ export const crawlerRouter = {
 				return { reason: "not_implemented" as const, started: false };
 			}
 
+			const board =
+				(input.contentType ?? settings?.contentType) === "community"
+					? await requireCrawlBoard(input.boardKey ?? settings?.boardKey)
+					: null;
 			const [active] = await db
 				.select({ startedAt: crawlRun.startedAt })
 				.from(crawlRun)
@@ -589,6 +642,7 @@ export const crawlerRouter = {
 			// crawl_run에 기록되므로 여기서는 미처리 거부만 막는다.
 			runCrawlTick(new Date(), undefined, {
 				contentType: input.contentType,
+				boardKey: board?.key,
 				force: true,
 			}).catch(() => {
 				// 실패 사유는 crawl_run.error에 남는다. 화면은 최근 회차 목록에서 확인한다.

@@ -41,6 +41,17 @@ import {
 } from "../../services/bambi-chat-realtime";
 import { getRoomIdsHiddenByActiveReport } from "../../services/bambi-chat-report-availability";
 import {
+	getChatResponseBucketsByUser,
+	lockChatResponseActivityRoom,
+	recordChatResponseActivity,
+} from "../../services/bambi-chat-response";
+import {
+	chatContactResponseActivityKey,
+	chatContactRevealActivityKey,
+	chatInterviewStatusActivityKey,
+	chatMessageActivityKey,
+} from "../../services/bambi-chat-response-policy";
+import {
 	drainPendingChatMessageSyncs,
 	enqueueChatMessageSync,
 	notifyChatMessageCreated,
@@ -61,6 +72,7 @@ import {
 	getChatAttachmentObjectUrl,
 	isOwnedChatAttachmentKey,
 } from "../../services/bambi-storage";
+import { getUserPresenceStatesByIds } from "../../services/bambi-user-presence-db";
 import {
 	resolveVisibleDisplayName,
 	WITHDRAWN_DISPLAY_NAME,
@@ -974,6 +986,14 @@ export const chatsRouter = {
 				withdrawnCounterpartIds.add(counterpartId);
 			}
 		}
+		const counterpartUserIds = visibleRooms.map(({ room }) =>
+			counterpartUserId(room, profile.userId)
+		);
+		const [presenceStates, responseBuckets] = await Promise.all([
+			getUserPresenceStatesByIds([profile.userId, ...counterpartUserIds]),
+			getChatResponseBucketsByUser(counterpartUserIds),
+		]);
+		const viewerPresence = presenceStates.get(profile.userId);
 
 		// 안 읽음 수도 방마다 묻지 않고 한 번의 집계로 모은다.
 		const unreadCountByRoomId = await getUnreadMessageCountsByRoom({
@@ -981,26 +1001,41 @@ export const chatsRouter = {
 			userId: profile.userId,
 		});
 
-		return visibleRooms.map(({ lastMessage, room }) => ({
-			...room,
-			// 목록이 쓰는 isBlocked는 방 컬럼이 아니라 "이 방에 들어갈 수 있는가"다.
-			// chatRoom.isBlocked는 운영자 차단만 담고, 사용자 간 차단은 user_block에
-			// 따로 있다 — 방 진입 가드(throwIfChatBlocked)는 둘 다 보므로 목록이 방
-			// 컬럼만 보면 "열리는 것처럼 보이는데 누르면 에러"가 그대로 남는다.
-			isBlocked:
-				room.isBlocked ||
-				blockedCounterpartIds.has(counterpartUserId(room, profile.userId)),
-			counterpartName: counterpartNames.get(room.id) ?? null,
-			counterpartWithdrawn: withdrawnCounterpartIds.has(
-				counterpartUserId(room, profile.userId)
-			),
-			// 목록 화면이 뷰어 쪽(구직자/구인자)을 판별하고 차단 대상을 고르는 근거.
-			// 방 row에는 양쪽 id만 있어 뷰어가 누구인지 화면에서 알 수 없다.
-			counterpartUserId: counterpartUserId(room, profile.userId),
-			jobTitle: jobTitleById.get(room.jobPostId) ?? null,
-			lastMessageBody: lastMessage?.body ?? null,
-			unreadCount: unreadCountByRoomId.get(room.id) ?? 0,
-		}));
+		return visibleRooms.map(({ lastMessage, room }) => {
+			const counterpartId = counterpartUserId(room, profile.userId);
+			const counterpartPresence = presenceStates.get(counterpartId);
+			const isBlocked =
+				room.isBlocked || blockedCounterpartIds.has(counterpartId);
+			const counterpartWithdrawn = withdrawnCounterpartIds.has(counterpartId);
+			const canExposeCounterpartResponse = !(isBlocked || counterpartWithdrawn);
+			return {
+				...room,
+				// 목록이 쓰는 isBlocked는 방 컬럼이 아니라 "이 방에 들어갈 수 있는가"다.
+				// chatRoom.isBlocked는 운영자 차단만 담고, 사용자 간 차단은 user_block에
+				// 따로 있다 — 방 진입 가드(throwIfChatBlocked)는 둘 다 보므로 목록이 방
+				// 컬럼만 보면 "열리는 것처럼 보이는데 누르면 에러"가 그대로 남는다.
+				isBlocked,
+				counterpartName: counterpartNames.get(room.id) ?? null,
+				counterpartWithdrawn,
+				counterpartIsOnline: canExposeCounterpartResponse
+					? (counterpartPresence?.isOnline ?? false)
+					: false,
+				counterpartPresenceRefreshAt: canExposeCounterpartResponse
+					? (counterpartPresence?.presenceRefreshAt ?? null)
+					: null,
+				counterpartResponseBucket: canExposeCounterpartResponse
+					? (responseBuckets.get(counterpartId) ?? null)
+					: null,
+				// 목록 화면이 뷰어 쪽(구직자/구인자)을 판별하고 차단 대상을 고르는 근거.
+				// 방 row에는 양쪽 id만 있어 뷰어가 누구인지 화면에서 알 수 없다.
+				counterpartUserId: counterpartId,
+				jobTitle: jobTitleById.get(room.jobPostId) ?? null,
+				lastMessageBody: lastMessage?.body ?? null,
+				unreadCount: unreadCountByRoomId.get(room.id) ?? 0,
+				viewerIsOnline: viewerPresence?.isOnline ?? false,
+				viewerPresenceRefreshAt: viewerPresence?.presenceRefreshAt ?? null,
+			};
+		});
 	}),
 
 	// 헤더 채팅 버튼 핀·모바일 탭 뱃지용 경량 집계. listMine은 방마다 상대 이름·
@@ -1127,6 +1162,7 @@ export const chatsRouter = {
 					title: jobPost.title,
 					industryCategory: jobPost.industryCategory,
 					region: jobPost.region,
+					district: jobPost.district,
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					status: jobPost.status,
@@ -1185,11 +1221,18 @@ export const chatsRouter = {
 				[room],
 				profile.userId
 			);
+			const counterpartId = counterpartUserId(room, profile.userId);
 			const [counterpartUser] = await db
 				.select({ deletedAt: user.deletedAt, image: user.image })
 				.from(user)
-				.where(eq(user.id, counterpartUserId(room, profile.userId)))
+				.where(eq(user.id, counterpartId))
 				.limit(1);
+			const [presenceStates, responseBuckets] = await Promise.all([
+				getUserPresenceStatesByIds([profile.userId, counterpartId]),
+				getChatResponseBucketsByUser([counterpartId]),
+			]);
+			const viewerPresence = presenceStates.get(profile.userId);
+			const counterpartPresence = presenceStates.get(counterpartId);
 			// 구인자 인증번호는 양쪽에 노출, 구직자 공개번호는 revealed 요청을 보는
 			// 구인자에게만 응답 조립 시점에 실어 준다(DB metadata엔 저장하지 않음).
 			const participantPhones = await db
@@ -1216,8 +1259,13 @@ export const chatsRouter = {
 			const seekerVerifiedPhone = verifiedPhoneFor(room.jobSeekerUserId);
 
 			return {
+				counterpartIsOnline: counterpartPresence?.isOnline ?? false,
 				counterpartName: counterpartNames.get(room.id) ?? null,
+				counterpartPresenceRefreshAt:
+					counterpartPresence?.presenceRefreshAt ?? null,
 				counterpartProfileImageUrl: counterpartUser?.image ?? null,
+				counterpartResponseBucket: responseBuckets.get(counterpartId) ?? null,
+				counterpartUserId: counterpartId,
 				counterpartWithdrawn: Boolean(counterpartUser?.deletedAt),
 				currentUserId: profile.userId,
 				employerVerifiedPhone: verifiedPhoneFor(room.employerUserId),
@@ -1242,6 +1290,8 @@ export const chatsRouter = {
 				nextCursor,
 				room,
 				schedules,
+				viewerIsOnline: viewerPresence?.isOnline ?? false,
+				viewerPresenceRefreshAt: viewerPresence?.presenceRefreshAt ?? null,
 			};
 		}),
 
@@ -1292,6 +1342,7 @@ export const chatsRouter = {
 			// 뒤에 전파를 이어 했기 때문에, 그 사이에 죽으면 상대에게 아무 신호도 가지
 			// 않는 메시지가 남았다.
 			const message = await db.transaction(async (tx) => {
+				await lockChatResponseActivityRoom(tx, room.id);
 				const [created] = await tx
 					.insert(chatMessage)
 					.values({
@@ -1306,6 +1357,12 @@ export const chatsRouter = {
 				if (!created) {
 					return null;
 				}
+				await recordChatResponseActivity(tx, {
+					activityKey: chatMessageActivityKey(created.id),
+					actorUserId: profile.userId,
+					chatRoomId: room.id,
+					occurredAt: created.createdAt,
+				});
 
 				await tx
 					.update(chatRoom)
@@ -1375,6 +1432,7 @@ export const chatsRouter = {
 			const attachmentCreatedAt = new Date();
 			const textCreatedAt = new Date(attachmentCreatedAt.getTime() + 1);
 			const inserted = await db.transaction(async (tx) => {
+				await lockChatResponseActivityRoom(tx, room.id);
 				const [createdMessage] = await tx
 					.insert(chatMessage)
 					.values({
@@ -1390,6 +1448,12 @@ export const chatsRouter = {
 				if (!createdMessage) {
 					return null;
 				}
+				await recordChatResponseActivity(tx, {
+					activityKey: chatMessageActivityKey(createdMessage.id),
+					actorUserId: profile.userId,
+					chatRoomId: room.id,
+					occurredAt: createdMessage.createdAt,
+				});
 
 				const [createdAttachment] = await tx
 					.insert(chatAttachment)
@@ -1430,6 +1494,12 @@ export const chatsRouter = {
 							message: "Text message ID is already in use.",
 						});
 					}
+					await recordChatResponseActivity(tx, {
+						activityKey: chatMessageActivityKey(createdTextMessage.id),
+						actorUserId: profile.userId,
+						chatRoomId: room.id,
+						occurredAt: createdTextMessage.createdAt,
+					});
 				}
 
 				await tx
@@ -1584,6 +1654,7 @@ export const chatsRouter = {
 			// 일정 INSERT와 인라인 안내 메시지 INSERT를 한 트랜잭션으로 묶는다. 커밋이
 			// 안 되면 둘 다 없다 — 일정만 남고 채팅엔 아무 흔적도 없는 어긋남이 사라진다.
 			const schedule = await db.transaction(async (tx) => {
+				await lockChatResponseActivityRoom(tx, room.id);
 				const [createdSchedule] = await tx
 					.insert(interviewSchedule)
 					.values({
@@ -1620,6 +1691,12 @@ export const chatsRouter = {
 						message: "Interview proposal message could not be created.",
 					});
 				}
+				await recordChatResponseActivity(tx, {
+					activityKey: chatMessageActivityKey(createdMessage.id),
+					actorUserId: profile.userId,
+					chatRoomId: room.id,
+					occurredAt: createdMessage.createdAt,
+				});
 
 				await tx
 					.update(chatRoom)
@@ -1696,24 +1773,38 @@ export const chatsRouter = {
 				throw new ORPCError("FORBIDDEN");
 			}
 
-			const [updatedSchedule] = await db
-				.update(interviewSchedule)
-				.set({ status: input.status })
-				.where(
-					and(
-						eq(interviewSchedule.id, input.interviewScheduleId),
-						eq(interviewSchedule.status, schedule.status)
+			const updatedSchedule = await db.transaction(async (tx) => {
+				await lockChatResponseActivityRoom(tx, room.id);
+				const actionAt = new Date();
+				const [updated] = await tx
+					.update(interviewSchedule)
+					.set({ status: input.status })
+					.where(
+						and(
+							eq(interviewSchedule.id, input.interviewScheduleId),
+							eq(interviewSchedule.status, schedule.status)
+						)
 					)
-				)
-				.returning();
+					.returning();
 
-			if (!updatedSchedule) {
-				throw new ORPCError("CONFLICT", {
-					message: "Interview schedule status has changed.",
+				if (!updated) {
+					throw new ORPCError("CONFLICT", {
+						message: "Interview schedule status has changed.",
+					});
+				}
+				await recordChatResponseActivity(tx, {
+					activityKey: chatInterviewStatusActivityKey(updated.id, input.status),
+					actorUserId: profile.userId,
+					chatRoomId: room.id,
+					occurredAt: actionAt,
 				});
-			}
+				return updated;
+			});
 
 			emitRoomUpdated({ roomId: room.id });
+			emitChatListUpdated([room.employerUserId, room.jobSeekerUserId], {
+				roomId: room.id,
+			});
 
 			// 확정·거절·취소·완료 전부 상대가 알아야 하는 전이다. 상태값은 metadata.action에
 			// 실어 화면이 "면접이 확정됐어요"처럼 문구를 가른다.
@@ -1925,25 +2016,42 @@ export const chatsRouter = {
 
 			assertChatSendRateLimit("revealContact", profile.userId);
 
-			const [consent] = await db
-				.insert(contactRevealConsent)
-				.values({
-					interviewScheduleId: schedule.id,
-					userId: profile.userId,
-					contactMethod: input.contactMethod,
-					contactValue: input.contactValue,
-				})
-				.onConflictDoUpdate({
-					target: [
-						contactRevealConsent.interviewScheduleId,
-						contactRevealConsent.userId,
-						contactRevealConsent.contactMethod,
-					],
-					set: {
+			const consent = await db.transaction(async (tx) => {
+				await lockChatResponseActivityRoom(tx, room.id);
+				const actionAt = new Date();
+				const [saved] = await tx
+					.insert(contactRevealConsent)
+					.values({
+						interviewScheduleId: schedule.id,
+						userId: profile.userId,
+						contactMethod: input.contactMethod,
 						contactValue: input.contactValue,
-					},
-				})
-				.returning();
+					})
+					.onConflictDoUpdate({
+						target: [
+							contactRevealConsent.interviewScheduleId,
+							contactRevealConsent.userId,
+							contactRevealConsent.contactMethod,
+						],
+						set: {
+							contactValue: input.contactValue,
+						},
+					})
+					.returning();
+				if (!saved) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR");
+				}
+				await recordChatResponseActivity(tx, {
+					activityKey: chatContactRevealActivityKey(
+						schedule.id,
+						input.contactMethod
+					),
+					actorUserId: profile.userId,
+					chatRoomId: room.id,
+					occurredAt: actionAt,
+				});
+				return saved;
+			});
 
 			await recordJobPerformanceEvent({
 				actorUserId: profile.userId,
@@ -1965,6 +2073,10 @@ export const chatsRouter = {
 				recipientUserId: room.jobSeekerUserId,
 				targetId: schedule.id,
 				targetType: "contact_reveal",
+			});
+			emitRoomUpdated({ roomId: room.id });
+			emitChatListUpdated([room.employerUserId, room.jobSeekerUserId], {
+				roomId: room.id,
 			});
 
 			return consent;
@@ -2018,6 +2130,7 @@ export const chatsRouter = {
 			// 서버가 만드는 메시지도 클라이언트 전송과 같은 유틸로 id를 만든다 —
 			// 정렬·커서의 기준(UUIDv7)이 메시지 종류에 따라 갈리지 않게.
 			const message = await db.transaction(async (tx) => {
+				await lockChatResponseActivityRoom(tx, room.id);
 				const [created] = await tx
 					.insert(chatMessage)
 					.values({
@@ -2039,6 +2152,12 @@ export const chatsRouter = {
 						message: "Contact request could not be created.",
 					});
 				}
+				await recordChatResponseActivity(tx, {
+					activityKey: chatMessageActivityKey(created.id),
+					actorUserId: profile.userId,
+					chatRoomId: room.id,
+					occurredAt: created.createdAt,
+				});
 
 				await tx
 					.update(chatRoom)
@@ -2110,22 +2229,36 @@ export const chatsRouter = {
 
 			const nextStatus: ContactRequestStatus =
 				input.decision === "reveal" ? "revealed" : "declined";
-			const [updated] = await db
-				.update(chatMessage)
-				.set({ metadata: { ...metadata, status: nextStatus } })
-				.where(
-					and(
-						eq(chatMessage.id, message.id),
-						sql`${chatMessage.metadata}->>'status' = 'pending'`
+			const updated = await db.transaction(async (tx) => {
+				await lockChatResponseActivityRoom(tx, room.id);
+				const actionAt = new Date();
+				const [saved] = await tx
+					.update(chatMessage)
+					.set({ metadata: { ...metadata, status: nextStatus } })
+					.where(
+						and(
+							eq(chatMessage.id, message.id),
+							sql`${chatMessage.metadata}->>'status' = 'pending'`
+						)
 					)
-				)
-				.returning();
+					.returning();
 
-			if (!updated) {
-				throw new ORPCError("CONFLICT", {
-					message: "연락처 공개 요청 상태가 이미 변경되었습니다.",
+				if (!saved) {
+					throw new ORPCError("CONFLICT", {
+						message: "연락처 공개 요청 상태가 이미 변경되었습니다.",
+					});
+				}
+				await recordChatResponseActivity(tx, {
+					activityKey: chatContactResponseActivityKey(
+						message.id,
+						input.decision
+					),
+					actorUserId: profile.userId,
+					chatRoomId: room.id,
+					occurredAt: actionAt,
 				});
-			}
+				return saved;
+			});
 
 			await notifyChatMessageCreated({
 				createdAt: updated.createdAt,

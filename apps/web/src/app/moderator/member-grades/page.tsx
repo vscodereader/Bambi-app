@@ -315,6 +315,12 @@ export default function ModeratorMemberGradesPage() {
 
 	const invalidate = async () => {
 		await queryClient.invalidateQueries({
+			queryKey: orpc.bambi.community.key(),
+		});
+		await queryClient.invalidateQueries({
+			queryKey: orpc.bambi.crawler.getSettings.queryKey(),
+		});
+		await queryClient.invalidateQueries({
 			queryKey: orpc.bambi.memberGrades.key(),
 		});
 	};

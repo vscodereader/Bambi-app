@@ -1,11 +1,14 @@
 import { db } from "@bambi-app/db";
+import { user } from "@bambi-app/db/schema/auth";
 import {
+	bambiProfile,
 	communityBoard,
 	communityComment,
 	communityPost,
 	communityPostLikeHistory,
+	jobViewLog,
 } from "@bambi-app/db/schema/bambi";
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure } from "../../index";
@@ -20,6 +23,7 @@ const adminInput = pageInput.extend({
 	filter: z.enum(["all", "comment", "post"]).default("all"),
 	userId: z.string().min(1),
 });
+const adminJobViewInput = pageInput.extend({ userId: z.string().min(1) });
 
 export const contentHistoryRouter = {
 	listMineAuthored: protectedProcedure
@@ -162,4 +166,102 @@ export const contentHistoryRouter = {
 				totalCount: merged.length,
 			};
 		}),
+	listAdminMemberJobViews: adminProcedure
+		.input(adminJobViewInput)
+		.handler(async ({ input }) => {
+			// 한 사용자의 로그는 많아야 수백 행이라 전부 읽어 업소별로 묶고 업소 단위로 페이지를 낸다.
+			// ponytail: 사용자당 행이 수천을 넘기면 business_key 기준 SQL 집계로 바꾼다.
+			const rows = await db
+				.select({
+					businessKey: jobViewLog.businessKey,
+					businessPhone: jobViewLog.businessPhone,
+					id: jobViewLog.id,
+					jobPostId: jobViewLog.jobPostId,
+					jobTitle: jobViewLog.jobTitle,
+					lastViewedAt: jobViewLog.lastViewedAt,
+					organizationId: jobViewLog.organizationId,
+					organizationName: jobViewLog.organizationName,
+					source: jobViewLog.source,
+					viewCount: jobViewLog.viewCount,
+				})
+				.from(jobViewLog)
+				.where(eq(jobViewLog.userId, input.userId))
+				.orderBy(desc(jobViewLog.lastViewedAt));
+			const groups = new Map<
+				string,
+				{
+					businessKey: string;
+					businessName: string;
+					businessPhone: null | string;
+					jobs: {
+						id: string;
+						jobPostId: string;
+						jobTitle: string;
+						lastViewedAt: Date;
+						source: "crawled" | "member";
+						viewCount: number;
+					}[];
+					lastViewedAt: Date;
+					organizationId: null | string;
+					source: "crawled" | "member";
+					totalViews: number;
+				}
+			>();
+			for (const row of rows) {
+				const source = row.source === "crawled" ? "crawled" : "member";
+				const group = groups.get(row.businessKey) ?? {
+					businessKey: row.businessKey,
+					businessName: row.organizationName,
+					businessPhone: row.businessPhone,
+					jobs: [],
+					lastViewedAt: row.lastViewedAt,
+					organizationId: row.organizationId,
+					source,
+					totalViews: 0,
+				};
+				group.jobs.push({
+					id: row.id,
+					jobPostId: row.jobPostId,
+					jobTitle: row.jobTitle,
+					lastViewedAt: row.lastViewedAt,
+					source,
+					viewCount: row.viewCount,
+				});
+				group.totalViews += row.viewCount;
+				groups.set(row.businessKey, group);
+			}
+			// rows가 lastViewedAt 내림차순이라 Map 삽입 순서가 곧 업소의 최근순이다.
+			const ordered = [...groups.values()];
+			const start = (input.page - 1) * input.pageSize;
+			return {
+				items: ordered.slice(start, start + input.pageSize),
+				page: input.page,
+				pageSize: input.pageSize,
+				totalCount: ordered.length,
+			};
+		}),
+
+	// 전 회원 공고 조회 로그 일괄 내보내기(운영자 CSV → 업소 아웃바운드용). 업소 연락처는
+	// crawler.exportLeads와 같은 운영자 전용 축이라 이 프로시저에만 싣는다. 운영자 계정은
+	// 관리 대상이 아니라 moderation.listUsers와 같은 규칙으로 제외한다.
+	exportAdminJobViews: adminProcedure.handler(() =>
+		db
+			.select({
+				businessName: jobViewLog.organizationName,
+				businessPhone: jobViewLog.businessPhone,
+				firstViewedAt: jobViewLog.firstViewedAt,
+				jobTitle: jobViewLog.jobTitle,
+				lastViewedAt: jobViewLog.lastViewedAt,
+				source: jobViewLog.source,
+				userEmail: user.email,
+				userName: user.name,
+				userUsername: user.login_id,
+				viewCount: jobViewLog.viewCount,
+			})
+			.from(jobViewLog)
+			.innerJoin(user, eq(user.id, jobViewLog.userId))
+			.leftJoin(bambiProfile, eq(bambiProfile.userId, user.id))
+			.where(sql`coalesce(${bambiProfile.role}, 'job_seeker')::text <> 'admin'`)
+			.orderBy(asc(user.name), desc(jobViewLog.lastViewedAt))
+	),
 };

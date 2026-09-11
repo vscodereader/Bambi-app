@@ -24,6 +24,7 @@ import {
 	MapPinIcon,
 	StarIcon,
 } from "../icons";
+import { JobMetadataBadges } from "../job-metadata-badges";
 import { EmployerPhoneTile } from "./seeker-job-detail-responsive";
 
 type CrawledJobDetail =
@@ -64,10 +65,6 @@ export function SeekerCrawledJobDetail({
 	// 수집 원본에서 고용형태 자리에 오는 값은 업무내용 원문(industryRaw)이다. 원문이 없으면
 	// 우리 8종 업종 라벨로 떨어지고, 둘 다 없으면 항목 자체를 생략한다.
 	const employmentType = job.industryRaw ?? job.industryCategory;
-	// 시/도 · 세부지역 · 고용형태를 한 줄로(우리 공고 상세의 "지역 · 고용형태" 부제와 같은 자리).
-	const meta = [job.region, job.district, employmentType]
-		.filter(Boolean)
-		.join(" · ");
 	const location = [job.region, job.district].filter(Boolean).join(" ");
 	const detailImageAssets = new Map(
 		job.detailImageDocument.assets.map((asset) => [asset.id, asset])
@@ -106,9 +103,13 @@ export function SeekerCrawledJobDetail({
 									{job.shopName ? `${job.shopName} ` : ""}
 									{job.title}
 								</h1>
-								{meta ? (
-									<p className="mt-2 mb-0 text-muted-foreground">{meta}</p>
-								) : null}
+								<JobMetadataBadges
+									className="mt-2"
+									district={job.district}
+									industryCategory={job.industryCategory}
+									industryRaw={job.industryRaw}
+									region={job.region}
+								/>
 							</div>
 							<div className="flex flex-col gap-3">
 								<InfoTile

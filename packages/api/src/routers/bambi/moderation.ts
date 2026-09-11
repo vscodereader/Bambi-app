@@ -110,6 +110,8 @@ import {
 	TEST_ACCOUNT_ROLES,
 } from "../../services/bambi-test-account-policy";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
+import { isUserOnline } from "../../services/bambi-user-presence";
+import { getUserOfflineAfterMinutes } from "../../services/bambi-user-presence-db";
 import {
 	normalizeAllExpiredWarningRestrictions,
 	normalizeExpiredWarningRestriction,
@@ -2203,6 +2205,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
 			await normalizeAllExpiredWarningRestrictions();
+			const offlineAfterMinutes = await getUserOfflineAfterMinutes();
 
 			// 계정 목록의 기준 테이블은 user다. bambi_profile은 좌측 조인해 부가 정보로만
 			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다.
@@ -2255,6 +2258,8 @@ export const moderationRouter = {
 					// 탈퇴해도 원본 그대로다 — 운영자 화면만 원본을 보고, 일반 사용자 화면은
 					// 표시 계층(bambi-withdrawn-display)이 "탈퇴한 회원"으로 바꾼다.
 					deletedAt: user.deletedAt,
+					lastActivityAt: user.lastActivityAt,
+					presenceDisconnectedAt: user.presenceDisconnectedAt,
 					// 개인정보 파기 완료 시각. 값이 있으면 탈퇴 복구가 불가능한 계정이다.
 					purgedAt: user.purgedAt,
 					createdAt: user.createdAt,
@@ -2265,13 +2270,18 @@ export const moderationRouter = {
 				.orderBy(desc(user.createdAt))
 				.limit(input.limit);
 
-			const rows = input.status
-				? // 프로필이 없는(온보딩 전) 계정도 목록 표시와 동일하게 active로 취급한다 —
-					// 컬럼을 그대로 비교하면 NULL이라 'active' 필터에서 통째로 사라진다.
-					await query.where(
-						sql`coalesce(${bambiProfile.status}, 'active')::text = ${input.status}`
-					)
-				: await query;
+			// 운영자 계정은 사용자 관리 대상이 아니다 — 목록·집계에서 뺀다.
+			const notAdmin = sql`coalesce(${bambiProfile.role}, 'job_seeker')::text <> 'admin'`;
+			const rows = await query.where(
+				input.status
+					? // 프로필이 없는(온보딩 전) 계정도 목록 표시와 동일하게 active로 취급한다 —
+						// 컬럼을 그대로 비교하면 NULL이라 'active' 필터에서 통째로 사라진다.
+						and(
+							notAdmin,
+							sql`coalesce(${bambiProfile.status}, 'active')::text = ${input.status}`
+						)
+					: notAdmin
+			);
 
 			// 잔액·등급 뱃지는 userId들로 한 번에 배치 조회해 각 행에 싣는다(행 부풀림 없음).
 			const userIds = rows.map((row) => row.userId);
@@ -2280,8 +2290,17 @@ export const moderationRouter = {
 				loadGradeBadges(userIds),
 			]);
 
+			const now = new Date();
 			return rows.map((row) => ({
 				...row,
+				isOnline: isUserOnline({
+					deletedAt: row.deletedAt,
+					lastActivityAt: row.lastActivityAt,
+					now,
+					offlineAfterMinutes,
+					presenceDisconnectedAt: row.presenceDisconnectedAt,
+				}),
+				offlineAfterMinutes,
 				pointBalance: balances.get(row.userId) ?? 0,
 				grade: badges.get(row.userId) ?? null,
 			}));

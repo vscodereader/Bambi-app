@@ -5,13 +5,15 @@ import { formatChatTimeLabel } from "@bambi-app/api/services/bambi-chat-message-
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { InferRouterOutputs } from "@orpc/server";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import { useChatPresenceRefresh } from "@/lib/bambi/use-chat-presence-refresh";
 import { connectBambiChatSocket } from "@/lib/bambi-chat-realtime";
 import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
+import { ChatAvailabilityBadges } from "../chat-availability-badges";
 import { Avatar, Badge, Card } from "../ds";
 import { Message, ShieldIcon } from "../icons";
 import { ReportDialog } from "../report-dialog";
@@ -74,25 +76,6 @@ const getRoomItemClassName = (
 					unreadCount > 0 && "md:border-coral-300 md:ring-1 md:ring-coral-200"
 				)
 	);
-
-// 방 상태 배지. 남는 상태는 운영자 차단뿐이다 — 상대가 나갔는지는 알리지 않는다
-// (나가도 발신은 그대로 되고, 그 사실이 상대에게 드러나서도 안 된다).
-function ChatRoomStateBadge({
-	counterpartWithdrawn,
-	isBlocked,
-}: {
-	counterpartWithdrawn: boolean;
-	isBlocked: boolean;
-}) {
-	if (counterpartWithdrawn) {
-		return <Badge tone="danger">대화 불가능</Badge>;
-	}
-	if (isBlocked) {
-		return <Badge tone="danger">차단됨</Badge>;
-	}
-
-	return <Badge tone="success">대화 가능</Badge>;
-}
 
 // 방 항목의 삭제·신고·차단 케밥 메뉴. 목록 항목은 방 열기 클릭 영역이 카드 전체를
 // 덮으므로, 이 메뉴 트리거는 그 열기 버튼과 형제(자식 아님)로 두어 button-in-button을
@@ -265,9 +248,12 @@ function ChatRoomItem({
 								{room.counterpartName}
 							</span>
 						) : null}
-						<ChatRoomStateBadge
+						<ChatAvailabilityBadges
+							counterpartIsOnline={room.counterpartIsOnline}
+							counterpartResponseBucket={room.counterpartResponseBucket}
 							counterpartWithdrawn={counterpartWithdrawn}
 							isBlocked={isBlocked}
+							viewerIsOnline={room.viewerIsOnline}
 						/>
 					</div>
 					<div className="flex min-w-0 items-center gap-2">
@@ -293,9 +279,12 @@ function ChatRoomItem({
 						<h2 className="m-0 truncate font-extrabold text-base">
 							{jobTitle}
 						</h2>
-						<ChatRoomStateBadge
+						<ChatAvailabilityBadges
+							counterpartIsOnline={room.counterpartIsOnline}
+							counterpartResponseBucket={room.counterpartResponseBucket}
 							counterpartWithdrawn={counterpartWithdrawn}
 							isBlocked={isBlocked}
+							viewerIsOnline={room.viewerIsOnline}
 						/>
 						{room.unreadCount > 0 ? (
 							<Badge tone="primary">{room.unreadCount}개 미확인</Badge>
@@ -390,25 +379,33 @@ export function SeekerChatListResponsive({
 	const queryClient = useQueryClient();
 	const chatsQuery = useQuery(orpc.bambi.chats.listMine.queryOptions());
 	const rooms = chatsQuery.data ?? [];
+	const refreshList = useCallback(() => {
+		queryClient
+			.invalidateQueries({ queryKey: orpc.bambi.chats.listMine.queryKey() })
+			.catch(() => undefined);
+	}, [queryClient]);
+	useChatPresenceRefresh(
+		rooms.flatMap((room) => [
+			room.viewerPresenceRefreshAt,
+			room.counterpartPresenceRefreshAt,
+		]),
+		refreshList
+	);
 
 	useEffect(() => {
 		const socket = connectBambiChatSocket();
 		// 유저 채널(user:${userId})로 오는 목록 갱신 신호를 받아, 특정 방에
 		// 입장하지 않아도 새 방 생성·새 메시지를 실시간으로 반영한다.
-		const refreshList = () => {
-			queryClient
-				.invalidateQueries({
-					queryKey: orpc.bambi.chats.listMine.queryKey(),
-				})
-				.catch(() => undefined);
-		};
-
 		socket.on("chat:list:updated", refreshList);
+		socket.on("chat:participant:presence", refreshList);
+		socket.on("chat:participant:presence:resync", refreshList);
 
 		return () => {
 			socket.off("chat:list:updated", refreshList);
+			socket.off("chat:participant:presence", refreshList);
+			socket.off("chat:participant:presence:resync", refreshList);
 		};
-	}, [queryClient]);
+	}, [refreshList]);
 
 	if (chatsQuery.isError) {
 		return (
