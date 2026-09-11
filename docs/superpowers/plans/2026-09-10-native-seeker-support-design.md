@@ -172,3 +172,7 @@
 - `onChange` payload에 hasImage 추가(documentImages 기반), 화면의 JSON 문자열 스니핑 제거.
 - 별건: 웹에서 작성된 취소선(strike)을 native 파서·MessageBody가 렌더하도록 보강. 링크+취소선 겹침은 밑줄만 적용(RN 단일 속성 한계).
 - 미조치: 서버 필드 단위 오류 매핑(채널 없음), 수정 화면용 hasImage 프리필(편집 진입점 없음), FieldSelect 바텀시트 45%·블록 카드 룩 실기기 확인.
+## 2026-09-11 고객센터 FAQ 아코디언 정리
+
+- 운영자 공지(notice) 블록을 native 고객센터에서 제거했다(웹 위젯 홈에는 그대로). "자주 묻는 질문" 제목 아래 서브타이틀 한 줄 추가.
+- FAQ 항목 오른쪽에 chevron-forward를 두고, 펼침 시 Reanimated withTiming으로 90도 회전(`FaqAccordionItem`). 답변 본문은 조건부 렌더 유지(높이 애니메이션 없음).

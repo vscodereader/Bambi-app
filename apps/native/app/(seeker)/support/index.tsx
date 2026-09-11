@@ -1,16 +1,16 @@
 // biome-ignore-all lint/style/noNestedTernary: query 상태를 화면 순서대로 표현한다
 import { useQuery } from "@tanstack/react-query";
 import { type Href, router, Stack } from "expo-router";
-import { Button, Skeleton, Surface } from "heroui-native";
+import { Button, Skeleton } from "heroui-native";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import {
 	BambiScreen,
 	ErrorState,
 	StateCard,
 } from "@/src/components/bambi-screen";
-import { MessageBody } from "@/src/components/message-body";
+import { FaqAccordionItem } from "@/src/components/support/faq-accordion-item";
 import { useVisitor } from "@/src/lib/guest-store";
 import { orpc } from "@/src/lib/orpc";
 
@@ -58,55 +58,38 @@ export default function SupportHomeScreen() {
 			) : query.isError ? (
 				<ErrorState onRetry={() => query.refetch()} />
 			) : (
-				<>
-					{query.data.notice ? (
-						<Surface className="rounded-lg p-4" variant="tertiary">
-							<Text className="text-foreground text-sm">
-								{query.data.notice}
-							</Text>
-						</Surface>
-					) : null}
-					<View className="gap-2">
+				<View className="gap-2">
+					<View className="gap-1">
 						<Text className="font-bold text-foreground text-xl">
 							자주 묻는 질문
 						</Text>
-						{query.data.faqs.length === 0 ? (
-							<StateCard
-								description="운영자가 FAQ를 등록하면 이곳에 표시됩니다."
-								title="등록된 FAQ가 없어요"
-							/>
-						) : (
-							query.data.faqs.map((faq) => (
-								<Surface
-									className="rounded-lg"
-									key={faq.id}
-									variant="secondary"
-								>
-									<Pressable
-										accessibilityRole="button"
-										className="min-h-11 justify-center p-4 active:opacity-75"
-										onPress={() => {
-											if (!faqAnswers.has(faq.id)) {
-												router.push("/login" as Href);
-												return;
-											}
-											setOpenFaqId(openFaqId === faq.id ? null : faq.id);
-										}}
-									>
-										<Text className="font-semibold text-foreground">
-											{faq.question}
-										</Text>
-									</Pressable>
-									{openFaqId === faq.id && faqAnswers.get(faq.id) ? (
-										<View className="border-border border-t p-4">
-											<MessageBody body={faqAnswers.get(faq.id) ?? ""} />
-										</View>
-									) : null}
-								</Surface>
-							))
-						)}
+						<Text className="text-muted text-sm">
+							궁금한 항목을 누르면 답변이 펼쳐져요.
+						</Text>
 					</View>
-				</>
+					{query.data.faqs.length === 0 ? (
+						<StateCard
+							description="운영자가 FAQ를 등록하면 이곳에 표시됩니다."
+							title="등록된 FAQ가 없어요"
+						/>
+					) : (
+						query.data.faqs.map((faq) => (
+							<FaqAccordionItem
+								answer={faqAnswers.get(faq.id)}
+								isOpen={openFaqId === faq.id}
+								key={faq.id}
+								onPress={() => {
+									if (!faqAnswers.has(faq.id)) {
+										router.push("/login" as Href);
+										return;
+									}
+									setOpenFaqId(openFaqId === faq.id ? null : faq.id);
+								}}
+								question={faq.question}
+							/>
+						))
+					)}
+				</View>
 			)}
 		</BambiScreen>
 	);
