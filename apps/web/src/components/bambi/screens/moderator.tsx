@@ -2982,18 +2982,16 @@ function UserJobViewHistory({ userId }: { userId: string }) {
 											className="flex items-center justify-between gap-3 text-sm"
 											key={job.id}
 										>
-											{job.source === "member" ? (
-												<Link
-													className="min-w-0 truncate underline-offset-2 hover:underline"
-													href={
-														`/moderator/jobs/${job.jobPostId}/edit` as Route
-													}
-												>
-													{job.jobTitle}
-												</Link>
-											) : (
-												<span className="min-w-0 truncate">{job.jobTitle}</span>
-											)}
+											<Link
+												className="min-w-0 truncate underline-offset-2 hover:underline"
+												href={
+													(job.source === "member"
+														? `/seeker/jobs/${job.jobPostId}`
+														: `/seeker/jobs/crawled/${job.jobPostId}`) as Route
+												}
+											>
+												{job.jobTitle}
+											</Link>
 											<span className="shrink-0 text-muted-foreground text-xs">
 												{job.viewCount}회 · {formatDateTime(job.lastViewedAt)}
 											</span>
