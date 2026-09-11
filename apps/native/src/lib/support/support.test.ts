@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
 	canSendSupportMessage,
 	canSubmitInquiry,
+	formatRelativeTime,
 	supportChatHref,
 	supportInquiryHref,
 } from "./support";
@@ -40,5 +41,18 @@ describe("support submission", () => {
 		expect(canSendSupportMessage("질문", false, "open")).toBe(true);
 		expect(canSendSupportMessage("질문", false, "closed")).toBe(false);
 		expect(canSendSupportMessage("질문", true, "open")).toBe(false);
+	});
+});
+
+describe("support relative time", () => {
+	const now = new Date("2026-09-11T12:00:00.000Z");
+
+	it("1분 미만은 방금 전, 그 위는 분·시간·일 단위로 내림한다", () => {
+		expect(formatRelativeTime("2026-09-11T11:59:31.000Z", now)).toBe("방금 전");
+		expect(formatRelativeTime("2026-09-11T11:30:00.000Z", now)).toBe("30분 전");
+		expect(formatRelativeTime("2026-09-11T07:10:00.000Z", now)).toBe(
+			"4시간 전"
+		);
+		expect(formatRelativeTime("2026-09-08T12:00:00.000Z", now)).toBe("3일 전");
 	});
 });
