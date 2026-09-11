@@ -8,6 +8,7 @@
 "use client";
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import { BAMBI_COMPANY } from "@bambi-app/api/services/bambi-company";
 import {
 	Dialog,
 	DialogContent,
@@ -20,7 +21,6 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import { APP_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import { MANUAL_PATH } from "@/lib/bambi/manual";
 import { SUPPORT_PATH } from "@/lib/bambi/support";

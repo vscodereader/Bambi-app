@@ -1,3 +1,4 @@
+import { BAMBI_COMPANY } from "@bambi-app/api/services/bambi-company";
 import type { Metadata } from "next";
 import {
 	LegalDoc,
@@ -5,7 +6,6 @@ import {
 	LegalParagraph,
 	LegalSection,
 } from "@/components/bambi/legal-doc";
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
 
 export const metadata: Metadata = {
 	title: "이용약관 | 밤비알바",

@@ -1,7 +1,6 @@
+import { BAMBI_COMPANY } from "@bambi-app/api/services/bambi-company";
 import { describe, expect, it } from "vitest";
-
 import { resolveAdInquiryTel } from "@/lib/bambi/ad-inquiry-tel";
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
 
 describe("resolveAdInquiryTel", () => {
 	it("uses the ad inquiry number when the operator set one", () => {

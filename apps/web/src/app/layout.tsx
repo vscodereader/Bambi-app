@@ -1,3 +1,4 @@
+import { BAMBI_COMPANY } from "@bambi-app/api/services/bambi-company";
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Suspense } from "react";
@@ -5,7 +6,6 @@ import { JsonLd } from "@/components/bambi/json-ld";
 import { MainPopupLayer } from "@/components/bambi/main-popup/main-popup-layer";
 import { SupportChatWidget } from "@/components/bambi/support-chat/support-chat-widget";
 import { Providers } from "@/components/providers";
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import {
 	bambiSiteJsonLd,
 	SITE_DESCRIPTION,

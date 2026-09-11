@@ -40,13 +40,10 @@ export function LogoutButton() {
 		]);
 	};
 
+	// 너비·정렬을 지정하지 않는다 — Button의 base가 이미 justify-center이고, 세로 스택
+	// (BambiScreen의 gap-4 p-4 컬럼)의 기본 stretch로 콘텐츠 폭을 그대로 채운다.
 	return (
-		<Button
-			isDisabled={isPending}
-			onPress={confirmSignOut}
-			size="sm"
-			variant="secondary"
-		>
+		<Button isDisabled={isPending} onPress={confirmSignOut} variant="outline">
 			<Button.Label>로그아웃</Button.Label>
 		</Button>
 	);
