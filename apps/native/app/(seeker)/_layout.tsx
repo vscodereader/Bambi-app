@@ -31,6 +31,19 @@ export default function SeekerLayout() {
 			<Stack.Screen name="me/blocks" options={{ title: "차단한 상대" }} />
 			{/* 채팅방은 상대 아바타·공고명·메뉴를 가진 전용 헤더(ChatRoomHeader)를 화면이 직접 그린다. */}
 			<Stack.Screen name="chats/[id]" options={{ headerShown: false }} />
+			{/* 상담은 Channel.io처럼 카드 시트로 띄운다. presentation:"modal"은 Android에서
+			    상단 슬라이드 풀스크린이라 카드가 안 나온다. 안쪽이 중첩 Stack이라 검색 화면의
+			    "모달 위 push가 뒤에 깔린다" 문제와도 무관하다(push가 시트 안에서 일어난다). */}
+			<Stack.Screen
+				name="support/chat"
+				options={{
+					headerShown: false,
+					presentation: "formSheet",
+					sheetAllowedDetents: [0.94],
+					sheetCornerRadius: 24,
+					sheetGrabberVisible: true,
+				}}
+			/>
 		</Stack>
 	);
 }

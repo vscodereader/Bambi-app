@@ -16,6 +16,7 @@ export interface MessageInline {
 	bold?: boolean;
 	href?: string;
 	italic?: boolean;
+	strike?: boolean;
 	text: string;
 }
 
@@ -56,6 +57,8 @@ const markedInline = (text: string, marks: unknown): MessageInline => {
 			inline.bold = true;
 		} else if (mark?.type === "italic") {
 			inline.italic = true;
+		} else if (mark?.type === "strike") {
+			inline.strike = true;
 		} else if (mark?.type === "link") {
 			const href = mark.attrs?.href;
 
