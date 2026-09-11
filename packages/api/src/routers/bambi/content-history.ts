@@ -167,31 +167,75 @@ export const contentHistoryRouter = {
 	listAdminMemberJobViews: adminProcedure
 		.input(adminJobViewInput)
 		.handler(async ({ input }) => {
-			const where = eq(jobViewLog.userId, input.userId);
-			const [[total], items] = await Promise.all([
-				db.select({ value: count() }).from(jobViewLog).where(where),
-				db
-					.select({
-						firstViewedAt: jobViewLog.firstViewedAt,
-						id: jobViewLog.id,
-						jobPostId: jobViewLog.jobPostId,
-						jobTitle: jobViewLog.jobTitle,
-						lastViewedAt: jobViewLog.lastViewedAt,
-						organizationId: jobViewLog.organizationId,
-						organizationName: jobViewLog.organizationName,
-						viewCount: jobViewLog.viewCount,
-					})
-					.from(jobViewLog)
-					.where(where)
-					.orderBy(desc(jobViewLog.lastViewedAt))
-					.limit(input.pageSize)
-					.offset((input.page - 1) * input.pageSize),
-			]);
+			// 한 사용자의 로그는 많아야 수백 행이라 전부 읽어 업소별로 묶고 업소 단위로 페이지를 낸다.
+			// ponytail: 사용자당 행이 수천을 넘기면 business_key 기준 SQL 집계로 바꾼다.
+			const rows = await db
+				.select({
+					businessKey: jobViewLog.businessKey,
+					businessPhone: jobViewLog.businessPhone,
+					id: jobViewLog.id,
+					jobPostId: jobViewLog.jobPostId,
+					jobTitle: jobViewLog.jobTitle,
+					lastViewedAt: jobViewLog.lastViewedAt,
+					organizationId: jobViewLog.organizationId,
+					organizationName: jobViewLog.organizationName,
+					source: jobViewLog.source,
+					viewCount: jobViewLog.viewCount,
+				})
+				.from(jobViewLog)
+				.where(eq(jobViewLog.userId, input.userId))
+				.orderBy(desc(jobViewLog.lastViewedAt));
+			const groups = new Map<
+				string,
+				{
+					businessKey: string;
+					businessName: string;
+					businessPhone: null | string;
+					jobs: {
+						id: string;
+						jobPostId: string;
+						jobTitle: string;
+						lastViewedAt: Date;
+						source: "crawled" | "member";
+						viewCount: number;
+					}[];
+					lastViewedAt: Date;
+					organizationId: null | string;
+					source: "crawled" | "member";
+					totalViews: number;
+				}
+			>();
+			for (const row of rows) {
+				const source = row.source === "crawled" ? "crawled" : "member";
+				const group = groups.get(row.businessKey) ?? {
+					businessKey: row.businessKey,
+					businessName: row.organizationName,
+					businessPhone: row.businessPhone,
+					jobs: [],
+					lastViewedAt: row.lastViewedAt,
+					organizationId: row.organizationId,
+					source,
+					totalViews: 0,
+				};
+				group.jobs.push({
+					id: row.id,
+					jobPostId: row.jobPostId,
+					jobTitle: row.jobTitle,
+					lastViewedAt: row.lastViewedAt,
+					source,
+					viewCount: row.viewCount,
+				});
+				group.totalViews += row.viewCount;
+				groups.set(row.businessKey, group);
+			}
+			// rows가 lastViewedAt 내림차순이라 Map 삽입 순서가 곧 업소의 최근순이다.
+			const ordered = [...groups.values()];
+			const start = (input.page - 1) * input.pageSize;
 			return {
-				items,
+				items: ordered.slice(start, start + input.pageSize),
 				page: input.page,
 				pageSize: input.pageSize,
-				totalCount: total?.value ?? 0,
+				totalCount: ordered.length,
 			};
 		}),
 };
