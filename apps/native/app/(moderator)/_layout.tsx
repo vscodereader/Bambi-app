@@ -48,6 +48,41 @@ export default function ModeratorLayout() {
 			<Stack.Screen name="queue/[id]" options={{ title: "공고 검수" }} />
 			<Stack.Screen name="reports/[id]" options={{ title: "신고 상세" }} />
 			<Stack.Screen name="users/[id]" options={{ title: "사용자 상세" }} />
+			<Stack.Screen name="users/create" options={{ title: "계정 생성" }} />
+			<Stack.Screen name="reviews" options={{ title: "후기 관리" }} />
+			<Stack.Screen name="interviews" options={{ title: "면접 일정" }} />
+			<Stack.Screen name="chats" options={{ title: "채팅 관리" }} />
+			<Stack.Screen name="employers" options={{ title: "업소 승인" }} />
+			<Stack.Screen name="team-invites" options={{ title: "팀 합류 승인" }} />
+			<Stack.Screen name="banned-words" options={{ title: "금칙어 관리" }} />
+			<Stack.Screen name="jobs" options={{ title: "공고 관리" }} />
+			<Stack.Screen name="jobs/[id]/edit" options={{ title: "공고 수정" }} />
+			<Stack.Screen name="content" options={{ title: "게시물 조치" }} />
+			<Stack.Screen name="support" options={{ title: "고객센터 관리" }} />
+			<Stack.Screen name="messages" options={{ title: "쪽지" }} />
+			<Stack.Screen name="support-chats" options={{ title: "문의 채팅" }} />
+			<Stack.Screen name="points" options={{ title: "포인트 관리" }} />
+			<Stack.Screen
+				name="points/members/[id]"
+				options={{ title: "회원 포인트" }}
+			/>
+			<Stack.Screen name="crawler" options={{ title: "수집 관리" }} />
+			<Stack.Screen
+				name="crawler/jobs/[id]/edit"
+				options={{ title: "수집 이미지 편집" }}
+			/>
+			<Stack.Screen
+				name="crawler/community/[id]/edit"
+				options={{ title: "수집 글 편집" }}
+			/>
+			<Stack.Screen name="popups" options={{ title: "팝업 관리" }} />
+			<Stack.Screen name="site-settings" options={{ title: "사이트 설정" }} />
+			<Stack.Screen name="commerce" options={{ title: "광고·결제" }} />
+			<Stack.Screen
+				name="community-boards"
+				options={{ title: "게시판 관리" }}
+			/>
+			<Stack.Screen name="manual" options={{ title: "운영자 매뉴얼" }} />
 		</Stack>
 	);
 }

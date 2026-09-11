@@ -14,13 +14,13 @@ import {
 	userRoleLabel,
 	WARNING_REVERT_DEFAULT_REASON,
 } from "@bambi-app/api/services/bambi-moderation-labels";
+import { isUserOnline } from "@bambi-app/api/services/bambi-user-presence";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
+import { type Href, router, useLocalSearchParams } from "expo-router";
 import { Button, Surface, useToast } from "heroui-native";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { Text, View } from "react-native";
-
 import {
 	BambiScreen,
 	ErrorState,
@@ -30,9 +30,15 @@ import {
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { FilterChips } from "@/src/components/moderation/filter-chips";
+import { PresenceIndicator } from "@/src/components/moderation/presence-indicator";
 import { ReasonDialog } from "@/src/components/moderation/reason-dialog";
 import { SanctionDialog } from "@/src/components/moderation/sanction-dialog";
 import { accountStatusBadge } from "@/src/lib/bambi-native";
+import { returnToModeratorList } from "@/src/lib/moderation/navigation";
+import {
+	resolveLivePresence,
+	useModeratorPresence,
+} from "@/src/lib/moderation/presence-stream";
 import {
 	useInvalidateModeration,
 	userListOptions,
@@ -117,6 +123,13 @@ function SectionCard({
 
 function ProfileCard({ user }: { user: ModeratorUser }) {
 	const badge = accountStatusBadge(user.status);
+	const presence = useModeratorPresence();
+	const live = resolveLivePresence(presence.users.get(user.userId), user);
+	const online = isUserOnline({
+		...live,
+		now: new Date(presence.now),
+		offlineAfterMinutes: presence.policyMinutes ?? user.offlineAfterMinutes,
+	});
 
 	return (
 		<Surface className="gap-3 rounded-lg p-4" variant="secondary">
@@ -124,6 +137,12 @@ function ProfileCard({ user }: { user: ModeratorUser }) {
 				{user.name || user.email}
 			</Text>
 			<View className="flex-row flex-wrap gap-2">
+				<View className="flex-row items-center gap-2">
+					<PresenceIndicator isOnline={online} />
+					<Text className="text-muted text-xs">
+						{online ? "온라인" : "오프라인"}
+					</Text>
+				</View>
 				<Pill tone={badge.tone}>{accountStatusLabel(user.status)}</Pill>
 				{user.deletedAt ? <Pill tone="neutral">탈퇴</Pill> : null}
 				<Pill>{userRoleLabel(user.role)}</Pill>
@@ -134,6 +153,16 @@ function ProfileCard({ user }: { user: ModeratorUser }) {
 				<InfoRow
 					label="전화 인증"
 					value={user.isPhoneVerified ? "인증됨" : "미인증"}
+				/>
+				<InfoRow label="인증 번호" value={user.phoneNumber ?? "미인증"} />
+				<InfoRow label="생년월일" value={user.birthDate ?? "미등록"} />
+				<InfoRow
+					label="마지막 활동"
+					value={
+						live.lastActivityAt
+							? formatDateTime(live.lastActivityAt)
+							: "마지막 활동 기록 없음"
+					}
 				/>
 				<InfoRow label="가입일" value={formatDateTime(user.createdAt)} />
 				{user.organizationNames.length > 0 ? (
@@ -150,6 +179,18 @@ function ProfileCard({ user }: { user: ModeratorUser }) {
 					<InfoRow label="탈퇴 시각" value={formatDateTime(user.deletedAt)} />
 				) : null}
 			</View>
+			<Button
+				onPress={() =>
+					router.push({
+						pathname: "/(moderator)/(tabs)/reports",
+						params: { user: user.userId },
+					} as never)
+				}
+				size="sm"
+				variant="secondary"
+			>
+				<Button.Label>이 사용자 신고 내역 보기</Button.Label>
+			</Button>
 		</Surface>
 	);
 }
@@ -393,7 +434,7 @@ function UserDetail({ user }: { user: ModeratorUser }) {
 			`${label} 처리했어요`,
 			() => {
 				setDialog(null);
-				router.back();
+				returnToModeratorList("/(moderator)/(tabs)/users" as Href);
 			}
 		);
 	};
@@ -522,7 +563,12 @@ export default function ModeratorUserDetailScreen() {
 			<BambiScreen>
 				<StateCard
 					action={
-						<Button onPress={() => router.back()} size="sm">
+						<Button
+							onPress={() =>
+								returnToModeratorList("/(moderator)/(tabs)/users" as Href)
+							}
+							size="sm"
+						>
 							<Button.Label>목록으로</Button.Label>
 						</Button>
 					}

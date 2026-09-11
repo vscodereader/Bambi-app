@@ -6,6 +6,7 @@ const {
 
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
+config.resolver.assetExts.push("md");
 
 const uniwindConfig = withUniwindConfig(wrapWithReanimatedMetroConfig(config), {
 	cssEntryFile: "./global.css",

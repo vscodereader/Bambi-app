@@ -24,9 +24,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Href, router, useLocalSearchParams } from "expo-router";
 import { Button, Surface, useToast } from "heroui-native";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-
 import {
 	BambiScreen,
 	ErrorState,
@@ -41,6 +40,8 @@ import { ReasonDialog } from "@/src/components/moderation/reason-dialog";
 import { SanctionDialog } from "@/src/components/moderation/sanction-dialog";
 import { contentBoardLabel } from "@/src/lib/me-content";
 import { formatPhoneNumber } from "@/src/lib/me-settings";
+import { createFollowupAction } from "@/src/lib/moderation/followup-action";
+import { returnToModeratorList } from "@/src/lib/moderation/navigation";
 import {
 	reportListOptions,
 	useInvalidateModeration,
@@ -528,6 +529,10 @@ function ReportActionBar({
 }
 
 function ReportDetail({ report }: { report: ModerationReport }) {
+	const sequence = useRef(createFollowupAction());
+	const [pendingResolution, setPendingResolution] = useState<string | null>(
+		null
+	);
 	const [dialog, setDialog] = useState<DialogState>(null);
 	const [confirming, setConfirming] = useState<CommunityAction | null>(null);
 	const invalidate = useInvalidateModeration();
@@ -568,7 +573,7 @@ function ReportDetail({ report }: { report: ModerationReport }) {
 		await invalidate.reports();
 		toast.show({ label: REPORT_TOASTS[status] });
 		setDialog(null);
-		router.back();
+		returnToModeratorList("/(moderator)/(tabs)/reports" as Href);
 		return true;
 	};
 
@@ -578,14 +583,18 @@ function ReportDetail({ report }: { report: ModerationReport }) {
 		if (!targetUserId) {
 			return false;
 		}
-		await setUserStatus.mutateAsync({ reason, status, targetUserId });
-		await invalidate.users(targetUserId);
-
-		// 제재까지 마쳤으면 신고도 함께 종료한다(웹 콘솔과 같은 연쇄).
-		return await resolveReport("resolved", REPORT_RESOLVE_DEFAULT_REASON);
+		return await sequence.current.run({
+			primary: () =>
+				setUserStatus.mutateAsync({ reason, status, targetUserId }),
+			onPrimaryDone: () => setPendingResolution(REPORT_RESOLVE_DEFAULT_REASON),
+			followup: async () => {
+				await invalidate.users(targetUserId);
+				return await resolveReport("resolved", REPORT_RESOLVE_DEFAULT_REASON);
+			},
+		});
 	};
 
-	// 차단은 신고를 닫지 않는다 — 방 상태만 바꾸고 화면에 남아 이어서 판단하게 둔다.
+	// 서버가 차단과 함께 관련 미처리 신고를 종료한다. 중복 종료 요청은 보내지 않는다.
 	const handleBlock = async (reason: string) => {
 		if (dialog?.kind !== "block") {
 			return false;
@@ -611,24 +620,30 @@ function ReportDetail({ report }: { report: ModerationReport }) {
 			return false;
 		}
 		const { status } = dialog.action;
-
-		if (community.kind === "post") {
-			await setPostStatus.mutateAsync({
-				postId: community.id,
-				reason,
-				reportId: report.id,
-				status,
-			});
-		} else {
-			await setCommentStatus.mutateAsync({
-				commentId: community.id,
-				reason,
-				reportId: report.id,
-				status,
-			});
-		}
-		toast.show({ label: communityActionToast(community.kind, status) });
-		return await resolveReport("resolved", reason);
+		return await sequence.current.run({
+			primary: async () => {
+				if (community.kind === "post") {
+					await setPostStatus.mutateAsync({
+						postId: community.id,
+						reason,
+						reportId: report.id,
+						status,
+					});
+				} else {
+					await setCommentStatus.mutateAsync({
+						commentId: community.id,
+						reason,
+						reportId: report.id,
+						status,
+					});
+				}
+			},
+			onPrimaryDone: () => {
+				setPendingResolution(reason);
+				toast.show({ label: communityActionToast(community.kind, status) });
+			},
+			followup: () => resolveReport("resolved", reason),
+		});
 	};
 
 	// 즉시 호출형이라 다이얼로그가 없다 — 실패는 토스트로만 알린다.
@@ -652,7 +667,7 @@ function ReportDetail({ report }: { report: ModerationReport }) {
 		<>
 			<BambiScreen
 				stickyFooter={
-					isOpen ? (
+					isOpen && !pendingResolution ? (
 						<ReportActionBar
 							canResolve={!CONTENT_ACTION_TARGET_TYPES.has(report.targetType)}
 							isUserTarget={isUserTarget}
@@ -664,10 +679,40 @@ function ReportDetail({ report }: { report: ModerationReport }) {
 				}
 			>
 				<ReportHeaderCard report={report} />
+				{pendingResolution ? (
+					<StateCard
+						action={
+							<Button
+								isDisabled={setReportStatus.isPending}
+								onPress={async () => {
+									try {
+										await resolveReport("resolved", pendingResolution);
+									} catch (error) {
+										toast.show({
+											label:
+												error instanceof Error
+													? error.message
+													: REPORT_TOASTS.failed,
+											variant: "danger",
+										});
+									}
+								}}
+							>
+								<Button.Label>신고 종료 재시도</Button.Label>
+							</Button>
+						}
+						description="신고 종료가 남아 있어요. 아래 버튼은 신고 종료만 재시도합니다."
+						title="대상 조치는 적용됐어요"
+					/>
+				) : null}
 				<ReportParties report={report} />
 				<TargetContextSection
 					community={community}
-					onCommunityAction={handleCommunityAction}
+					onCommunityAction={(action) => {
+						if (!pendingResolution) {
+							handleCommunityAction(action);
+						}
+					}}
 					onToggleBlock={(next) =>
 						setDialog({ isBlocked: next, kind: "block" })
 					}
@@ -772,7 +817,12 @@ export default function ModeratorReportDetailScreen() {
 			<BambiScreen>
 				<StateCard
 					action={
-						<Button onPress={() => router.back()} size="sm">
+						<Button
+							onPress={() =>
+								returnToModeratorList("/(moderator)/(tabs)/reports" as Href)
+							}
+							size="sm"
+						>
 							<Button.Label>목록으로</Button.Label>
 						</Button>
 					}
@@ -783,5 +833,5 @@ export default function ModeratorReportDetailScreen() {
 		);
 	}
 
-	return <ReportDetail report={report} />;
+	return <ReportDetail key={report.id} report={report} />;
 }

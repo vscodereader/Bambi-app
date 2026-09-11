@@ -55,6 +55,7 @@ const MODERATION_ACTION_LABELS: Record<string, string> = {
 	"set_status:suspended": "이용 정지",
 	"set_role:legal_advisor": "법률자문 지정",
 	"set_role:job_seeker": "법률자문 해제",
+	revert_warning: "최근 경고 되돌리기",
 	restore_account: "탈퇴 복구",
 };
 

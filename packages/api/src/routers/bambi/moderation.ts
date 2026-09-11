@@ -19,6 +19,7 @@ import {
 	communityBoard,
 	communityComment,
 	communityPost,
+	crawledCommunityTopic,
 	employerBusinessDocument,
 	employerOrganizationProfile,
 	employerTeamProfile,
@@ -110,6 +111,8 @@ import {
 	TEST_ACCOUNT_ROLES,
 } from "../../services/bambi-test-account-policy";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
+import { isUserOnline } from "../../services/bambi-user-presence";
+import { getUserOfflineAfterMinutes } from "../../services/bambi-user-presence-db";
 import {
 	normalizeAllExpiredWarningRestrictions,
 	normalizeExpiredWarningRestriction,
@@ -1055,17 +1058,30 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 			body: communityComment.body,
 			createdAt: communityComment.createdAt,
 			id: communityComment.id,
-			postBoard: communityPost.board,
+			// 댓글 스키마가 두 부모 FK 중 정확히 하나를 요구하므로 게시판이 존재한다.
+			postBoard: sql<string>`coalesce(${communityPost.board}, ${crawledCommunityTopic.boardKey})`,
 			postBoardLabel: communityBoard.label,
 			postBoardSlug: communityBoard.slug,
 			postId: communityComment.postId,
 			postStatus: communityPost.status,
-			postTitle: communityPost.title,
+			postTitle: sql<
+				string | null
+			>`coalesce(${communityPost.title}, ${crawledCommunityTopic.editedTitle}, ${crawledCommunityTopic.title})`,
 			status: communityComment.status,
 		})
 		.from(communityComment)
 		.leftJoin(communityPost, eq(communityPost.id, communityComment.postId))
-		.leftJoin(communityBoard, eq(communityBoard.key, communityPost.board))
+		.leftJoin(
+			crawledCommunityTopic,
+			eq(crawledCommunityTopic.id, communityComment.crawledTopicId)
+		)
+		.leftJoin(
+			communityBoard,
+			eq(
+				communityBoard.key,
+				sql`coalesce(${communityPost.board}, ${crawledCommunityTopic.boardKey})`
+			)
+		)
 		.leftJoin(user, eq(user.id, communityComment.authorUserId))
 		.leftJoin(
 			bambiProfile,
@@ -1098,7 +1114,7 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 		id: comment.id,
 		// 수집 글은 밤문화 이야기 게시판에 합류하므로 게시판 배지도 그 값으로 세운다
 		// (운영 화면이 게시판 라벨 맵을 태우려면 null이 아니라 key여야 한다).
-		postBoard: comment.postBoard ?? "work_talk",
+		postBoard: comment.postBoard,
 		postBoardLabel: comment.postBoardLabel,
 		postBoardSlug: comment.postBoardSlug,
 		postId: comment.postId,
@@ -2203,6 +2219,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
 			await normalizeAllExpiredWarningRestrictions();
+			const offlineAfterMinutes = await getUserOfflineAfterMinutes();
 
 			// 계정 목록의 기준 테이블은 user다. bambi_profile은 좌측 조인해 부가 정보로만
 			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다.
@@ -2255,6 +2272,8 @@ export const moderationRouter = {
 					// 탈퇴해도 원본 그대로다 — 운영자 화면만 원본을 보고, 일반 사용자 화면은
 					// 표시 계층(bambi-withdrawn-display)이 "탈퇴한 회원"으로 바꾼다.
 					deletedAt: user.deletedAt,
+					lastActivityAt: user.lastActivityAt,
+					presenceDisconnectedAt: user.presenceDisconnectedAt,
 					// 개인정보 파기 완료 시각. 값이 있으면 탈퇴 복구가 불가능한 계정이다.
 					purgedAt: user.purgedAt,
 					createdAt: user.createdAt,
@@ -2280,8 +2299,17 @@ export const moderationRouter = {
 				loadGradeBadges(userIds),
 			]);
 
+			const now = new Date();
 			return rows.map((row) => ({
 				...row,
+				isOnline: isUserOnline({
+					deletedAt: row.deletedAt,
+					lastActivityAt: row.lastActivityAt,
+					now,
+					offlineAfterMinutes,
+					presenceDisconnectedAt: row.presenceDisconnectedAt,
+				}),
+				offlineAfterMinutes,
 				pointBalance: balances.get(row.userId) ?? 0,
 				grade: badges.get(row.userId) ?? null,
 			}));

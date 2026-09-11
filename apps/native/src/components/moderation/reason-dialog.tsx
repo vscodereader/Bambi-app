@@ -17,6 +17,7 @@ export interface ReasonFormProps {
 	onCancel: () => void;
 	/** false를 돌려주면 폼을 유지한 채 실패 문구를 보인다. throw하면 그 메시지를 보인다. */
 	onConfirm: (reason: string) => Promise<boolean>;
+	onPendingChange?: (pending: boolean) => void;
 	presets?: readonly string[];
 }
 
@@ -29,6 +30,7 @@ export function ReasonForm({
 	defaultReason,
 	onCancel,
 	onConfirm,
+	onPendingChange,
 	presets,
 }: ReasonFormProps) {
 	const [reason, setReason] = useState(defaultReason);
@@ -53,6 +55,7 @@ export function ReasonForm({
 			return;
 		}
 		setIsPending(true);
+		onPendingChange?.(true);
 		setErrorMessage(null);
 		try {
 			const ok = await onConfirm(trimmed);
@@ -65,6 +68,7 @@ export function ReasonForm({
 			);
 		} finally {
 			setIsPending(false);
+			onPendingChange?.(false);
 		}
 	};
 
@@ -136,6 +140,13 @@ export function ReasonDialog({
 	presets,
 	title,
 }: ReasonDialogProps) {
+	const [isPending, setIsPending] = useState(false);
+	const handleOpenChange = (next: boolean) => {
+		if (!next && isPending) {
+			return;
+		}
+		onOpenChange(next);
+	};
 	const handleConfirm = async (reason: string) => {
 		const ok = await onConfirm(reason);
 		if (ok) {
@@ -145,13 +156,13 @@ export function ReasonDialog({
 	};
 
 	return (
-		<Dialog isOpen={isOpen} onOpenChange={onOpenChange}>
+		<Dialog isOpen={isOpen} onOpenChange={handleOpenChange}>
 			<Dialog.Portal>
 				<Dialog.Overlay />
 				<KeyboardAvoidingView
 					behavior={Platform.OS === "ios" ? "padding" : undefined}
 				>
-					<Dialog.Content>
+					<Dialog.Content isSwipeable={!isPending}>
 						<View className="gap-4">
 							<View className="gap-1.5">
 								<Dialog.Title>{title}</Dialog.Title>
@@ -163,8 +174,9 @@ export function ReasonDialog({
 								confirmLabel={confirmLabel}
 								danger={danger}
 								defaultReason={defaultReason}
-								onCancel={() => onOpenChange(false)}
+								onCancel={() => handleOpenChange(false)}
 								onConfirm={handleConfirm}
+								onPendingChange={setIsPending}
 								presets={presets}
 							/>
 						</View>

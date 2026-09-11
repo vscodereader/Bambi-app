@@ -7,11 +7,10 @@ import {
 } from "@bambi-app/api/services/bambi-moderation-labels";
 import { env } from "@bambi-app/env/native";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
+import { type Href, useLocalSearchParams } from "expo-router";
 import { Button, Dialog, Spinner, Surface, useToast } from "heroui-native";
 import { useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
-
 import {
 	BambiScreen,
 	formatDateTime,
@@ -23,6 +22,7 @@ import {
 import { JobDescriptionSection } from "@/src/components/job-description-section";
 import { ReasonDialog } from "@/src/components/moderation/reason-dialog";
 import { publicObjectUri } from "@/src/lib/bambi-native";
+import { returnToModeratorList } from "@/src/lib/moderation/navigation";
 import {
 	queueListOptions,
 	useInvalidateModeration,
@@ -124,7 +124,12 @@ export default function ModeratorQueueDetailScreen() {
 			<BambiScreen>
 				<StateCard
 					action={
-						<Button onPress={() => router.back()} size="sm">
+						<Button
+							onPress={() =>
+								returnToModeratorList("/(moderator)/(tabs)" as Href)
+							}
+							size="sm"
+						>
 							<Button.Label>목록으로</Button.Label>
 						</Button>
 					}
@@ -151,7 +156,7 @@ export default function ModeratorQueueDetailScreen() {
 		});
 		await invalidate.queue();
 		toast.show({ label: config.toast });
-		router.back();
+		returnToModeratorList("/(moderator)/(tabs)" as Href);
 		return true;
 	};
 
@@ -232,6 +237,7 @@ export default function ModeratorQueueDetailScreen() {
 						descriptionBlocks={detail.descriptionBlocks}
 						detail={detail.media.detail}
 						gcsPublicBaseUrl={GCS_PUBLIC_BASE_URL}
+						highlightTerms={item.detectedTerms}
 						title={detail.title}
 					/>
 				) : null}

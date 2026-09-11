@@ -4,9 +4,9 @@ import {
 	resolveQueueRiskLevel,
 } from "@bambi-app/api/services/bambi-moderation-labels";
 import { useQuery } from "@tanstack/react-query";
-import { type Href, router } from "expo-router";
+import { type Href, router, useLocalSearchParams } from "expo-router";
 import { Surface } from "heroui-native";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
 import {
@@ -17,6 +17,11 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import {
+	BulkActions,
+	SelectableModerationRow,
+	useBulkSelection,
+} from "@/src/components/moderation/bulk-actions";
 import { FilterChips } from "@/src/components/moderation/filter-chips";
 import { queueListOptions } from "@/src/lib/moderation/queries";
 
@@ -125,8 +130,15 @@ function QueueRowCard({ row }: { row: QueueRow }) {
 }
 
 export default function ModeratorQueueScreen() {
+	const params = useLocalSearchParams<{ risk?: string }>();
 	const [risk, setRisk] = useState<RiskFilter>("all");
+	useEffect(() => {
+		if (params.risk === "all") {
+			setRisk("all");
+		}
+	}, [params.risk]);
 	const [sort, setSort] = useState<SortKey>("oldest");
+	const selection = useBulkSelection(`${risk}-${sort}`);
 	const queueQuery = useQuery(queueListOptions());
 	const rows = useQueueRows(queueQuery.data ?? [], risk, sort);
 
@@ -148,7 +160,14 @@ export default function ModeratorQueueScreen() {
 					title="공고 검수"
 				/>
 			</View>
-			<FilterChips onChange={setRisk} options={RISK_OPTIONS} value={risk} />
+			<FilterChips
+				onChange={(value) => {
+					setRisk(value);
+					router.setParams({ risk: undefined });
+				}}
+				options={RISK_OPTIONS}
+				value={risk}
+			/>
 			<FilterChips onChange={setSort} options={SORT_OPTIONS} value={sort} />
 			<FlatList
 				contentContainerClassName="gap-3 p-4"
@@ -164,13 +183,27 @@ export default function ModeratorQueueScreen() {
 						title="검수 대기 없음"
 					/>
 				}
+				ListHeaderComponent={
+					<BulkActions
+						ids={selection.ids}
+						kind="jobs"
+						onChanged={selection.setIds}
+					/>
+				}
 				refreshControl={
 					<RefreshControl
 						onRefresh={() => queueQuery.refetch()}
 						refreshing={queueQuery.isRefetching}
 					/>
 				}
-				renderItem={({ item }) => <QueueRowCard row={item} />}
+				renderItem={({ item }) => (
+					<SelectableModerationRow
+						onToggle={() => selection.toggle(item.job.id)}
+						selected={selection.ids.includes(item.job.id)}
+					>
+						<QueueRowCard row={item} />
+					</SelectableModerationRow>
+				)}
 			/>
 		</View>
 	);

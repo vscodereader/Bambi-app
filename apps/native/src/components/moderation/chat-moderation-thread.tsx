@@ -5,12 +5,19 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "heroui-native";
 import { Text, View } from "react-native";
-
+import { ChatAttachmentMessage } from "@/src/components/chat/chat-attachment-message";
 import { ChatDateChip } from "@/src/components/chat/chat-date-chip";
 import { orpc } from "@/src/lib/orpc";
 
 interface ThreadMessage {
-	attachments: { fileName: string; id: string }[];
+	attachments: {
+		byteSize: number;
+		category: "image" | "pdf";
+		fileName: string;
+		id: string;
+		mimeType: string;
+		objectUrl: string;
+	}[];
 	body: string;
 	createdAt: Date | string;
 	id: string;
@@ -69,9 +76,12 @@ function ModerationBubble({
 				</Text>
 			</View>
 			{message.attachments.map((attachment) => (
-				<Text className="mt-1 text-muted text-xs" key={attachment.id}>
-					첨부 · {attachment.fileName}
-				</Text>
+				<ChatAttachmentMessage
+					attachment={attachment}
+					isMine={isEmployer}
+					key={attachment.id}
+					localImageUri={null}
+				/>
 			))}
 			{isGroupEnd ? (
 				<Text className="mt-1 text-muted text-xs">

@@ -1,8 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { openBrowserAsync } from "expo-web-browser";
-import { cn, Dialog, Spinner, Surface, useThemeColor } from "heroui-native";
+import {
+	Button,
+	cn,
+	Dialog,
+	Spinner,
+	Surface,
+	useThemeColor,
+} from "heroui-native";
 import { useEffect, useState } from "react";
 import {
+	Alert,
 	Image,
 	Pressable,
 	Text,
@@ -11,8 +19,8 @@ import {
 } from "react-native";
 
 import type { ChatSendStatus } from "@/src/lib/chat/chat-optimistic";
-import type { ChatRoomAttachment } from "@/src/lib/chat/chat-types";
 import { resolveWebUrl } from "@/src/lib/dev-web-url";
+import { saveManagedFile } from "@/src/lib/managed-file";
 
 const BYTES_PER_KB = 1024;
 const BYTES_PER_MB = 1024 * 1024;
@@ -61,13 +69,21 @@ export function ChatAttachmentMessage({
 	localImageUri,
 	sendStatus,
 }: {
-	attachment: ChatRoomAttachment | null;
+	attachment: null | {
+		byteSize: number;
+		category: "image" | "pdf";
+		fileName: string;
+		id: string;
+		mimeType: string;
+		objectUrl: string;
+	};
 	isMine: boolean;
 	localImageUri: null | string;
 	sendStatus?: ChatSendStatus;
 }) {
 	const { height: windowHeight, width: windowWidth } = useWindowDimensions();
 	const [isViewerOpen, setIsViewerOpen] = useState(false);
+	const [saving, setSaving] = useState(false);
 	const foreground = useThemeColor("foreground");
 	// dev 서버는 objectUrl로 web 로컬 라우트 상대 URL을 내려주므로 앱이 닿을 절대 URL로 푼다.
 	const imageUri =
@@ -76,6 +92,32 @@ export function ChatAttachmentMessage({
 			: localImageUri;
 	const ratio = useImageAspectRatio(imageUri);
 	const imageWidth = Math.round(windowWidth * IMAGE_WIDTH_RATIO);
+	const download = async () => {
+		if (!attachment || saving) {
+			return;
+		}
+		const url = resolveWebUrl(attachment.objectUrl);
+		if (!url) {
+			Alert.alert("저장하지 못했어요", "첨부파일 주소를 확인할 수 없어요.");
+			return;
+		}
+		setSaving(true);
+		try {
+			const result = await saveManagedFile({
+				fileName: attachment.fileName,
+				mimeType: attachment.mimeType,
+				url,
+			});
+			if (result.status === "saved") {
+				Alert.alert("저장했어요", "선택한 위치에 파일을 저장했어요.");
+			}
+			if (result.status === "failed") {
+				Alert.alert("저장하지 못했어요", result.message);
+			}
+		} finally {
+			setSaving(false);
+		}
+	};
 
 	if (imageUri) {
 		return (
@@ -124,6 +166,11 @@ export function ChatAttachmentMessage({
 									style={{ height: "100%", width: "100%" }}
 								/>
 							</Pressable>
+							<Button isDisabled={saving} onPress={download}>
+								<Button.Label>
+									{saving ? "저장 중" : "이미지 저장"}
+								</Button.Label>
+							</Button>
 						</Dialog.Content>
 					</Dialog.Portal>
 				</Dialog>
@@ -169,6 +216,32 @@ export function ChatAttachmentMessage({
 				}}
 			>
 				<Ionicons color={foreground} name="open-outline" size={20} />
+			</Pressable>
+			<Pressable
+				accessibilityLabel="PDF 저장"
+				accessibilityRole="button"
+				disabled={!openUrl}
+				hitSlop={8}
+				onPress={() => {
+					if (!openUrl) {
+						return;
+					}
+					saveManagedFile({
+						fileName: attachment.fileName,
+						mimeType: attachment.mimeType,
+						url: openUrl,
+					})
+						.then((result) => {
+							if (result.status === "saved") {
+								Alert.alert("저장했어요", "선택한 폴더에 파일을 저장했어요.");
+							} else if (result.status === "failed") {
+								Alert.alert("저장하지 못했어요", result.message);
+							}
+						})
+						.catch(() => undefined);
+				}}
+			>
+				<Ionicons color={foreground} name="download-outline" size={20} />
 			</Pressable>
 		</Surface>
 	);

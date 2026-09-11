@@ -7,9 +7,9 @@ import {
 	targetTypeLabel,
 } from "@bambi-app/api/services/bambi-moderation-labels";
 import { useQuery } from "@tanstack/react-query";
-import { type Href, router } from "expo-router";
-import { Surface } from "heroui-native";
-import { useMemo, useState } from "react";
+import { type Href, router, useLocalSearchParams } from "expo-router";
+import { Button, Surface } from "heroui-native";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
 import {
@@ -20,6 +20,11 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
+import {
+	BulkActions,
+	SelectableModerationRow,
+	useBulkSelection,
+} from "@/src/components/moderation/bulk-actions";
 import { FilterChips } from "@/src/components/moderation/filter-chips";
 import { reportListOptions } from "@/src/lib/moderation/queries";
 import {
@@ -90,16 +95,27 @@ function ReportRowCard({ report }: { report: ModerationReport }) {
 }
 
 export default function ModeratorReportsScreen() {
+	const { user, bucket: requestedBucket } = useLocalSearchParams<{
+		user?: string;
+		bucket?: string;
+	}>();
 	const [bucket, setBucket] = useState<Bucket>("open");
+	useEffect(() => {
+		if (requestedBucket === "open") {
+			setBucket("open");
+		}
+	}, [requestedBucket]);
+	const selection = useBulkSelection(`${bucket}-${user ?? ""}`);
 	const reportsQuery = useQuery(reportListOptions());
 	// 서버가 접수 시각 내림차순으로 주므로(listReports orderBy) 다시 정렬하지 않는다.
 	const reports = useMemo(
 		() =>
 			(reportsQuery.data ?? []).filter(
 				(report) =>
-					OPEN_REPORT_STATUSES.has(report.status) === (bucket === "open")
+					OPEN_REPORT_STATUSES.has(report.status) === (bucket === "open") &&
+					(!user || (report.targetType === "user" && report.targetId === user))
 			),
-		[reportsQuery.data, bucket]
+		[reportsQuery.data, bucket, user]
 	);
 
 	if (reportsQuery.isLoading) {
@@ -119,10 +135,24 @@ export default function ModeratorReportsScreen() {
 				/>
 			</View>
 			<FilterChips
-				onChange={setBucket}
+				onChange={(value) => {
+					setBucket(value);
+					router.setParams({ bucket: undefined });
+				}}
 				options={BUCKET_OPTIONS}
 				value={bucket}
 			/>
+			{user ? (
+				<View className="px-4">
+					<Button
+						onPress={() => router.setParams({ user: undefined })}
+						size="sm"
+						variant="tertiary"
+					>
+						<Button.Label>특정 사용자 필터 해제</Button.Label>
+					</Button>
+				</View>
+			) : null}
 			<FlatList
 				contentContainerClassName="gap-3 p-4"
 				data={reports}
@@ -137,13 +167,27 @@ export default function ModeratorReportsScreen() {
 						title="신고 없음"
 					/>
 				}
+				ListHeaderComponent={
+					<BulkActions
+						ids={selection.ids}
+						kind="reports"
+						onChanged={selection.setIds}
+					/>
+				}
 				refreshControl={
 					<RefreshControl
 						onRefresh={() => reportsQuery.refetch()}
 						refreshing={reportsQuery.isRefetching}
 					/>
 				}
-				renderItem={({ item }) => <ReportRowCard report={item} />}
+				renderItem={({ item }) => (
+					<SelectableModerationRow
+						onToggle={() => selection.toggle(item.id)}
+						selected={selection.ids.includes(item.id)}
+					>
+						<ReportRowCard report={item} />
+					</SelectableModerationRow>
+				)}
 			/>
 		</View>
 	);

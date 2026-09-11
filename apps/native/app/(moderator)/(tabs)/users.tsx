@@ -5,10 +5,21 @@ import {
 	type UserStatusFilter,
 	userRoleLabel,
 } from "@bambi-app/api/services/bambi-moderation-labels";
-import { useQuery } from "@tanstack/react-query";
-import { type Href, router } from "expo-router";
-import { SearchField, Surface } from "heroui-native";
-import { useMemo, useState } from "react";
+import {
+	isUserOnline,
+	POSTGRES_INTEGER_MAX,
+} from "@bambi-app/api/services/bambi-user-presence";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type Href, router, useLocalSearchParams } from "expo-router";
+import {
+	Button,
+	Input,
+	SearchField,
+	Surface,
+	TextField,
+	useToast,
+} from "heroui-native";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
 import {
@@ -19,9 +30,20 @@ import {
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { FieldSelect } from "@/src/components/field-select";
+import {
+	BulkActions,
+	SelectableModerationRow,
+	useBulkSelection,
+} from "@/src/components/moderation/bulk-actions";
 import { FilterChips } from "@/src/components/moderation/filter-chips";
+import { PresenceIndicator } from "@/src/components/moderation/presence-indicator";
 import { accountStatusBadge } from "@/src/lib/bambi-native";
+import {
+	resolveLivePresence,
+	useModeratorPresence,
+} from "@/src/lib/moderation/presence-stream";
 import { userListOptions } from "@/src/lib/moderation/queries";
+import { orpc } from "@/src/lib/orpc";
 import { useDebouncedValue } from "@/src/lib/use-debounced-value";
 
 type ModeratorUser = Awaited<
@@ -54,7 +76,13 @@ const matchesKeyword = (user: ModeratorUser, keyword: string): boolean =>
 		(value ?? "").toLowerCase().includes(keyword)
 	);
 
-function UserRowCard({ user }: { user: ModeratorUser }) {
+function UserRowCard({
+	isOnline,
+	user,
+}: {
+	isOnline: boolean;
+	user: ModeratorUser;
+}) {
 	const badge = accountStatusBadge(user.status);
 	const roleLabel = userRoleLabel(user.role);
 	const counts = `신고 ${user.reportsCount}건 · 경고 ${user.warningsCount}회`;
@@ -73,6 +101,12 @@ function UserRowCard({ user }: { user: ModeratorUser }) {
 				importantForAccessibility="no-hide-descendants"
 				variant="secondary"
 			>
+				<View className="flex-row items-center gap-2">
+					<PresenceIndicator isOnline={isOnline} />
+					<Text className="text-muted text-xs">
+						{isOnline ? "온라인" : "오프라인"}
+					</Text>
+				</View>
 				<View className="flex-row flex-wrap gap-2">
 					<Pill tone={badge.tone}>{badge.label}</Pill>
 					{user.deletedAt ? <Pill tone="neutral">탈퇴</Pill> : null}
@@ -91,22 +125,122 @@ function UserRowCard({ user }: { user: ModeratorUser }) {
 }
 
 export default function ModeratorUsersScreen() {
+	const params = useLocalSearchParams<{ status?: string }>();
 	const [query, setQuery] = useState("");
 	const [status, setStatus] = useState<UserStatusFilter>("all");
+	useEffect(() => {
+		if (params.status === "warned") {
+			setStatus("warned");
+		}
+	}, [params.status]);
 	const [role, setRole] = useState("all");
+	const [phone, setPhone] = useState("all");
+	const [minReports, setMinReports] = useState("");
+	const [minWarnings, setMinWarnings] = useState("");
+	const [sort, setSort] = useState("recent");
+	const selection = useBulkSelection(
+		`${status}-${role}-${query}-${phone}-${minReports}-${minWarnings}-${sort}`
+	);
+	const [offlineAfterMinutes, setOfflineAfterMinutes] = useState("");
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+	const presence = useModeratorPresence();
+	const policy = useQuery(
+		orpc.bambi.siteSettings.getPresencePolicy.queryOptions()
+	);
+	const updatePolicy = useMutation(
+		orpc.bambi.siteSettings.updatePresencePolicy.mutationOptions({
+			onSuccess: async () => {
+				toast.show({ label: "오프라인 기준을 저장했어요." });
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getPresencePolicy.queryKey(),
+				});
+			},
+		})
+	);
 	const usersQuery = useQuery(userListOptions());
+	const refetchPolicy = policy.refetch;
+	const refetchUsers = usersQuery.refetch;
+	useEffect(() => {
+		if (policy.data) {
+			setOfflineAfterMinutes(String(policy.data.offlineAfterMinutes));
+		}
+	}, [policy.data]);
+	useEffect(() => {
+		if (presence.reconnectRevision > 0) {
+			refetchUsers().catch(() => undefined);
+			refetchPolicy().catch(() => undefined);
+		}
+	}, [presence.reconnectRevision, refetchPolicy, refetchUsers]);
 	// 서버가 이미 가입일 내림차순으로 주므로(listUsers orderBy) 다시 정렬하지 않는다.
 	const keyword = useDebouncedValue(query).trim().toLowerCase();
 	const users = useMemo(
 		() =>
-			(usersQuery.data ?? []).filter(
-				(user) =>
-					matchesUserStatusFilter(user, status) &&
-					(role === "all" || user.role === role) &&
-					matchesKeyword(user, keyword)
-			),
-		[usersQuery.data, keyword, role, status]
+			(usersQuery.data ?? [])
+				.map((user) => {
+					const live = resolveLivePresence(
+						presence.users.get(user.userId),
+						user
+					);
+					return {
+						...user,
+						isOnline: isUserOnline({
+							...live,
+							now: new Date(presence.now),
+							offlineAfterMinutes:
+								presence.policyMinutes ?? user.offlineAfterMinutes,
+						}),
+					};
+				})
+				.filter(
+					(user) =>
+						matchesUserStatusFilter(user, status) &&
+						(role === "all" || user.role === role) &&
+						(phone === "all" ||
+							user.isPhoneVerified === (phone === "verified")) &&
+						user.reportsCount >= Number(minReports) &&
+						user.warningsCount >= Number(minWarnings) &&
+						matchesKeyword(user, keyword)
+				)
+				.sort((a, b) => {
+					if (sort === "reports") {
+						return b.reportsCount - a.reportsCount;
+					}
+					if (sort === "warnings") {
+						return b.warningsCount - a.warningsCount;
+					}
+					if (sort === "name") {
+						return a.name.localeCompare(b.name, "ko");
+					}
+					return 0;
+				}),
+		[
+			usersQuery.data,
+			keyword,
+			presence,
+			role,
+			status,
+			phone,
+			minReports,
+			minWarnings,
+			sort,
+		]
 	);
+	const savePolicy = () => {
+		const value = Number(offlineAfterMinutes);
+		if (
+			!Number.isSafeInteger(value) ||
+			value < 1 ||
+			value > POSTGRES_INTEGER_MAX
+		) {
+			toast.show({
+				label: "오프라인 기준은 1 이상의 분 단위 정수로 입력해 주세요.",
+				variant: "danger",
+			});
+			return;
+		}
+		updatePolicy.mutate({ offlineAfterMinutes: value });
+	};
 
 	if (usersQuery.isLoading) {
 		return <LoadingState label="사용자 목록을 불러오고 있습니다." />;
@@ -122,6 +256,15 @@ export default function ModeratorUsersScreen() {
 		<View className="flex-1 bg-background">
 			<View className="gap-3 px-4">
 				<BambiHeader
+					action={
+						<Button
+							onPress={() => router.push("/(moderator)/users/create" as Href)}
+							size="sm"
+							variant="secondary"
+						>
+							<Button.Label>계정 생성</Button.Label>
+						</Button>
+					}
 					description="계정 상태와 역할을 확인하고 제재·복구를 처리합니다."
 					title="사용자 관리"
 				/>
@@ -137,11 +280,35 @@ export default function ModeratorUsersScreen() {
 				</SearchField>
 			</View>
 			<FilterChips
-				onChange={setStatus}
+				onChange={(value) => {
+					setStatus(value);
+					router.setParams({ status: undefined });
+				}}
 				options={STATUS_OPTIONS}
 				value={status}
 			/>
 			<View className="px-4">
+				<View className="mb-3 flex-row items-end gap-2">
+					<View className="flex-1">
+						<TextField>
+							<Input
+								accessibilityLabel="오프라인 기준 시간"
+								keyboardType="number-pad"
+								onChangeText={setOfflineAfterMinutes}
+								placeholder="분"
+								value={offlineAfterMinutes}
+							/>
+						</TextField>
+					</View>
+					<Button
+						isDisabled={updatePolicy.isPending}
+						onPress={savePolicy}
+						size="sm"
+						variant="secondary"
+					>
+						<Button.Label>기준 저장</Button.Label>
+					</Button>
+				</View>
 				<FieldSelect
 					isLabelHidden
 					label="역할"
@@ -163,13 +330,70 @@ export default function ModeratorUsersScreen() {
 						title="조건에 맞는 사용자가 없어요"
 					/>
 				}
+				ListHeaderComponent={
+					<View className="gap-2">
+						<BulkActions
+							ids={selection.ids}
+							kind="users"
+							onChanged={selection.setIds}
+						/>
+						<FieldSelect
+							label="휴대폰 인증"
+							onChange={setPhone}
+							options={[
+								{ value: "all", label: "전체 인증 상태" },
+								{ value: "verified", label: "인증됨" },
+								{ value: "unverified", label: "미인증" },
+							]}
+							placeholder="전체"
+							value={phone}
+						/>
+						<TextField>
+							<Input
+								accessibilityLabel="최소 신고 수"
+								keyboardType="number-pad"
+								onChangeText={setMinReports}
+								placeholder="최소 신고 수"
+								value={minReports}
+							/>
+						</TextField>
+						<TextField>
+							<Input
+								accessibilityLabel="최소 경고 수"
+								keyboardType="number-pad"
+								onChangeText={setMinWarnings}
+								placeholder="최소 경고 수"
+								value={minWarnings}
+							/>
+						</TextField>
+						<FieldSelect
+							label="사용자 정렬"
+							onChange={setSort}
+							options={[
+								{ value: "recent", label: "가입 최신순" },
+								{ value: "name", label: "이름순" },
+								{ value: "reports", label: "신고 많은 순" },
+								{ value: "warnings", label: "경고 많은 순" },
+							]}
+							placeholder="가입 최신순"
+							value={sort}
+						/>
+					</View>
+				}
 				refreshControl={
 					<RefreshControl
 						onRefresh={() => usersQuery.refetch()}
 						refreshing={usersQuery.isRefetching}
 					/>
 				}
-				renderItem={({ item }) => <UserRowCard user={item} />}
+				renderItem={({ item }) => (
+					<SelectableModerationRow
+						onToggle={() => selection.toggle(item.userId)}
+						selected={selection.ids.includes(item.userId)}
+					>
+						<UserRowCard isOnline={item.isOnline} user={item} />
+					</SelectableModerationRow>
+				)}
 			/>
 		</View>
 	);

@@ -70,6 +70,16 @@ export default function ModeratorTabsLayout() {
 					title: "사용자",
 				}}
 			/>
+			<Tabs.Screen
+				name="more"
+				options={{
+					tabBarIcon: tabIcon(
+						"ellipsis-horizontal-circle",
+						"ellipsis-horizontal-circle-outline"
+					),
+					title: "더보기",
+				}}
+			/>
 		</Tabs>
 	);
 }

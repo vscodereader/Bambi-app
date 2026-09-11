@@ -25,8 +25,12 @@ export function SanctionDialog({
 	targetName,
 }: SanctionDialogProps) {
 	const [picked, setPicked] = useState<null | SanctionChoice>(null);
+	const [isPending, setIsPending] = useState(false);
 
 	const handleOpenChange = (next: boolean) => {
+		if (!next && isPending) {
+			return;
+		}
 		if (!next) {
 			setPicked(null);
 		}
@@ -39,7 +43,8 @@ export function SanctionDialog({
 		}
 		const ok = await onConfirm(picked.status, reason);
 		if (ok) {
-			handleOpenChange(false);
+			setPicked(null);
+			onOpenChange(false);
 		}
 		return ok;
 	};
@@ -51,7 +56,7 @@ export function SanctionDialog({
 				<KeyboardAvoidingView
 					behavior={Platform.OS === "ios" ? "padding" : undefined}
 				>
-					<Dialog.Content>
+					<Dialog.Content isSwipeable={!isPending}>
 						<View className="gap-4">
 							<View className="gap-1.5">
 								<Dialog.Title>{`${targetName} 제재`}</Dialog.Title>
@@ -70,6 +75,7 @@ export function SanctionDialog({
 									defaultReason={picked.defaultReason}
 									onCancel={() => setPicked(null)}
 									onConfirm={handleConfirm}
+									onPendingChange={setIsPending}
 								/>
 							) : (
 								<View className="gap-3">

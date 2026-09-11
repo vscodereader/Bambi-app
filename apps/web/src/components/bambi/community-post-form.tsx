@@ -141,8 +141,9 @@ const canSubmitPost = ({
 
 interface CommunityPostInitial {
 	authorName: string;
-	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
-	authorRole: "admin" | "employer" | "guest" | "job_seeker" | "legal_advisor";
+	// 일반 글은 작성자의 role 스냅샷(getPost.authorRole)을 넘겨 수정 모드 광고 Switch 게이트에 쓴다.
+	// 계정 소유자가 없는 수집 글 편집 모드는 생략한다.
+	authorRole?: "admin" | "employer" | "guest" | "job_seeker" | "legal_advisor";
 	// 글이 실제로 속한 게시판 key(getPost.board). 교차 노출된 게시판 경로로 수정에
 	// 들어와도 공지/이벤트 판정이 URL slug가 아니라 글의 원래 게시판을 따르게 한다.
 	board?: string;
@@ -153,7 +154,7 @@ interface CommunityPostInitial {
 	id: string;
 	isAnonymous?: boolean;
 	isEvent?: boolean;
-	isLocked: boolean;
+	isLocked?: boolean;
 	// 수정 모드 광고글 초기값. 편집 페이지가 getPost.isPromotion을 넘겨주면 사용한다.
 	isPromotion?: boolean;
 	noticeBoardKeys?: string[];
@@ -162,6 +163,11 @@ interface CommunityPostInitial {
 
 interface CommunityPostFormProps {
 	board: CommunityBoardMeta;
+	crawledEdit?: {
+		isPending: boolean;
+		onSubmit: (input: { title: string; body: string }) => void;
+		onCancel: () => void;
+	};
 	// 수정 모드 초기값. 게이트(CommunityEditGate)를 통과한 비번을 넘긴다 — 비회원 수정과
 	// 회원 비작성자 수정 모두 이 값으로 인라인 비밀번호 재입력을 없앤다(회원 작성자는 undefined).
 	editPassword?: string;
@@ -539,7 +545,43 @@ function CommunityTitleHelp({ tooShort }: { tooShort: boolean }) {
 const isTitleTooShort = (title: string): boolean =>
 	title.length > 0 && title.trim().length < COMMUNITY_TITLE_MIN_LENGTH;
 
+function postEditorPermissions({
+	crawled,
+	board,
+	isEdit,
+	role,
+	authorRole,
+	guest,
+	isLocked,
+}: {
+	crawled: boolean;
+	board: CommunityBoardMeta;
+	isEdit: boolean;
+	role: CommunityPostInitial["authorRole"] | undefined;
+	authorRole: CommunityPostInitial["authorRole"] | undefined;
+	guest: boolean;
+	isLocked: boolean;
+}) {
+	return {
+		canManageNotice: !crawled && isAdminNoticeBoard(board.key, role),
+		canPromote: !crawled && canPromotePost(isEdit, authorRole, role),
+		canWriteAnonymously:
+			!crawled && canUseAnonymousPostAuthor(board.writable, guest, role),
+		requiresPassword:
+			!crawled &&
+			(guest || isLockPasswordRequired(isEdit, board.key === "free", isLocked)),
+		canManageComments: !crawled && role === "admin",
+	};
+}
+const shouldRedirectNoticeWriter = (
+	isEdit: boolean,
+	isPending: boolean,
+	adminOnly: boolean | undefined,
+	role: string | undefined
+) => Boolean(!(isEdit || isPending) && adminOnly && role !== "admin");
+
 export function CommunityPostForm({
+	crawledEdit,
 	board,
 	editPassword,
 	guest = false,
@@ -600,24 +642,36 @@ export function CommunityPostForm({
 	// 작성 모드에서는 URL이 가리키는 board.key를 쓴다 — 공지를 교차 노출한 게시판 경로로
 	// 수정에 들어와도 공지 관리 UI가 사라지지 않게 한다. 잠금·자유/비밀 판정은 URL board 그대로 둔다.
 	const effectiveBoardKey = initialPost?.board ?? board.key;
-	const canManageNotice = isAdminNoticeBoard(effectiveBoardKey, role);
+	const {
+		canManageNotice,
+		canPromote,
+		canWriteAnonymously,
+		requiresPassword,
+		canManageComments,
+	} = postEditorPermissions({
+		crawled: Boolean(crawledEdit),
+		board: { ...board, key: effectiveBoardKey },
+		isEdit,
+		role,
+		authorRole: initialPost?.authorRole,
+		guest,
+		isLocked,
+	});
 	const noticeBoards = useNoticeBoards(effectiveBoardKey, role);
 	// 작성인 기본값은 표시명(user.name, 세션)에서 가져온다 — bambi_profile.display_name은 제거됐다.
 	const displayName = session.data?.user?.name ?? "";
 	// 광고 Switch 노출: 작성 모드는 편집자 role, 수정 모드는 글 작성자 role 기준.
 	// employer가 비번으로 타인(job_seeker) 글을 수정할 때 서버 검증(작성자 role
 	// 기준)과 어긋나 BAD_REQUEST 나던 문제를 막는다.
-	const canPromote = canPromotePost(isEdit, initialPost?.authorRole, role);
-	const canWriteAnonymously = canUseAnonymousPostAuthor(
-		board.writable,
-		guest,
-		role
-	);
+
 	useInitialAuthorName({ displayName, isAnonymous, isEdit, setAuthorName });
 
 	// 공지사항은 운영자만 작성 가능 — 작성 모드에서 비운영자는 안내 후 목록으로 보낸다.
-	const blockedFromNotice = Boolean(
-		!(isEdit || mineQuery.isPending) && board.adminOnly && role !== "admin"
+	const blockedFromNotice = shouldRedirectNoticeWriter(
+		isEdit,
+		mineQuery.isPending,
+		board.adminOnly,
+		role
 	);
 	useNoticeWriteRedirect({
 		blocked: blockedFromNotice,
@@ -660,12 +714,14 @@ export function CommunityPostForm({
 
 	// 비밀번호는 비밀글(잠금)에만 필요하다 — 작성 모드에서 잠그지 않으면 비번 없이 등록할 수 있다.
 	// 비회원은 세션이 없어 비밀번호가 유일한 소유권 증명이라 작성·수정 모두 필수다.
-	const requiresPassword =
-		guest || isLockPasswordRequired(isEdit, isFreeBoard, isLocked);
+
 	const submittedIsLocked = resolveSubmittedLock(board.key, guest, isLocked);
 	const submittedIsEvent = canManageNotice && isEvent;
 
-	const isSubmitting = createMutation.isPending || updateMutation.isPending;
+	const isSubmitting =
+		createMutation.isPending ||
+		updateMutation.isPending ||
+		Boolean(crawledEdit?.isPending);
 	const canSubmit = canSubmitPost({
 		authorName,
 		bodyHasImage,
@@ -719,6 +775,10 @@ export function CommunityPostForm({
 		if (!canSubmit) {
 			return;
 		}
+		if (crawledEdit) {
+			crawledEdit.onSubmit({ title: title.trim(), body: bodyJson });
+			return;
+		}
 		if (isEdit && initialPost) {
 			submitEdit(initialPost.id);
 			return;
@@ -745,17 +805,19 @@ export function CommunityPostForm({
 				{board.label} {isEdit ? "글 수정" : "글쓰기"}
 			</h1>
 
-			<PostAuthorIdentitySection
-				authorName={authorName}
-				canWriteAnonymously={canWriteAnonymously}
-				displayName={displayName}
-				guest={guest}
-				isAnonymous={isAnonymous}
-				secret={isSecretBoard}
-				setAuthorName={setAuthorName}
-				setIsAnonymous={setIsAnonymous}
-			/>
-			{role === "admin" ? (
+			<fieldset className="contents" disabled={Boolean(crawledEdit)}>
+				<PostAuthorIdentitySection
+					authorName={authorName}
+					canWriteAnonymously={canWriteAnonymously}
+					displayName={displayName}
+					guest={guest}
+					isAnonymous={isAnonymous}
+					secret={isSecretBoard}
+					setAuthorName={setAuthorName}
+					setIsAnonymous={setIsAnonymous}
+				/>
+			</fieldset>
+			{canManageComments ? (
 				<div className="flex items-center gap-2">
 					<Checkbox
 						checked={commentsDisabled}
@@ -768,16 +830,18 @@ export function CommunityPostForm({
 				</div>
 			) : null}
 
-			<PostLockField
-				allowLocking={!(isFreeBoard || guest || isLegalBoard)}
-				forcedLock={isLegalBoard}
-				guest={guest}
-				isEdit={isEdit}
-				isLocked={isLocked}
-				password={password}
-				setIsLocked={handleLockChange}
-				setPassword={setPassword}
-			/>
+			{!crawledEdit && (
+				<PostLockField
+					allowLocking={!(isFreeBoard || guest || isLegalBoard)}
+					forcedLock={isLegalBoard}
+					guest={guest}
+					isEdit={isEdit}
+					isLocked={isLocked}
+					password={password}
+					setIsLocked={handleLockChange}
+					setPassword={setPassword}
+				/>
+			)}
 			<NoticeEventField
 				isEvent={isEvent}
 				onChange={handleEventChange}
@@ -794,7 +858,7 @@ export function CommunityPostForm({
 			<LegalContactPhoneField
 				setValue={setContactPhone}
 				value={contactPhone}
-				visible={isLegalBoard}
+				visible={isLegalBoard && !crawledEdit}
 			/>
 
 			<PromotionField
@@ -833,7 +897,10 @@ export function CommunityPostForm({
 
 			<div className="flex justify-end gap-2">
 				<Button
-					onClick={() => router.push(listPath as Route)}
+					disabled={isSubmitting}
+					onClick={
+						crawledEdit?.onCancel ?? (() => router.push(listPath as Route))
+					}
 					type="button"
 					variant="outline"
 				>

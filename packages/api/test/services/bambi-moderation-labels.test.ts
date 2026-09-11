@@ -11,6 +11,9 @@ import {
 } from "@/services/bambi-moderation-labels";
 
 describe("getReportSeverity", () => {
+	it("labels warning reversals from the moderation audit log", () => {
+		expect(moderationActionLabel("revert_warning")).toBe("최근 경고 되돌리기");
+	});
 	it("marks safety reasons on open reports as high", () => {
 		expect(getReportSeverity("coercion_or_safety", "open")).toBe("high");
 		expect(getReportSeverity("underage_concern", "reviewing")).toBe("high");
