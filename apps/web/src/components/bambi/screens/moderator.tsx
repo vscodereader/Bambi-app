@@ -2931,7 +2931,13 @@ function UserContentHistory({ userId }: { userId: string }) {
 	);
 }
 
-// 회원이 상세를 연 공고 목록(사용자×공고 누적). 업소 아웃바운드 근거로 쓴다.
+const JOB_VIEW_SOURCE_LABEL = {
+	crawled: "수집 공고",
+	member: "회원 업소",
+} as const;
+
+// 회원이 상세를 연 공고를 업소 단위로 묶어 보여준다. 업소 아웃바운드 근거로 쓰므로
+// 헤더에 연락처를 두고, 아래에 그 업소의 어떤 공고를 몇 번 봤는지 붙인다.
 function UserJobViewHistory({ userId }: { userId: string }) {
 	const [page, setPage] = useState(1);
 	const query = useQuery(
@@ -2950,20 +2956,50 @@ function UserJobViewHistory({ userId }: { userId: string }) {
 							아직 본 공고가 없습니다.
 						</p>
 					) : null}
-					<ul className="grid list-none gap-2 p-0">
-						{query.data?.items.map((item) => (
-							<li className="rounded-lg border p-3" key={item.id}>
-								<div className="flex justify-between gap-3">
-									<strong>
-										{item.organizationName || "업소명 없음"} · {item.jobTitle}
-									</strong>
+					<ul className="grid list-none gap-3 p-0">
+						{query.data?.items.map((group) => (
+							<li className="rounded-lg border p-3" key={group.businessKey}>
+								<div className="flex flex-wrap items-start justify-between gap-2">
+									<div className="min-w-0">
+										<strong className="block truncate">
+											{group.businessName || "업소명 없음"}
+										</strong>
+										<span className="text-muted-foreground text-xs">
+											{JOB_VIEW_SOURCE_LABEL[group.source]}
+											{group.businessPhone
+												? ` · ${formatPhone(group.businessPhone)}`
+												: " · 연락처 없음"}
+										</span>
+									</div>
 									<span className="shrink-0 text-muted-foreground text-xs">
-										{item.viewCount}회
+										총 {group.totalViews}회 · 마지막 조회{" "}
+										{formatDateTime(group.lastViewedAt)}
 									</span>
 								</div>
-								<span className="text-muted-foreground text-xs">
-									마지막 조회 {formatDateTime(item.lastViewedAt)}
-								</span>
+								<ul className="mt-2 grid list-none gap-1 border-t p-0 pt-2">
+									{group.jobs.map((job) => (
+										<li
+											className="flex items-center justify-between gap-3 text-sm"
+											key={job.id}
+										>
+											{job.source === "member" ? (
+												<Link
+													className="min-w-0 truncate underline-offset-2 hover:underline"
+													href={
+														`/moderator/jobs/${job.jobPostId}/edit` as Route
+													}
+												>
+													{job.jobTitle}
+												</Link>
+											) : (
+												<span className="min-w-0 truncate">{job.jobTitle}</span>
+											)}
+											<span className="shrink-0 text-muted-foreground text-xs">
+												{job.viewCount}회 · {formatDateTime(job.lastViewedAt)}
+											</span>
+										</li>
+									))}
+								</ul>
 							</li>
 						))}
 					</ul>
