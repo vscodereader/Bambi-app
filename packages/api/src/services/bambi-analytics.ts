@@ -4,6 +4,7 @@ import {
 	jobBoostEvent,
 	jobPerformanceEvent,
 	jobPost,
+	jobViewLog,
 } from "@bambi-app/db/schema/bambi";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { isOrganizationManagerRole } from "./bambi-organization-authz";
@@ -585,4 +586,35 @@ export const getEmployerJobPerformanceSummary = async (
 		sectionMetrics:
 			sectionMetricsByJobId.get(job.jobPostId) ?? emptySectionMetrics(),
 	}));
+};
+
+export interface RecordJobViewInput {
+	jobPostId: string;
+	jobTitle: string;
+	organizationId: string;
+	organizationName: string;
+	userId: string;
+}
+
+// 회원의 공고 상세 조회를 사용자×공고 1행에 누적한다. 제목·업소명은 최신값으로
+// 덮어써 운영자 화면이 현재 이름을 보이게 한다. FK는 user뿐이라 삼킬 오류가 없다.
+export const recordJobView = async ({
+	jobPostId,
+	jobTitle,
+	organizationId,
+	organizationName,
+	userId,
+}: RecordJobViewInput): Promise<void> => {
+	await db
+		.insert(jobViewLog)
+		.values({ jobPostId, jobTitle, organizationId, organizationName, userId })
+		.onConflictDoUpdate({
+			set: {
+				jobTitle,
+				lastViewedAt: sql`now()`,
+				organizationName,
+				viewCount: sql`${jobViewLog.viewCount} + 1`,
+			},
+			target: [jobViewLog.userId, jobViewLog.jobPostId],
+		});
 };

@@ -65,6 +65,7 @@ import {
 	recordAdBannerImpressions,
 	recordJobListingImpressions,
 	recordJobPerformanceEvent,
+	recordJobView,
 } from "../../services/bambi-analytics";
 import {
 	isEmployerLikeRole,
@@ -2051,6 +2052,17 @@ export const jobsRouter = {
 				jobPostId: post.id,
 				organizationId: post.organizationId,
 			});
+
+			// 회원의 조회만 사용자×공고 로그에 누적한다(비회원 제외). 업소 아웃바운드 근거.
+			if (context.session?.user.id) {
+				await recordJobView({
+					jobPostId: post.id,
+					jobTitle: post.title,
+					organizationId: post.organizationId,
+					organizationName: post.employerDisplayName ?? "",
+					userId: context.session.user.id,
+				});
+			}
 
 			// 공고 작성자(구인자)의 인증번호를 상세에 노출한다(인증된 경우에만).
 			const [creatorProfile] = await db

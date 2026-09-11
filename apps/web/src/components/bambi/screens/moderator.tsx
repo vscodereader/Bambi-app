@@ -2931,6 +2931,56 @@ function UserContentHistory({ userId }: { userId: string }) {
 	);
 }
 
+// 회원이 상세를 연 공고 목록(사용자×공고 누적). 업소 아웃바운드 근거로 쓴다.
+function UserJobViewHistory({ userId }: { userId: string }) {
+	const [page, setPage] = useState(1);
+	const query = useQuery(
+		orpc.bambi.contentHistory.listAdminMemberJobViews.queryOptions({
+			input: { page, pageSize: 5, userId },
+		})
+	);
+	const pageCount = Math.max(1, Math.ceil((query.data?.totalCount ?? 0) / 5));
+	return (
+		<Accordion>
+			<AccordionItem value="job-view-history">
+				<AccordionTrigger>최근 본 공고</AccordionTrigger>
+				<AccordionContent>
+					{query.data?.items.length === 0 ? (
+						<p className="mb-0 text-muted-foreground text-sm">
+							아직 본 공고가 없습니다.
+						</p>
+					) : null}
+					<ul className="grid list-none gap-2 p-0">
+						{query.data?.items.map((item) => (
+							<li className="rounded-lg border p-3" key={item.id}>
+								<div className="flex justify-between gap-3">
+									<strong>
+										{item.organizationName || "업소명 없음"} · {item.jobTitle}
+									</strong>
+									<span className="shrink-0 text-muted-foreground text-xs">
+										{item.viewCount}회
+									</span>
+								</div>
+								<span className="text-muted-foreground text-xs">
+									마지막 조회 {formatDateTime(item.lastViewedAt)}
+								</span>
+							</li>
+						))}
+					</ul>
+					<div className="mt-3 flex justify-end">
+						<PageControls
+							disabled={query.isFetching}
+							onPageChange={setPage}
+							page={page}
+							pageCount={pageCount}
+						/>
+					</div>
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
+	);
+}
+
 // 무료 법률 자문 답변 계정 지정·해제. 구직자 ↔ 법률자문만 오갈 수 있고(서버 규칙),
 // 액션 UI는 사용자 목록(/moderator/users)이 이 헬퍼로 대상 여부를 판정해 띄운다.
 const LEGAL_ADVISOR_ROLE = "legal_advisor";
@@ -3196,6 +3246,7 @@ export function UserDetail({
 					) : null}
 					<UserModerationHistory key={item.id} userId={item.id} />
 					<UserContentHistory userId={item.id} />
+					<UserJobViewHistory userId={item.id} />
 					<div>
 						<div className="mb-2.5 font-bold text-[13px] text-foreground">
 							제재 적용
