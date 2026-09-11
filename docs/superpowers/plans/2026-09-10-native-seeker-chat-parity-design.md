@@ -151,3 +151,8 @@ PR 355가 먼저 mobile에 병합돼 같은 lifecycle이 존재하면 중복 구
 - 공고·면접 정보 패널의 공고 정보, 면접 일정, 인증 연락처를 확인했다.
 - 면접 제안 확인창의 거절 결과와 별도 제안의 확정 결과를 확인했다.
 - `pnpm --filter native test`: 38 files / 384 tests 통과. presence·응답시간 서비스 13 tests, native 타입 검사, Drizzle check, Ultracite, `git diff --check` 통과.
+## 2026-09-11 독립성 재감사
+
+- 다른 구직자 PR을 base로 사용하거나 해당 화면·컴포넌트를 import하지 않는다.
+- migration 0116과 수집 커뮤니티 schema/API가 포함된 이유는 최신 develop의 확정 순서가 0115 presence → 0116 crawled community → 0117 chat response이기 때문이다. 0116을 생략하거나 다른 내용으로 재사용하면 mobile을 develop에 합칠 때 migration 번호와 snapshot이 충돌한다.
+- UI 범위는 구직자 채팅이며 구인자·운영자 전용 route 또는 화면은 추가하지 않는다. 채팅 room과 server realtime은 양측이 공유하는 기존 계약이라 공용 계층에서만 변경한다.
