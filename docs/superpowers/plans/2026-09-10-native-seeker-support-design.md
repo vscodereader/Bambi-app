@@ -157,3 +157,10 @@
 - 회원의 "문의 글 등록하기"(primary)·"내 문의 내역"(secondary)은 공고 상세의 "1:1 채팅 시작"과 같은 하단 고정 영역(stickyFooter)으로 옮겼다. 비회원에겐 같은 자리에 "1:1 상담" 하나만 둔다.
 - "1:1 상담"·"이용 가이드" 본문 버튼은 제거했다. 이용 가이드 route와 코드는 유지하되 진입점을 두지 않는다.
 - 회원의 1:1 상담 진입은 구직자 홈 탭 우하단 스피드다이얼 FAB(`SpeedDialFab`)로 옮겼다. actions 배열에 항목을 추가하면 펼침 메뉴 항목이 늘어난다.
+## 2026-09-11 1:1 상담 시트·채팅 UI 개편
+
+- support/chat은 자체 Stack(`_layout.tsx`, anchor index)을 가진 그룹으로 묶고 부모 (seeker) Stack에서 `presentation: "formSheet"`(detent 0.94, 모서리 24, 그래버)로 띄운다. Android `modal`은 상단 슬라이드 풀스크린이라 쓰지 않는다. 시트 닫기는 `router.back()`(중첩 Stack에 index 하나뿐이라 dismiss는 시트를 못 내린다).
+- 목록 시트(index): 자체 헤더 "대화"+X, 운영팀 아바타·상대시간·미리보기 2줄·미읽음/종료 칩 행, 하단 중앙 플로팅 "새 문의하기" → `/support/chat/new`. 목록의 새 상담 입력창은 제거했다.
+- 대화방([id]): 헤더 "1:1 상담", inverted FlatList + 공유 `annotateChatMessages`로 날짜 칩·그룹 경계, `SupportChatBubble`(내 것 오른쪽 accent, 운영팀 왼쪽 surface-secondary+헤드셋 아바타), `SupportChatComposer`(멀티라인·원형 전송·withSpring 눌림). `id === "new"`는 인사 말풍선만 두고 첫 전송이 방을 만든 뒤 실제 id로 replace한다. 비회원은 첫 전송 직전 토큰을 보장한다.
+- Reanimated: 마운트 이후 도착한 메시지만 FadeInRight/FadeInLeft 등장, 전송 버튼 스프링, 새 메시지 pill 재사용. 3초 폴링·markRead는 현행 유지.
+- 실기기 확인 잔여: 시트 안 상단 안전영역 값, Android formSheet 렌더, 플로팅 버튼 배치·그림자, 키보드와 컴포저 겹침.
