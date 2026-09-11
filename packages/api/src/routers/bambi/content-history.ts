@@ -1,12 +1,14 @@
 import { db } from "@bambi-app/db";
+import { user } from "@bambi-app/db/schema/auth";
 import {
+	bambiProfile,
 	communityBoard,
 	communityComment,
 	communityPost,
 	communityPostLikeHistory,
 	jobViewLog,
 } from "@bambi-app/db/schema/bambi";
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure } from "../../index";
@@ -238,4 +240,28 @@ export const contentHistoryRouter = {
 				totalCount: ordered.length,
 			};
 		}),
+
+	// 전 회원 공고 조회 로그 일괄 내보내기(운영자 CSV → 업소 아웃바운드용). 업소 연락처는
+	// crawler.exportLeads와 같은 운영자 전용 축이라 이 프로시저에만 싣는다. 운영자 계정은
+	// 관리 대상이 아니라 moderation.listUsers와 같은 규칙으로 제외한다.
+	exportAdminJobViews: adminProcedure.handler(() =>
+		db
+			.select({
+				businessName: jobViewLog.organizationName,
+				businessPhone: jobViewLog.businessPhone,
+				firstViewedAt: jobViewLog.firstViewedAt,
+				jobTitle: jobViewLog.jobTitle,
+				lastViewedAt: jobViewLog.lastViewedAt,
+				source: jobViewLog.source,
+				userEmail: user.email,
+				userName: user.name,
+				userUsername: user.login_id,
+				viewCount: jobViewLog.viewCount,
+			})
+			.from(jobViewLog)
+			.innerJoin(user, eq(user.id, jobViewLog.userId))
+			.leftJoin(bambiProfile, eq(bambiProfile.userId, user.id))
+			.where(sql`coalesce(${bambiProfile.role}, 'job_seeker')::text <> 'admin'`)
+			.orderBy(asc(user.name), desc(jobViewLog.lastViewedAt))
+	),
 };
