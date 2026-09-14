@@ -12,14 +12,12 @@ import { useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
 import {
-	BambiHeader,
 	ErrorState,
 	LoadingState,
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { FieldSelect } from "@/src/components/field-select";
-import { FilterChips } from "@/src/components/moderation/filter-chips";
 import { accountStatusBadge } from "@/src/lib/bambi-native";
 import { userListOptions } from "@/src/lib/moderation/queries";
 import { useDebouncedValue } from "@/src/lib/use-debounced-value";
@@ -120,11 +118,8 @@ export default function ModeratorUsersScreen() {
 	// 그려질 때 입력이 재마운트돼 키보드 포커스가 끊긴다(검수 목록과 같은 구성).
 	return (
 		<View className="flex-1 bg-background">
-			<View className="gap-3 px-4">
-				<BambiHeader
-					description="계정 상태와 역할을 확인하고 제재·복구를 처리합니다."
-					title="사용자 관리"
-				/>
+			{/* 스크롤 시 목록이 필터 행에 붙지 않게 경계를 긋는다. */}
+			<View className="gap-3 border-border border-b px-4 py-3">
 				<SearchField onChange={setQuery} value={query}>
 					<SearchField.Group>
 						<SearchField.SearchIcon />
@@ -135,21 +130,32 @@ export default function ModeratorUsersScreen() {
 						<SearchField.ClearButton />
 					</SearchField.Group>
 				</SearchField>
-			</View>
-			<FilterChips
-				onChange={setStatus}
-				options={STATUS_OPTIONS}
-				value={status}
-			/>
-			<View className="px-4">
-				<FieldSelect
-					isLabelHidden
-					label="역할"
-					onChange={setRole}
-					options={ROLE_OPTIONS}
-					placeholder="전체 역할"
-					value={role}
-				/>
+				{/* 두 축 모두 시트 트리거라 한 줄로 붙인다(폭이 반씩이라도 값 한 단어는 잘리지 않는다). */}
+				<View className="flex-row gap-3">
+					<View className="flex-1">
+						{/* 45%: 항목 5개(각 48dp) + 시트 제목·핸들. */}
+						<FieldSelect
+							isLabelHidden
+							label="상태"
+							onChange={(next) => setStatus(next as UserStatusFilter)}
+							options={STATUS_OPTIONS}
+							placeholder="전체"
+							snapPoints={["45%"]}
+							value={status}
+						/>
+					</View>
+					<View className="flex-1">
+						<FieldSelect
+							isLabelHidden
+							label="역할"
+							onChange={setRole}
+							options={ROLE_OPTIONS}
+							placeholder="전체 역할"
+							snapPoints={["45%"]}
+							value={role}
+						/>
+					</View>
+				</View>
 			</View>
 			<FlatList
 				contentContainerClassName="gap-3 p-4"
