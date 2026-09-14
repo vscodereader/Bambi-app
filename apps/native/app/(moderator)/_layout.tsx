@@ -3,6 +3,7 @@ import { type Href, Redirect, Stack } from "expo-router";
 
 import { authClient } from "@/lib/auth-client";
 import { ErrorState, LoadingState } from "@/src/components/bambi-screen";
+import { SeekerStackHeader } from "@/src/components/seeker-header";
 import {
 	getNativeHomeRoute,
 	type NativeProfileRole,
@@ -42,8 +43,14 @@ export default function ModeratorLayout() {
 
 	// 복귀 진입점(RoleSwitchMenu)은 탭 셸 헤더(ModeratorHomeHeader)가 맡는다. 상세는
 	// 이 Stack에 push되므로 기본 뒤로 버튼으로 목록에 돌아간다.
+	// 네이티브 기본 헤더는 edge-to-edge에서 상단 밴드를 상태바 높이만큼 과하게 잡아
+	// (seeker-header.tsx 주석 참조) 구직자·구인자 스택과 같은 커스텀 헤더를 쓴다.
 	return (
-		<Stack>
+		<Stack
+			screenOptions={{
+				header: (props) => <SeekerStackHeader {...props} />,
+			}}
+		>
 			<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 			<Stack.Screen name="queue/[id]" options={{ title: "공고 검수" }} />
 			<Stack.Screen name="reports/[id]" options={{ title: "신고 상세" }} />
