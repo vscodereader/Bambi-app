@@ -20,7 +20,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
-import { FilterChips } from "@/src/components/moderation/filter-chips";
+import { FieldSelect } from "@/src/components/field-select";
 import { reportListOptions } from "@/src/lib/moderation/queries";
 import {
 	type ModerationReport,
@@ -112,17 +112,22 @@ export default function ModeratorReportsScreen() {
 
 	return (
 		<View className="flex-1 bg-background">
-			<View className="px-4">
+			<View className="gap-3 px-4">
 				<BambiHeader
 					description="접수된 신고를 검토하고 기각·조치·제재를 처리합니다."
 					title="신고 관리"
 				/>
+				{/* 30%: 항목 2개(각 48dp) + 시트 제목·핸들이 작은 화면에서도 잘리지 않는 최소 높이. */}
+				<FieldSelect
+					isLabelHidden
+					label="처리 상태"
+					onChange={(next) => setBucket(next as Bucket)}
+					options={BUCKET_OPTIONS}
+					placeholder="열림"
+					snapPoints={["30%"]}
+					value={bucket}
+				/>
 			</View>
-			<FilterChips
-				onChange={setBucket}
-				options={BUCKET_OPTIONS}
-				value={bucket}
-			/>
 			<FlatList
 				contentContainerClassName="gap-3 p-4"
 				data={reports}
