@@ -118,7 +118,8 @@ export default function ModeratorUsersScreen() {
 	// 그려질 때 입력이 재마운트돼 키보드 포커스가 끊긴다(검수 목록과 같은 구성).
 	return (
 		<View className="flex-1 bg-background">
-			<View className="gap-3 px-4 pt-3">
+			{/* 스크롤 시 목록이 필터 행에 붙지 않게 경계를 긋는다. */}
+			<View className="gap-3 border-border border-b px-4 py-3">
 				<SearchField onChange={setQuery} value={query}>
 					<SearchField.Group>
 						<SearchField.SearchIcon />

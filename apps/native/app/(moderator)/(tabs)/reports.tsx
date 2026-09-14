@@ -129,7 +129,8 @@ export default function ModeratorReportsScreen() {
 
 	return (
 		<View className="flex-1 bg-background">
-			<View className="px-4 pt-3">
+			{/* 스크롤 시 목록이 필터 행에 붙지 않게 경계를 긋는다 */}
+			<View className="border-border border-b px-4 py-3">
 				{/* 30%: 항목 2개(각 48dp) + 시트 제목·핸들이 작은 화면에서도 잘리지 않는 최소 높이. */}
 				<FieldSelect
 					isLabelHidden
