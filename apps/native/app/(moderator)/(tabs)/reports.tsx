@@ -15,7 +15,6 @@ import { useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
 import {
-	BambiHeader,
 	ErrorState,
 	formatDateTime,
 	LoadingState,
@@ -130,11 +129,7 @@ export default function ModeratorReportsScreen() {
 
 	return (
 		<View className="flex-1 bg-background">
-			<View className="gap-3 px-4">
-				<BambiHeader
-					description="접수된 신고를 검토하고 기각·조치·제재를 처리합니다."
-					title="신고 관리"
-				/>
+			<View className="px-4 pt-3">
 				{/* 30%: 항목 2개(각 48dp) + 시트 제목·핸들이 작은 화면에서도 잘리지 않는 최소 높이. */}
 				<FieldSelect
 					isLabelHidden
