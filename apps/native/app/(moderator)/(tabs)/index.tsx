@@ -16,7 +16,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
-import { FilterChips } from "@/src/components/moderation/filter-chips";
+import { FieldSelect } from "@/src/components/field-select";
 import { SortTabs } from "@/src/components/moderation/sort-tabs";
 import { queueListOptions } from "@/src/lib/moderation/queries";
 
@@ -143,7 +143,18 @@ export default function ModeratorQueueScreen() {
 	// 탭 셸 헤더(ModeratorHomeHeader)가 진다.
 	return (
 		<View className="flex-1 bg-background">
-			<FilterChips onChange={setRisk} options={RISK_OPTIONS} value={risk} />
+			<View className="px-4 py-3">
+				{/* 35%: 항목 3개(각 48dp) + 시트 제목·핸들이 작은 화면에서도 잘리지 않는 최소 높이. */}
+				<FieldSelect
+					isLabelHidden
+					label="감지 여부"
+					onChange={(next) => setRisk(next as RiskFilter)}
+					options={RISK_OPTIONS}
+					placeholder="전체"
+					snapPoints={["35%"]}
+					value={risk}
+				/>
+			</View>
 			<SortTabs onChange={setSort} options={SORT_OPTIONS} value={sort} />
 			<FlatList
 				contentContainerClassName="gap-3 p-4"

@@ -1,9 +1,12 @@
 import { Tabs } from "heroui-native";
 
-import type { FilterChipOption } from "@/src/components/moderation/filter-chips";
+interface SortTabOption<T extends string> {
+	label: string;
+	value: T;
+}
 
-// 필터(위험도)와 정렬이 같은 Chip 모양이면 두 축이 구분되지 않는다 — 정렬만 밑줄
-// 인디케이터(secondary variant)로 분리한다.
+// 필터(감지 여부)는 시트 트리거, 정렬은 밑줄 인디케이터(secondary variant)라 두 축이
+// 생김새로 구분된다.
 //
 // 구분선은 따로 긋지 않는다: secondary variant의 Tabs.List가 이미 border-b
 // border-border를 달고 있어서, 폭만 w-full로 늘리면 목록과의 경계가 된다. 래퍼에
@@ -18,7 +21,7 @@ export function SortTabs<T extends string>({
 	value,
 }: {
 	onChange: (next: T) => void;
-	options: readonly FilterChipOption<T>[];
+	options: readonly SortTabOption<T>[];
 	value: T;
 }) {
 	return (

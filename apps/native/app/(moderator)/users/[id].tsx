@@ -29,7 +29,7 @@ import {
 	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
-import { FilterChips } from "@/src/components/moderation/filter-chips";
+import { FieldSelect } from "@/src/components/field-select";
 import { ReasonDialog } from "@/src/components/moderation/reason-dialog";
 import { SanctionDialog } from "@/src/components/moderation/sanction-dialog";
 import { accountStatusBadge } from "@/src/lib/bambi-native";
@@ -267,9 +267,14 @@ function ContentHistorySection({ userId }: { userId: string }) {
 
 	return (
 		<SectionCard title="작성 콘텐츠 이력">
-			<FilterChips
-				onChange={setFilter}
+			{/* 35%: 항목 3개(각 48dp) + 시트 제목·핸들. 카드가 이미 p-4라 좌우 여백은 얹지 않는다. */}
+			<FieldSelect
+				isLabelHidden
+				label="콘텐츠 종류"
+				onChange={(next) => setFilter(next as ContentFilter)}
 				options={CONTENT_FILTER_OPTIONS}
+				placeholder="전체"
+				snapPoints={["35%"]}
 				value={filter}
 			/>
 			<HistoryStatus
