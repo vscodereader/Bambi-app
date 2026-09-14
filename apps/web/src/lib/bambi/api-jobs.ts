@@ -23,6 +23,141 @@ import {
 const UUID_RE =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// 로컬 포트폴리오 촬영은 화면 구조를 유지하고 표시 콘텐츠만 일반 아르바이트 예시로 바꾼다.
+const PORTFOLIO_PREVIEW = process.env.NODE_ENV === "development";
+const PORTFOLIO_LISTINGS = [
+	[
+		"카페 평일 오픈",
+		"로컬커피 정자점",
+		"경기 · 성남시 분당구",
+		"시급 12,000원",
+		"평일 08:00–13:00",
+		"https://images.unsplash.com/photo-1453614512568-c4024d13c247?auto=format&fit=crop&w=1000&q=85",
+	],
+	[
+		"주말 바리스타",
+		"오후커피 강남점",
+		"서울 · 강남구",
+		"시급 13,000원",
+		"토·일 12:00–18:00",
+		"https://images.unsplash.com/photo-1560463230-1d6803589edf?auto=format&fit=crop&w=1000&q=85",
+	],
+	[
+		"의류매장 판매",
+		"데일리웨어 수원점",
+		"경기 · 수원시 영통구",
+		"시급 12,500원",
+		"주 3일 13:00–20:00",
+		"https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?auto=format&fit=crop&w=1000&q=85",
+	],
+	[
+		"매장 진열 보조",
+		"라이프숍 잠실점",
+		"서울 · 송파구",
+		"시급 12,000원",
+		"월·수·금 10:00–16:00",
+		"https://images.unsplash.com/photo-1721152531778-47bb07d618bc?auto=format&fit=crop&w=1000&q=85",
+	],
+	[
+		"카페 마감 스태프",
+		"브루잉룸 성수점",
+		"서울 · 성동구",
+		"시급 12,500원",
+		"화–토 17:00–22:00",
+		"https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=1000&q=85",
+	],
+	[
+		"주말 매장 관리",
+		"클로젯 판교점",
+		"경기 · 성남시 분당구",
+		"시급 13,000원",
+		"토·일 11:00–19:00",
+		"https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?auto=format&fit=crop&w=1000&q=85",
+	],
+	[
+		"베이커리 포장",
+		"모닝브레드 서현점",
+		"경기 · 성남시 분당구",
+		"시급 12,000원",
+		"주 4일 09:00–14:00",
+		"https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1000&q=85",
+	],
+	[
+		"팝업스토어 운영",
+		"스튜디오샵 홍대점",
+		"서울 · 마포구",
+		"일급 110,000원",
+		"10:00–19:00",
+		"https://images.unsplash.com/photo-1443884590026-2e4d21aee71c?auto=format&fit=crop&w=1000&q=85",
+	],
+	[
+		"평일 음료 제조",
+		"커피가든 역삼점",
+		"서울 · 강남구",
+		"시급 12,000원",
+		"월–금 11:00–16:00",
+		"https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1000&q=85",
+	],
+	[
+		"매장 재고 정리",
+		"오브젝트룸 광교점",
+		"경기 · 수원시 영통구",
+		"시급 12,500원",
+		"주 3일 09:00–15:00",
+		"https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=1000&q=85",
+	],
+	[
+		"카페 홀 스태프",
+		"테라스커피 송도점",
+		"인천 · 연수구",
+		"시급 12,000원",
+		"토·일 10:00–17:00",
+		"https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=1000&q=85",
+	],
+	[
+		"주말 판매 스태프",
+		"에브리웨어 신촌점",
+		"서울 · 서대문구",
+		"시급 13,000원",
+		"토·일 13:00–20:00",
+		"https://images.unsplash.com/photo-1528698827591-e19ccd7bc23d?auto=format&fit=crop&w=1000&q=85",
+	],
+] as const;
+
+const withPortfolioContent = (job: Job, index: number): Job => {
+	if (!PORTFOLIO_PREVIEW) {
+		return job;
+	}
+	const item = PORTFOLIO_LISTINGS[index % PORTFOLIO_LISTINGS.length];
+	if (!item) {
+		return job;
+	}
+	const [title, company, location, pay, hours, imageUrl] = item;
+	const [region = "", district = ""] = location.split(" · ");
+	return {
+		...job,
+		company,
+		coverImage: {
+			altText: `${company} 매장 이미지`,
+			byteSize: 0,
+			fileName: "portfolio-photo.jpg",
+			mimeType: "image/jpeg",
+			storageKey: `portfolio/${index}`,
+			url: imageUrl,
+			usage: "cover",
+		},
+		desc: `${company}에서 함께 근무할 ${title}를 모집합니다. 근무 일정은 협의할 수 있습니다.`,
+		district,
+		hours,
+		location,
+		pay,
+		region,
+		tags: [region, district, "초보 가능"],
+		title,
+		type: index % 3 === 2 ? "기타" : "다방",
+	};
+};
+
 // 데스크톱 4열 × 12줄을 한 페이지로 삼는다. 첫 조회와 더보기를 같은 크기로 유지해야
 // 사용자가 누를 때마다 예측 가능한 12줄씩 이어지고 커서 소비량도 화면 계약과 일치한다.
 export const MARKETPLACE_PAGE_SIZE = 48;
@@ -144,13 +279,37 @@ export function useMarketplaceJobs(
 				.map((item) => [item.id, item] as const)
 		).values(),
 	];
+	const mappedOrganic = organicRows
+		.map(toMarketplaceJob)
+		.map(withPortfolioContent);
+	const mappedRecommended =
+		firstPage?.sections.recommended
+			.map(toMarketplaceJob)
+			.map(withPortfolioContent) ?? [];
+	const mappedSpecial =
+		firstPage?.sections.special
+			.map(toMarketplaceJob)
+			.map(withPortfolioContent) ?? [];
+	const mappedUrgent =
+		firstPage?.sections.urgent
+			.map(toMarketplaceJob)
+			.map(withPortfolioContent) ?? [];
 	const sections = firstPage
 		? filterSections(
 				{
-					organic: organicRows.map(toMarketplaceJob),
-					recommended: firstPage.sections.recommended.map(toMarketplaceJob),
-					special: firstPage.sections.special.map(toMarketplaceJob),
-					urgent: firstPage.sections.urgent.map(toMarketplaceJob),
+					organic: mappedOrganic,
+					recommended:
+						PORTFOLIO_PREVIEW && mappedRecommended.length === 0
+							? mappedOrganic.slice(8, 12)
+							: mappedRecommended,
+					special:
+						PORTFOLIO_PREVIEW && mappedSpecial.length === 0
+							? mappedOrganic.slice(0, 12)
+							: mappedSpecial,
+					urgent:
+						PORTFOLIO_PREVIEW && mappedUrgent.length === 0
+							? mappedOrganic.slice(4, 8)
+							: mappedUrgent,
 				},
 				filters
 			)
@@ -275,6 +434,25 @@ export interface AdBannerJobGroups {
 
 export function useAdBannerJobs(): AdBannerJobGroups {
 	const bannersQuery = useQuery(orpc.bambi.jobs.listAdBanners.queryOptions());
+	if (PORTFOLIO_PREVIEW && !bannersQuery.isLoading) {
+		const items: AdBannerItem[] = PORTFOLIO_LISTINGS.slice(0, 9).map(
+			(listing, index) => ({
+				company: listing[1],
+				crawled: false,
+				href: "/seeker",
+				id: `portfolio-banner-${index}`,
+				imageUrl: listing[5],
+				layout: null,
+				title: listing[0],
+			})
+		);
+		return {
+			isLoading: false,
+			leftBanner: items.slice(0, 3),
+			premiumBanner: items.slice(3, 6),
+			rightBanner: items.slice(6, 9),
+		};
+	}
 	// 슬롯→배너 규격 매핑은 렌더러 비율과 한 몸이다: 좌측·상단 프리미엄은 가로형(7:3),
 	// 우측 레일은 세로형(4:9). 슬롯마다 맞는 usage를 넘겨야 구인자가 올린 배너가 뜬다.
 	// 빈 칸(null)은 그대로 null로 두고 렌더러가 자리표시로 채운다.

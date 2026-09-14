@@ -35,6 +35,51 @@ const COMMUNITY_BLOCKED_MESSAGE =
 	"일반 여성 회원과 광고 중인 업소회원만 가능합니다";
 const SUSPENDED_COMMUNITY_BLOCKED_MESSAGE = "차단된 유저는 확인이 불가합니다";
 
+const PORTFOLIO_COMMUNITY_TITLES: Record<string, readonly string[]> = {
+	best: [
+		"첫 출근 전에 꼭 확인하는 것들",
+		"면접 볼 때 근무시간 어떻게 물어봐?",
+		"카페 알바 처음인데 준비 팁 있을까요",
+	],
+	free: [
+		"오늘 면접 보고 왔어요",
+		"주말 알바 구할 때 중요하게 보는 조건",
+		"출근 전 준비물 추천해 주세요",
+	],
+	notice: [
+		"서비스 이용 안내 및 안전한 구직 활동 안내",
+		"채용 공고 등록 전 확인해 주세요",
+		"개인정보 보호 및 신고 기능 안내",
+		"연휴 고객센터 운영 안내",
+	],
+	secret: [
+		"근무 조건 관련해서 조언 부탁드려요",
+		"급여 지급일 문의해도 괜찮을까요",
+		"계약서 확인할 부분이 궁금해요",
+	],
+};
+
+const portfolioCommunityBoards = (
+	boards: Parameters<typeof CommunityOverviewGrid>[0]["boards"]
+) => {
+	if (process.env.NODE_ENV !== "development") {
+		return boards;
+	}
+	return boards.map((board) => ({
+		...board,
+		posts: board.posts.map((post, index) => ({
+			...post,
+			authorName:
+				board.key === "notice"
+					? "운영팀"
+					: ["초코라떼", "오늘도화이팅", "새싹알바"][index % 3],
+			title:
+				PORTFOLIO_COMMUNITY_TITLES[board.key]?.[index] ??
+				"알바 경험과 정보를 나눠요",
+		})),
+	}));
+};
+
 // 섹션 헤더 — visual-job-exposure-sections의 ExposureSection 헤더 문법을 따른다.
 function SectionHeader() {
 	return (
@@ -121,7 +166,7 @@ function CommunityContent({
 			<SectionHeader />
 			<CommunityOverviewGrid
 				analyticsSurface="seeker_home_community"
-				boards={overviewQuery.data?.boards ?? []}
+				boards={portfolioCommunityBoards(overviewQuery.data?.boards ?? [])}
 				isPending={overviewQuery.isPending}
 				onBlockedNavigate={onBlockedNavigate}
 			/>
