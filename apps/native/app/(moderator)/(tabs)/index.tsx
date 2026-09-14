@@ -10,7 +10,6 @@ import { useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
 import {
-	BambiHeader,
 	ErrorState,
 	formatDateTime,
 	LoadingState,
@@ -139,15 +138,10 @@ export default function ModeratorQueueScreen() {
 	}
 
 	// 목록은 FlatList가 스스로 스크롤한다 — BambiScreen(ScrollView) 안에 넣으면 가상화가
-	// 죽으므로 헤더·필터를 형제로 두고 아래에 붙인다(검색 화면과 같은 구성).
+	// 죽으므로 필터를 형제로 두고 아래에 붙인다(검색 화면과 같은 구성). 화면 제목은
+	// 탭 셸 헤더(ModeratorHomeHeader)가 진다.
 	return (
 		<View className="flex-1 bg-background">
-			<View className="px-4">
-				<BambiHeader
-					description="검수 대기 공고를 승인, 보류, 반려 처리합니다."
-					title="공고 검수"
-				/>
-			</View>
 			<FilterChips onChange={setRisk} options={RISK_OPTIONS} value={risk} />
 			<FilterChips onChange={setSort} options={SORT_OPTIONS} value={sort} />
 			<FlatList
