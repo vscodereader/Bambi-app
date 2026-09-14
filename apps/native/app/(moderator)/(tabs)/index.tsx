@@ -3,9 +3,10 @@ import {
 	type QueueRiskLevel,
 	resolveQueueRiskLevel,
 } from "@bambi-app/api/services/bambi-moderation-labels";
+import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { type Href, router } from "expo-router";
-import { Surface } from "heroui-native";
+import { Chip, Surface, useThemeColor } from "heroui-native";
 import { useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
@@ -19,6 +20,7 @@ import {
 import { FieldSelect } from "@/src/components/field-select";
 import { SortTabs } from "@/src/components/moderation/sort-tabs";
 import { queueListOptions } from "@/src/lib/moderation/queries";
+import { formatRelativeTime } from "@/src/lib/support/support";
 
 type RiskFilter = "all" | QueueRiskLevel;
 type SortKey = "oldest" | "recent" | "risk";
@@ -86,39 +88,70 @@ function useQueueRows(
 
 function QueueRowCard({ row }: { row: QueueRow }) {
 	const { job } = row;
-	const terms =
-		job.detectedTerms.length > 0
-			? job.detectedTerms.slice(0, 3).join(", ")
-			: "감지된 문구 없음";
-	const receivedAt = formatDateTime(job.createdAt);
+	const shownTerms = job.detectedTerms.slice(0, 3);
+	const hiddenTermCount = job.detectedTerms.length - shownTerms.length;
+	const mutedColor = useThemeColor("muted");
 
 	return (
 		<Pressable
-			accessibilityLabel={`${job.organizationDisplayName} ${job.title}, ${QUEUE_RISK_LABELS[row.risk]}, ${terms}, ${receivedAt} 접수`}
+			accessibilityLabel={`${job.organizationDisplayName} ${job.title}, ${QUEUE_RISK_LABELS[row.risk]}, ${job.detectedTerms.join(", ") || "감지된 문구 없음"}, ${formatDateTime(job.createdAt)} 접수`}
 			accessibilityRole="button"
 			accessible
 			className="active:opacity-75"
 			onPress={() => router.push(queueDetailHref(job.id))}
 		>
+			{/* 감지 여부 왼쪽 띠. 두께(border-l-4)는 항상 두고 색만 바꾼다 — overflow-hidden
+			    Surface에서 테두리 두께를 런타임에 0↔4로 토글하면 Android가 자식을 잘라먹는다. */}
 			<Surface
-				className="gap-2 rounded-lg p-4"
+				className={`gap-2 rounded-lg border-l-4 p-4 ${row.risk === "mid" ? "border-warning" : "border-transparent"}`}
 				importantForAccessibility="no-hide-descendants"
 				variant="secondary"
 			>
-				<Text className="text-muted text-xs">
-					{job.organizationDisplayName}
-				</Text>
-				<Text className="font-bold text-base text-foreground">{job.title}</Text>
-				<View className="flex-row flex-wrap gap-2">
+				<View className="flex-row items-center justify-between gap-2">
+					<Text className="flex-1 text-muted text-xs" numberOfLines={1}>
+						{job.organizationDisplayName} · {job.region}
+					</Text>
 					<Pill tone={row.risk === "mid" ? "warning" : "neutral"}>
 						{QUEUE_RISK_LABELS[row.risk]}
 					</Pill>
-					<Pill>{job.region}</Pill>
 				</View>
-				<Text className="text-muted text-sm leading-5">{terms}</Text>
-				<Text className="text-muted text-xs">
-					{receivedAt} · #{job.id.slice(0, 8)}
+				<Text className="font-bold text-base text-foreground" numberOfLines={2}>
+					{job.title}
 				</Text>
+				{/* Chip은 내부가 Pressable이라 그냥 두면 카드 탭을 가로챈다 — pointerEvents로
+				    터치를 통과시킨다(disabled와 달리 접근성 상태를 건드리지 않는다). */}
+				{shownTerms.length > 0 ? (
+					<View className="flex-row flex-wrap gap-1.5">
+						{shownTerms.map((term) => (
+							<Chip
+								color="warning"
+								key={term}
+								pointerEvents="none"
+								size="sm"
+								variant="soft"
+							>
+								{term}
+							</Chip>
+						))}
+						{hiddenTermCount > 0 ? (
+							<Chip
+								color="default"
+								pointerEvents="none"
+								size="sm"
+								variant="soft"
+							>
+								{`+${hiddenTermCount}`}
+							</Chip>
+						) : null}
+					</View>
+				) : null}
+				<View className="flex-row items-center gap-1">
+					<Ionicons color={mutedColor} name="time-outline" size={12} />
+					<Text className="flex-1 text-muted text-xs" numberOfLines={1}>
+						{formatRelativeTime(job.createdAt)}
+					</Text>
+					<Ionicons color={mutedColor} name="chevron-forward" size={16} />
+				</View>
 			</Surface>
 		</Pressable>
 	);
