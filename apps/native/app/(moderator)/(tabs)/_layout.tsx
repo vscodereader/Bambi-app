@@ -53,12 +53,7 @@ export default function ModeratorTabsLayout() {
 				name="index"
 				options={{
 					// 본문이 아니라 헤더가 화면 제목을 진다 — 본문에 같은 제목 블록을 두지 않는다.
-					header: () => (
-						<ModeratorHomeHeader
-							description="검수 대기 공고를 승인, 보류, 반려 처리합니다."
-							title="공고 검수"
-						/>
-					),
+					header: () => <ModeratorHomeHeader title="공고 검수" />,
 					tabBarIcon: tabIcon("shield-checkmark", "shield-checkmark-outline"),
 					title: "검수",
 				}}
@@ -66,12 +61,7 @@ export default function ModeratorTabsLayout() {
 			<Tabs.Screen
 				name="reports"
 				options={{
-					header: () => (
-						<ModeratorHomeHeader
-							description="접수된 신고를 검토하고 기각·조치·제재를 처리합니다."
-							title="신고 관리"
-						/>
-					),
+					header: () => <ModeratorHomeHeader title="신고 관리" />,
 					tabBarIcon: tabIcon("flag", "flag-outline"),
 					title: "신고",
 				}}
@@ -79,12 +69,7 @@ export default function ModeratorTabsLayout() {
 			<Tabs.Screen
 				name="users"
 				options={{
-					header: () => (
-						<ModeratorHomeHeader
-							description="계정 상태와 역할을 확인하고 제재·복구를 처리합니다."
-							title="사용자 관리"
-						/>
-					),
+					header: () => <ModeratorHomeHeader title="사용자 관리" />,
 					tabBarIcon: tabIcon("people", "people-outline"),
 					title: "사용자",
 				}}
