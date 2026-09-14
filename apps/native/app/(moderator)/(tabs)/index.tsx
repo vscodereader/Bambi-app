@@ -17,6 +17,7 @@ import {
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { FilterChips } from "@/src/components/moderation/filter-chips";
+import { SortTabs } from "@/src/components/moderation/sort-tabs";
 import { queueListOptions } from "@/src/lib/moderation/queries";
 
 type RiskFilter = "all" | QueueRiskLevel;
@@ -143,7 +144,7 @@ export default function ModeratorQueueScreen() {
 	return (
 		<View className="flex-1 bg-background">
 			<FilterChips onChange={setRisk} options={RISK_OPTIONS} value={risk} />
-			<FilterChips onChange={setSort} options={SORT_OPTIONS} value={sort} />
+			<SortTabs onChange={setSort} options={SORT_OPTIONS} value={sort} />
 			<FlatList
 				contentContainerClassName="gap-3 p-4"
 				data={rows}
