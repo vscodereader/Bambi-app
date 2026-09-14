@@ -1,14 +1,13 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { type Href, router } from "expo-router";
-import { Skeleton, Surface } from "heroui-native";
+import { Skeleton, Surface, useThemeColor } from "heroui-native";
 import { Pressable, Text, View } from "react-native";
 
 import {
-	BambiHeader,
 	BambiScreen,
 	ErrorState,
-	Pill,
 	StateCard,
 } from "@/src/components/bambi-screen";
 import { MemberOnly } from "@/src/components/member-only";
@@ -20,6 +19,8 @@ type Overview = Awaited<
 >;
 
 function BoardPreview({ board }: { board: Overview["boards"][number] }) {
+	const foreground = useThemeColor("foreground");
+
 	return (
 		<Surface className="gap-3 rounded-lg p-4" variant="secondary">
 			<Pressable
@@ -38,7 +39,7 @@ function BoardPreview({ board }: { board: Overview["boards"][number] }) {
 						<Text className="text-muted text-sm">{board.description}</Text>
 					) : null}
 				</View>
-				<Pill tone="neutral">{board.posts.length}개</Pill>
+				<Ionicons color={foreground} name="chevron-forward" size={22} />
 			</Pressable>
 			{board.posts.length === 0 ? (
 				<Text className="text-muted text-sm">아직 게시글이 없어요.</Text>
@@ -79,10 +80,6 @@ function CommunityHome() {
 	if (query.isPending) {
 		return (
 			<BambiScreen>
-				<BambiHeader
-					description="구직자들과 이야기를 나누는 공간입니다."
-					title="수다방"
-				/>
 				{["a", "b", "c"].map((key) => (
 					<Skeleton className="h-36 rounded-lg" key={key} />
 				))}
@@ -95,10 +92,6 @@ function CommunityHome() {
 
 	return (
 		<BambiScreen>
-			<BambiHeader
-				description="게시판을 골라 글과 댓글을 확인해 보세요."
-				title="수다방"
-			/>
 			{query.data.boards.length === 0 ? (
 				<StateCard
 					description="운영자가 게시판을 배치하면 이곳에 표시됩니다."

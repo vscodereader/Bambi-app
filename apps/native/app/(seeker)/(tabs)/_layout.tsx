@@ -131,6 +131,15 @@ export default function SeekerTabsLayout() {
 			<Tabs.Screen
 				name="community"
 				options={{
+					header: () => (
+						<SeekerHomeHeader
+							hidePointShop={
+								mineQuery.data?.bambiProfile?.role === "legal_advisor"
+							}
+							hideSearch
+							title="수다방"
+						/>
+					),
 					tabBarIcon: tabIcon("chatbubbles", "chatbubbles-outline"),
 					title: "수다방",
 				}}

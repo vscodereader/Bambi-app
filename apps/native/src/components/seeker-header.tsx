@@ -93,8 +93,12 @@ export function SeekerStackHeader({
 // Tabs의 커스텀 header로 쓰이므로 상단 안전영역 인셋을 스스로 채운다.
 export function SeekerHomeHeader({
 	hidePointShop = false,
+	hideSearch = false,
+	title,
 }: {
 	hidePointShop?: boolean;
+	hideSearch?: boolean;
+	title?: string;
 }) {
 	const insets = useSafeAreaInsets();
 
@@ -104,21 +108,29 @@ export function SeekerHomeHeader({
 			style={{ paddingTop: insets.top }}
 		>
 			<View className="h-14 flex-row items-center justify-between px-4">
-				<View className="flex-row items-center gap-2">
-					<BambiLogo />
+				{title ? (
 					<Text className="font-extrabold text-foreground text-xl">
-						밤비알바
+						{title}
 					</Text>
-				</View>
+				) : (
+					<View className="flex-row items-center gap-2">
+						<BambiLogo />
+						<Text className="font-extrabold text-foreground text-xl">
+							밤비알바
+						</Text>
+					</View>
+				)}
 				{/* 테두리 박스끼리 맞닿지 않게 gap을 둔다 — 터치 영역은 각자 44dp(h-11)로 충분. */}
 				<View className="flex-row items-center gap-2">
 					{/* 정적 라우트지만 jobs/[id]와 같은 이유로 Href 캐스팅 — expo-router 타입
 					    생성이 dev 서버 없이 돌지 않아 새 라우트가 생성 타입에 아직 없다. */}
-					<HeaderIconButton
-						href={"/(seeker)/search" as unknown as Href}
-						label="공고 검색"
-						name="search-outline"
-					/>
+					{hideSearch ? null : (
+						<HeaderIconButton
+							href={"/(seeker)/search" as unknown as Href}
+							label="공고 검색"
+							name="search-outline"
+						/>
+					)}
 					{hidePointShop ? null : (
 						<HeaderIconButton
 							href={"/(seeker)/point-shop" as unknown as Href}
