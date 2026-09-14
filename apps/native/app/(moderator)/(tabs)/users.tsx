@@ -12,7 +12,6 @@ import { useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
 import {
-	BambiHeader,
 	ErrorState,
 	LoadingState,
 	Pill,
@@ -119,11 +118,7 @@ export default function ModeratorUsersScreen() {
 	// 그려질 때 입력이 재마운트돼 키보드 포커스가 끊긴다(검수 목록과 같은 구성).
 	return (
 		<View className="flex-1 bg-background">
-			<View className="gap-3 px-4">
-				<BambiHeader
-					description="계정 상태와 역할을 확인하고 제재·복구를 처리합니다."
-					title="사용자 관리"
-				/>
+			<View className="gap-3 px-4 pt-3">
 				<SearchField onChange={setQuery} value={query}>
 					<SearchField.Group>
 						<SearchField.SearchIcon />
