@@ -52,6 +52,13 @@ export default function ModeratorTabsLayout() {
 			<Tabs.Screen
 				name="index"
 				options={{
+					// 본문이 아니라 헤더가 화면 제목을 진다 — 본문에 같은 제목 블록을 두지 않는다.
+					header: () => (
+						<ModeratorHomeHeader
+							description="검수 대기 공고를 승인, 보류, 반려 처리합니다."
+							title="공고 검수"
+						/>
+					),
 					tabBarIcon: tabIcon("shield-checkmark", "shield-checkmark-outline"),
 					title: "검수",
 				}}
